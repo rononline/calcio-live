@@ -274,3 +274,53 @@ class TestStandingsParser:
         ]}}]})
         groups = result["standings_groups"]
         assert groups[0]["standings"][0]["points"] == "42"
+
+
+# ---------------------------------------------------------------------------
+# Scoreboard helper robustness (malformed nested arrays / null season / tz)
+# ---------------------------------------------------------------------------
+
+class TestScoreboardHelpers:
+    def test_season_slug_on_null_season(self):
+        assert _scoreboard.get_season_slug_or_displayname({"season": None}) is None
+
+    def test_season_slug_on_scalar_season(self):
+        assert _scoreboard.get_season_slug_or_displayname({"season": "2026"}) is None
+
+    def test_season_slug_reads_slug(self):
+        assert _scoreboard.get_season_slug_or_displayname({"season": {"slug": "2025-26"}}) == "2025-26"
+
+    def test_statistics_skips_non_dict(self):
+        stats = _scoreboard._get_statistics({"statistics": [None, "x", {"name": "shots", "displayValue": "5"}]})
+        assert stats == {"shots": "5"}
+
+    def test_record_skips_non_dict(self):
+        assert _scoreboard._get_record({"records": [None, {"summary": "14-6-14"}]}) == "14-6-14"
+
+    def test_top_scorer_on_null_athlete(self):
+        comp = {"leaders": [None, {"name": "goals", "leaders": [None, {"athlete": None, "displayValue": "10"}]}]}
+        assert _scoreboard._get_top_scorer(comp) == {"name": "", "short_name": "", "value": "10"}
+
+    def test_broadcast_skips_non_dict(self):
+        comp = {"geoBroadcasts": [None, {"media": {"shortName": "ESPN"}}]}
+        assert _scoreboard._get_broadcast(comp) == "ESPN"
+
+    def test_broadcasts_skips_non_dict(self):
+        comp = {"geoBroadcasts": [None, "x", {"media": {"shortName": "ESPN"}}, {"media": None}]}
+        assert _scoreboard._get_broadcasts(comp) == ["ESPN"]
+
+    def test_links_skips_non_dict(self):
+        comp = {"links": [None, {"rel": ["summary"], "href": "http://x/s"}]}
+        assert _scoreboard._get_links(comp) == {"summary": "http://x/s"}
+
+    def test_parse_date_falls_back_to_utc_without_hass(self):
+        # hass=None must not raise; UTC fallback yields a formatted date.
+        out = _scoreboard._parse_date(None, "2026-06-20T17:00Z", show_time=False)
+        assert out == "20-06-2026"
+
+    def test_parse_date_bad_timezone_falls_back_to_utc(self):
+        class _BadTz:
+            class config:
+                time_zone = "Not/AZone"
+        out = _scoreboard._parse_date(_BadTz(), "2026-06-20T17:00Z", show_time=False)
+        assert out == "20-06-2026"

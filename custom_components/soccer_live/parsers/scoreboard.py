@@ -28,8 +28,8 @@ def process_league_data(data, hass=None):
     return league_info
 
 def get_season_slug_or_displayname(match):
-    season_data = match.get("season", {})
-    
+    season_data = _as_dict(match.get("season"))
+
     # Check for 'slug' first
     slug = season_data.get("slug")
     if slug:
@@ -366,8 +366,10 @@ def is_within_last_48_hours(end_time):
 
 def _get_statistics(competitor):
     statistics = {}
-    stats = competitor.get("statistics", [])
+    stats = competitor.get("statistics", []) or []
     for stat in stats:
+        if not isinstance(stat, dict):
+            continue
         stat_name = stat.get("name", "Unknown")
         stat_value = stat.get("displayValue", "N/A")
         statistics[stat_name] = stat_value
@@ -375,7 +377,7 @@ def _get_statistics(competitor):
 
 def _get_record(competitor):
     """Return the team's season record, e.g. '14-6-14'."""
-    records = competitor.get("records", []) or []
+    records = [r for r in (competitor.get("records", []) or []) if isinstance(r, dict)]
     if records:
         return records[0].get("summary", "")
     return ""
@@ -384,11 +386,13 @@ def _get_top_scorer(competitor):
     """Return the team's top scorer as {name, short_name, value}."""
     leaders = competitor.get("leaders", []) or []
     for ldr in leaders:
+        if not isinstance(ldr, dict):
+            continue
         if ldr.get("name") == "goals":
-            tops = ldr.get("leaders", []) or []
+            tops = [t for t in (ldr.get("leaders", []) or []) if isinstance(t, dict)]
             if tops:
                 t = tops[0]
-                athlete = t.get("athlete", {}) or {}
+                athlete = _as_dict(t.get("athlete"))
                 return {
                     "name": athlete.get("displayName", ""),
                     "short_name": athlete.get("shortName", ""),
@@ -398,9 +402,9 @@ def _get_top_scorer(competitor):
 
 def _get_broadcast(competition):
     """Returns the first broadcast channel name (backwards-compatible)."""
-    gbs = competition.get("geoBroadcasts", []) or []
+    gbs = [g for g in (competition.get("geoBroadcasts", []) or []) if isinstance(g, dict)]
     if gbs:
-        media = gbs[0].get("media", {}) or {}
+        media = _as_dict(gbs[0].get("media"))
         return media.get("shortName", "")
     return ""
 
@@ -409,7 +413,9 @@ def _get_broadcasts(competition):
     gbs = competition.get("geoBroadcasts", []) or []
     channels = []
     for gb in gbs:
-        name = (gb.get("media", {}) or {}).get("shortName", "")
+        if not isinstance(gb, dict):
+            continue
+        name = _as_dict(gb.get("media")).get("shortName", "")
         if name and name not in channels:
             channels.append(name)
     return channels
@@ -425,6 +431,8 @@ def _get_links(competition):
         "video":       ["video", "highlights"],
     }
     for link in links_raw:
+        if not isinstance(link, dict):
+            continue
         rel = [r.lower() for r in (link.get("rel") or [])]
         href = link.get("href", "")
         if not href:
@@ -621,10 +629,15 @@ def process_scorers_data(data):
 
 def _parse_date(hass, date_str, show_time=True):
     try:
-        user_timezone = hass.config.time_zone
+        # Fall back to UTC when hass or its configured time zone is unavailable
+        # (e.g. during tests or very early startup).
+        user_timezone = getattr(getattr(hass, "config", None), "time_zone", None) or "UTC"
         dt = parser.isoparse(date_str)
         parsed_date = dt.astimezone(timezone.utc) if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
-        local_tz = ZoneInfo(user_timezone)
+        try:
+            local_tz = ZoneInfo(user_timezone)
+        except Exception:
+            local_tz = timezone.utc
         local_date = parsed_date.astimezone(local_tz)
 
         if show_time:
