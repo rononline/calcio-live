@@ -9,3 +9,4 @@ __pycache__/
 
 # AI tooling
 .claude/
+hacs-default-fork/
