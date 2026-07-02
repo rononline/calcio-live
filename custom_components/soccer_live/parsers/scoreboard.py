@@ -454,22 +454,28 @@ def process_summary_data(data):
         "key_events": [],
         "head_to_head": [],
     }
+    # Each section is isolated so a single malformed subfield (e.g. a null
+    # roster entry) cannot wipe out the other, valid sections.
     try:
         rosters = data.get("rosters", []) or []
         for r in rosters:
+            if not isinstance(r, dict):
+                continue
             home_away = r.get("homeAway", "")
             formation = r.get("formation", "")
             roster = r.get("roster", []) or []
             players = []
             for p in roster:
-                a = p.get("athlete", {}) or {}
+                if not isinstance(p, dict):
+                    continue
+                a = _as_dict(p.get("athlete"))
                 players.append({
                     "name": a.get("displayName", ""),
                     "short_name": a.get("shortName", ""),
                     "jersey": p.get("jersey", ""),
-                    "position": (p.get("position", {}) or {}).get("abbreviation", ""),
+                    "position": _as_dict(p.get("position")).get("abbreviation", ""),
                     "starter": p.get("starter", False),
-                    "headshot": (a.get("headshot", {}) or {}).get("href", ""),
+                    "headshot": _as_dict(a.get("headshot")).get("href", ""),
                 })
             if home_away == "home":
                 out["lineup_home"] = players
@@ -477,17 +483,23 @@ def process_summary_data(data):
             elif home_away == "away":
                 out["lineup_away"] = players
                 out["formation_away"] = formation
+    except Exception as e:
+        _LOGGER.warning(f"Error processing summary lineups: {e}")
 
+    try:
         key_events = data.get("keyEvents", []) or []
         for ev in key_events:
-            t = ev.get("type", {}) or {}
-            clock = (ev.get("clock", {}) or {}).get("displayValue", "")
-            team = (ev.get("team", {}) or {}).get("displayName", "")
+            if not isinstance(ev, dict):
+                continue
+            t = _as_dict(ev.get("type"))
+            clock = _as_dict(ev.get("clock")).get("displayValue", "")
+            team = _as_dict(ev.get("team")).get("displayName", "")
             participants = ev.get("participants", []) or []
             athletes = []
             for p in participants:
-                a = p.get("athlete", {}) or {}
-                athletes.append(a.get("displayName", ""))
+                if not isinstance(p, dict):
+                    continue
+                athletes.append(_as_dict(p.get("athlete")).get("displayName", ""))
             out["key_events"].append({
                 "type": t.get("type", ""),
                 "type_text": t.get("text", ""),
@@ -497,7 +509,10 @@ def process_summary_data(data):
                 "athletes": athletes,
                 "scoring_play": ev.get("scoringPlay", False),
             })
+    except Exception as e:
+        _LOGGER.warning(f"Error processing summary key events: {e}")
 
+    try:
         # The Team card shows at most 8 h2h matches and does not use logos;
         # limit to 10 entries and omit home_logo/away_logo to stay well
         # under the 16384-byte recorder payload limit.
@@ -506,36 +521,49 @@ def process_summary_data(data):
         for game in h2h:
             if len(out["head_to_head"]) >= H2H_MAX:
                 break
+            if not isinstance(game, dict):
+                continue
             events = game.get("events", []) or []
             for e in events:
                 if len(out["head_to_head"]) >= H2H_MAX:
                     break
-                comp = (e.get("competitions", []) or [{}])[0]
-                competitors = comp.get("competitors", []) or []
+                if not isinstance(e, dict):
+                    continue
+                comps = [c for c in (e.get("competitions", []) or []) if isinstance(c, dict)]
+                comp = comps[0] if comps else {}
+                competitors = [c for c in (comp.get("competitors", []) or []) if isinstance(c, dict)]
                 if len(competitors) < 2:
                     continue
                 home_c = next((c for c in competitors if c.get("homeAway") == "home"), competitors[0])
                 away_c = next((c for c in competitors if c.get("homeAway") == "away"), competitors[1])
                 out["head_to_head"].append({
                     "date": e.get("date", ""),
-                    "home_team": (home_c.get("team", {}) or {}).get("displayName", ""),
+                    "home_team": _as_dict(home_c.get("team")).get("displayName", ""),
                     "home_score": home_c.get("score", ""),
-                    "away_team": (away_c.get("team", {}) or {}).get("displayName", ""),
+                    "away_team": _as_dict(away_c.get("team")).get("displayName", ""),
                     "away_score": away_c.get("score", ""),
                 })
+    except Exception as e:
+        _LOGGER.warning(f"Error processing summary head-to-head: {e}")
+
+    try:
         # Recent form: boxscore.participants[].statistics contains lastFiveGames
-        for participant in (data.get("boxscore", {}) or {}).get("players", []) or []:
+        for participant in _as_dict(data.get("boxscore")).get("players", []) or []:
+            if not isinstance(participant, dict):
+                continue
             home_away = participant.get("homeAway", "")
             stats = participant.get("statistics", []) or []
             form_key = "last_five_home" if home_away == "home" else "last_five_away"
             for stat_group in stats:
+                if not isinstance(stat_group, dict):
+                    continue
                 for stat in (stat_group.get("stats", []) or []):
-                    if stat.get("name") == "lastFiveGames":
+                    if isinstance(stat, dict) and stat.get("name") == "lastFiveGames":
                         out[form_key] = stat.get("displayValue", "")
                         break
-
     except Exception as e:
-        _LOGGER.error(f"Error processing summary data: {e}")
+        _LOGGER.warning(f"Error processing summary recent form: {e}")
+
     return out
 
 def process_news_data(data):

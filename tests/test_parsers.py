@@ -324,3 +324,42 @@ class TestScoreboardHelpers:
                 time_zone = "Not/AZone"
         out = _scoreboard._parse_date(_BadTz(), "2026-06-20T17:00Z", show_time=False)
         assert out == "20-06-2026"
+
+
+class TestSummaryParser:
+    process_summary_data = staticmethod(_scoreboard.process_summary_data)
+
+    def test_graceful_on_empty(self):
+        out = self.process_summary_data({})
+        assert out["lineup_home"] == [] and out["head_to_head"] == []
+
+    def test_malformed_roster_does_not_wipe_key_events(self):
+        # A null roster entry must not drop the valid keyEvents section.
+        data = {
+            "rosters": [None, "bad"],
+            "keyEvents": [{"type": {"type": "Goal", "text": "Goal"}, "shortText": "1-0"}],
+        }
+        out = self.process_summary_data(data)
+        assert out["lineup_home"] == []
+        assert len(out["key_events"]) == 1
+        assert out["key_events"][0]["type"] == "Goal"
+
+    def test_malformed_h2h_does_not_wipe_lineups(self):
+        data = {
+            "rosters": [{"homeAway": "home", "formation": "4-3-3", "roster": [
+                {"athlete": {"displayName": "Player"}, "jersey": "10"}]}],
+            "headToHeadGames": [None, {"events": [None, "bad"]}],
+        }
+        out = self.process_summary_data(data)
+        assert out["formation_home"] == "4-3-3"
+        assert out["lineup_home"][0]["name"] == "Player"
+        assert out["head_to_head"] == []
+
+    def test_null_athlete_and_position_in_roster(self):
+        data = {"rosters": [{"homeAway": "away", "roster": [
+            {"athlete": None, "position": None, "jersey": "7"}]}]}
+        out = self.process_summary_data(data)
+        assert out["lineup_away"][0] == {
+            "name": "", "short_name": "", "jersey": "7",
+            "position": "", "starter": False, "headshot": "",
+        }
