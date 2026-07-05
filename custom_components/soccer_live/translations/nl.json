@@ -5,7 +5,11 @@
         "title": "Soccer Live instellen",
         "description": "Welkom bij de Soccer Live configuratiewizard.\n\nKies wat je wilt volgen:\n\n- **Competitie**: alle wedstrijden van een specifieke competitie (voor bekertoernooien wordt automatisch een bracket-sensor aangemaakt).\n- **Team**: wedstrijden van een specifiek team.\n- **Alle wedstrijden vandaag**: alle wedstrijden ter wereld die vandaag gespeeld worden.\n- **Nieuws**: nieuwsfeed van een competitie.\n- **Handmatige invoer**: voer het team-ID handmatig in.",
         "data": {
-          "selection": "Wat wil je volgen?"
+          "provider": "Databron",
+          "selection": "Wat wil je volgen?",
+          "api_football_key": "API-Football API-key",
+          "api_football_season": "API-Football seizoen (0 = auto)",
+          "include_friendlies": "Oefenwedstrijden meenemen"
         }
       },
       "news_competition": {
@@ -27,6 +31,20 @@
         "description": "Selecteer de competitie waarin het team speelt dat je wilt volgen.\n\nIn de volgende stap kies je het team uit de lijst.",
         "data": {
           "competition_code": "Competitie"
+        }
+      },
+      "api_football_team_method": {
+        "title": "API-Football teamselectie",
+        "description": "Kies hoe je het team wilt vinden. Zoeken op teamnaam is meestal sneller en toont direct de API-Football IDs.",
+        "data": {
+          "team_method": "Methode voor teamselectie"
+        }
+      },
+      "api_football_team_search": {
+        "title": "API-Football team zoeken",
+        "description": "Voer minimaal drie tekens van de teamnaam in.",
+        "data": {
+          "team_search": "Team zoeken"
         }
       },
       "team": {
@@ -68,10 +86,13 @@
         "description": "Stel het polling-interval in en hoe lang de laatste afgelopen wedstrijd zichtbaar blijft op de teamkaart voordat overgeschakeld wordt naar de volgende wedstrijd.",
         "data": {
           "scan_interval": "Polling-interval (minuten)",
+          "live_scan_interval": "Live refresh-interval (seconden)",
           "start_date": "Begindatum (YYYY-MM-DD)",
           "end_date": "Einddatum (YYYY-MM-DD)",
           "recent_match_hours": "Afgelopen wedstrijd zichtbaar houden voor (uren)",
           "enable_summary_enrichment": "Ophalen opstellingen, events en H2H (summary)",
+          "include_friendlies": "Oefenwedstrijden meenemen",
+          "api_football_season": "API-Football seizoen (0 = auto)",
           "max_matches": "Max wedstrijden in attributen (0 = onbeperkt)",
           "notify_service": "Meldingsservice (bijv. notify.mobile_app)"
         }
@@ -79,7 +100,11 @@
     },
     "error": {
       "invalid_date": "Datum moet in YYYY-MM-DD formaat zijn (bijv. 2026-06-20).",
-      "end_before_start": "Einddatum moet op of na de begindatum liggen."
+      "end_before_start": "Einddatum moet op of na de begindatum liggen.",
+      "api_key_required": "API-Football vereist een API-key.",
+      "unsupported_provider_selection": "API-Football nieuws wordt nog niet ondersteund.",
+      "search_too_short": "Voer minimaal drie tekens in.",
+      "no_search_results": "Geen teams gevonden voor deze zoekopdracht."
     },
     "abort": {
       "no_competitions": "Kan de competitielijst niet laden. Controleer uw internetverbinding en probeer het opnieuw.",

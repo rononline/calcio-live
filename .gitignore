@@ -10,3 +10,6 @@ __pycache__/
 # AI tooling
 .claude/
 hacs-default-fork/
+
+# Local secrets
+.api-football-key

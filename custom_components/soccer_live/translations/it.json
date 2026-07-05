@@ -5,7 +5,11 @@
         "title": "Configurazione Soccer Live",
         "description": "Benvenuto nella configurazione di Soccer Live.\n\nScegli cosa vuoi monitorare:\n\n- **Campionato**: tutte le partite di un campionato (per le coppe viene creato anche il sensore tabellone KO).\n- **Squadra**: partite di una squadra specifica.\n- **Tutte le partite del giorno**: tutte le partite nel mondo giocate oggi.\n- **Notizie**: feed news di una competizione.\n- **Inserimento Manuale**: inserisci l'ID della squadra manualmente.",
         "data": {
-          "selection": "Cosa vuoi monitorare?"
+          "provider": "Provider dati",
+          "selection": "Cosa vuoi monitorare?",
+          "api_football_key": "Chiave API API-Football",
+          "api_football_season": "Stagione API-Football (0 = automatico)",
+          "include_friendlies": "Includi amichevoli"
         }
       },
       "news_competition": {
@@ -27,6 +31,20 @@
         "description": "Seleziona il campionato in cui gioca la squadra che vuoi seguire.\n\nNel passo successivo sceglierai la squadra dall'elenco.",
         "data": {
           "competition_code": "Competizione"
+        }
+      },
+      "api_football_team_method": {
+        "title": "Selezione squadra API-Football",
+        "description": "Scegli come trovare la squadra. La ricerca per nome è di solito più veloce e mostra direttamente gli ID API-Football.",
+        "data": {
+          "team_method": "Metodo di selezione squadra"
+        }
+      },
+      "api_football_team_search": {
+        "title": "Cerca squadra API-Football",
+        "description": "Inserisci almeno tre caratteri del nome della squadra.",
+        "data": {
+          "team_search": "Cerca squadra"
         }
       },
       "team": {
@@ -72,10 +90,13 @@
         "description": "Configura il polling e per quanto tempo mantenere visibile la partita appena terminata sulla Team card prima di passare alla prossima.",
         "data": {
           "scan_interval": "Intervallo di aggiornamento (minuti)",
+          "live_scan_interval": "Intervallo aggiornamento live (secondi)",
           "start_date": "Data di inizio (YYYY-MM-DD)",
           "end_date": "Data di fine (YYYY-MM-DD)",
           "recent_match_hours": "Tieni visibile la partita finita per (ore)",
           "enable_summary_enrichment": "Recupera formazioni, eventi e H2H",
+          "include_friendlies": "Includi amichevoli",
+          "api_football_season": "Stagione API-Football (0 = automatico)",
           "max_matches": "Max partite negli attributi (0 = illimitato)",
           "notify_service": "Servizio notifiche (es. notify.mobile_app)"
         }
@@ -83,7 +104,11 @@
     },
     "error": {
       "invalid_date": "La data deve essere nel formato YYYY-MM-DD (es. 2026-06-20).",
-      "end_before_start": "La data di fine deve essere uguale o successiva alla data di inizio."
+      "end_before_start": "La data di fine deve essere uguale o successiva alla data di inizio.",
+      "api_key_required": "API-Football richiede una chiave API.",
+      "unsupported_provider_selection": "Le notizie API-Football non sono ancora supportate.",
+      "search_too_short": "Inserisci almeno tre caratteri.",
+      "no_search_results": "Nessuna squadra trovata per questa ricerca."
     }
   }
 }

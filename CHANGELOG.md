@@ -1,5 +1,13 @@
 # Changelog
 
+## v3.6.58 (2026-07-05)
+- provider: add optional API-Football support alongside ESPN, including provider setup, API key handling, direct team search, season selection and friendlies filtering
+- sensor: API-Football supports team fixtures (`team_match`, `team_matches`, `team_matches_mixed`), competition fixtures, all matches today, standings and top scorers; news and knockout brackets remain ESPN-only
+- sensor: API-Football match enrichment fetches fixture events, statistics and lineups for team sensors, including recent finished matches so card popups can show scorers/cards after full time
+- sensor: add configurable `live_scan_interval` option (`30` / `45` / `60` / `90` / `120` seconds); live-mode main response cache now follows the selected interval when lower than 60 seconds
+- parser: add API-Football parser and normalize event/detail strings to the existing Soccer Live match contract
+- docs/tests: document provider behavior, quota-related caching and live polling; add config-flow, parser and sensor regression coverage
+
 ## v3.6.49 (2026-06-30)
 - parser: `home_form` and `away_form` now default to `""` instead of `"N/A"` when ESPN does not supply form data — prevents cards from rendering spurious dots for the literal characters N, / and A
 

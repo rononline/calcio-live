@@ -20,11 +20,16 @@ def _load_parser(name):
 
 _scoreboard = _load_parser("scoreboard")
 _standings  = _load_parser("standings")
+_api_football = _load_parser("api_football")
 process_match_data = _scoreboard.process_match_data
 standings_data     = _standings.standings_data
 process_league_data = _scoreboard.process_league_data
 process_news_data = _scoreboard.process_news_data
 process_scorers_data = _scoreboard.process_scorers_data
+process_api_football_fixture_data = _api_football.process_fixture_data
+process_api_football_standings_data = _api_football.process_standings_data
+process_api_football_scorers_data = _api_football.process_scorers_data
+process_api_football_fixture_enrichment = _api_football.process_fixture_enrichment
 process_bracket_data = _load_parser("bracket").process_bracket_data
 
 class _MockHass:
@@ -194,6 +199,163 @@ class TestScoreboardParser:
 
         assert match["league_name"] == "UEFA Champions League"
         assert match["league_logo"] == "https://example.com/ucl.png"
+
+
+class TestApiFootballParser:
+    def test_fixture_response_maps_to_match_model(self):
+        data = {
+            "response": [{
+                "fixture": {
+                    "id": 123,
+                    "date": "2026-07-20T18:00:00+00:00",
+                    "status": {"short": "NS", "long": "Not Started", "elapsed": None},
+                    "venue": {"name": "De Kuip"},
+                },
+                "league": {"id": 667, "name": "Friendlies Clubs", "country": "World", "season": 2026, "logo": "league.png"},
+                "teams": {
+                    "home": {"id": 1, "name": "Feyenoord", "logo": "home.png"},
+                    "away": {"id": 2, "name": "PSV", "logo": "away.png"},
+                },
+                "goals": {"home": None, "away": None},
+            }]
+        }
+
+        result = process_api_football_fixture_data(data, _MockHass(), team_id="1", team_name="Feyenoord")
+
+        assert result["provider"] == "api_football"
+        assert result["team_logo"] == "home.png"
+        assert result["league_info"][0]["name"] == "Friendlies Clubs"
+        assert result["league_info"][0]["abbreviation"] == "Friendlies Clubs"
+        match = result["matches"][0]
+        assert match["event_id"] == "123"
+        assert match["home_id"] == 1
+        assert match["away_id"] == 2
+        assert match["home_team"] == "Feyenoord"
+        assert match["away_team"] == "PSV"
+        assert match["state"] == "pre"
+        assert match["league_name"] == "Friendlies Clubs"
+
+    def test_friendlies_can_be_filtered_out(self):
+        data = {
+            "response": [{
+                "fixture": {"id": 123, "date": "2026-07-20T18:00:00+00:00", "status": {"short": "NS"}},
+                "league": {"id": 667, "name": "Friendlies Clubs"},
+                "teams": {
+                    "home": {"id": 1, "name": "Feyenoord"},
+                    "away": {"id": 2, "name": "PSV"},
+                },
+                "goals": {"home": None, "away": None},
+            }]
+        }
+
+        result = process_api_football_fixture_data(data, _MockHass(), team_id="1", include_friendlies=False)
+
+        assert result["matches"] == []
+
+    def test_standings_response_maps_to_standings_model(self):
+        data = {"response": [{"league": {
+            "id": 39,
+            "name": "Premier League",
+            "country": "England",
+            "logo": "league.png",
+            "season": 2026,
+            "standings": [[{
+                "rank": 1,
+                "team": {"id": 42, "name": "Arsenal", "logo": "arsenal.png"},
+                "points": 80,
+                "goalsDiff": 42,
+                "group": "Premier League",
+                "description": "Champions League",
+                "all": {"played": 38, "win": 25, "draw": 5, "lose": 8, "goals": {"for": 81, "against": 39}},
+            }]],
+        }}]}
+
+        result = process_api_football_standings_data(data)
+
+        assert result["league_name"] == "Premier League"
+        assert result["standings_groups"][0]["standings"][0]["team_name"] == "Arsenal"
+        assert result["standings_groups"][0]["standings"][0]["points"] == 80
+
+    def test_scorers_response_maps_to_scorers_model(self):
+        data = {"response": [{
+            "player": {"id": 1, "name": "Player One", "photo": "player.png"},
+            "statistics": [{
+                "team": {"id": 42, "name": "Arsenal", "logo": "arsenal.png"},
+                "league": {"id": 39, "name": "Premier League", "logo": "league.png"},
+                "goals": {"total": 21, "assists": 6},
+            }],
+        }]}
+
+        result = process_api_football_scorers_data(data)
+
+        assert result["league_name"] == "Premier League"
+        assert result["scorers"][0]["player"] == "Player One"
+        assert result["scorers"][0]["goals"] == 21
+
+    def test_fixture_enrichment_maps_events_stats_and_lineups(self):
+        events = {"response": [{
+            "time": {"elapsed": 12},
+            "team": {"id": 42, "name": "Arsenal"},
+            "player": {"name": "Player One"},
+            "type": "Goal",
+            "detail": "Normal Goal",
+        }, {
+            "time": {"elapsed": 36},
+            "team": {"id": 42, "name": "Arsenal"},
+            "player": {"name": "Player Two"},
+            "type": "Goal",
+            "detail": "Penalty",
+        }, {
+            "time": {"elapsed": 73},
+            "team": {"id": 50, "name": "Chelsea"},
+            "player": {"name": "Player Three"},
+            "type": "Card",
+            "detail": "Yellow Card",
+        }]}
+        statistics = {"response": [{
+            "team": {"id": 50, "name": "Chelsea"},
+            "statistics": [
+                {"type": "Ball Possession", "value": "45%"},
+                {"type": "Total Shots", "value": 8},
+                {"type": "Shots on Goal", "value": 3},
+                {"type": "Fouls", "value": 11},
+            ],
+        }, {
+            "team": {"id": 42, "name": "Arsenal"},
+            "statistics": [
+                {"type": "Ball Possession", "value": "55%"},
+                {"type": "Total Shots", "value": 14},
+                {"type": "Shots on Goal", "value": 7},
+                {"type": "Fouls", "value": 9},
+            ],
+        }]}
+        lineups = {"response": [{
+            "team": {"id": 50, "name": "Chelsea"},
+            "formation": "4-2-3-1",
+            "startXI": [{"player": {"name": "Player Two", "number": 1, "pos": "G"}}],
+            "substitutes": [],
+        }, {
+            "team": {"id": 42, "name": "Arsenal"},
+            "formation": "4-3-3",
+            "startXI": [{"player": {"name": "Player One", "number": 9, "pos": "F"}}],
+            "substitutes": [],
+        }]}
+
+        result = process_api_football_fixture_enrichment(events, statistics, lineups, home_team_id=42, away_team_id=50)
+
+        assert result["has_commentary"] is True
+        assert result["match_details"][0] == "Goal - 12': Player One"
+        assert result["match_details"][1] == "Penalty - Scored - 36': Player Two"
+        assert result["match_details"][2] == "Yellow Card - 73': Player Three"
+        assert result["key_events"][0]["type"] == "Goal"
+        assert result["key_events"][0]["clock"] == "12"
+        assert result["home_statistics"]["Shots on Goal"] == 7
+        assert result["home_statistics"]["possessionPct"] == "55"
+        assert result["home_statistics"]["totalShots"] == 14
+        assert result["home_statistics"]["shotsOnTarget"] == 7
+        assert result["home_statistics"]["foulsCommitted"] == 9
+        assert result["formation_home"] == "4-3-3"
+        assert result["lineup_home"][0]["starter"] is True
 
 
 # ---------------------------------------------------------------------------

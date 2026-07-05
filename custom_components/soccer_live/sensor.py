@@ -2,6 +2,7 @@ import asyncio
 import json
 import aiohttp
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.storage import Store
 from homeassistant.config_entries import ConfigEntry
@@ -12,7 +13,17 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 import logging
 import random
 import re
-from .const import DOMAIN
+from urllib.parse import urlencode
+from .const import (
+    CONF_API_FOOTBALL_KEY,
+    CONF_API_FOOTBALL_SEASON,
+    CONF_INCLUDE_FRIENDLIES,
+    CONF_LIVE_SCAN_INTERVAL,
+    CONF_PROVIDER,
+    DOMAIN,
+    PROVIDER_API_FOOTBALL,
+    PROVIDER_ESPN,
+)
 
 _LIVE_POLL_TYPES = {"team_match", "team_matches", "team_matches_mixed", "match_day", "all_matches_today"}
 
@@ -49,6 +60,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
         team_name = entry.data.get("team_name")
         selection = entry.data.get("selection")
         team_id = entry.data.get("team_id")
+        provider = entry.data.get(CONF_PROVIDER, PROVIDER_ESPN)
+        api_football_key = entry.data.get(CONF_API_FOOTBALL_KEY, "")
+        include_friendlies = entry.options.get(
+            CONF_INCLUDE_FRIENDLIES,
+            entry.data.get(CONF_INCLUDE_FRIENDLIES, True),
+        )
+        api_football_season = entry.options.get(
+            CONF_API_FOOTBALL_SEASON,
+            entry.data.get(CONF_API_FOOTBALL_SEASON),
+        )
 
         # Season dates are resolved dynamically via _get_calendar_data each update.
         # Use a wide rolling fallback (±1 year) so process_match_data never
@@ -60,6 +81,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
         end_date = entry.options.get("end_date", entry.data.get("end_date", _default_end))
 
         base_scan_interval = timedelta(minutes=entry.options.get("scan_interval", 3))
+        live_scan_interval = entry.options.get(
+            CONF_LIVE_SCAN_INTERVAL,
+            entry.data.get(CONF_LIVE_SCAN_INTERVAL, 60),
+        )
         recent_match_hours = entry.options.get("recent_match_hours", 24)
         enable_summary_enrichment = entry.options.get("enable_summary_enrichment", True)
         max_matches = entry.options.get("max_matches", 0)
@@ -77,7 +102,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
                     config_entry_id=entry.entry_id,
                     start_date=start_date, end_date=end_date, team_id=team_id, recent_match_hours=recent_match_hours,
                     enable_summary_enrichment=enable_summary_enrichment,
-                    max_matches=max_matches
+                    max_matches=max_matches, provider=provider, api_football_key=api_football_key,
+                    include_friendlies=include_friendlies, api_football_season=api_football_season,
+                    live_scan_interval=live_scan_interval
                 )
             ]
             async_add_entities(sensors, True)
@@ -85,24 +112,28 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 
         if team_name:
             team_name_normalized = team_name.replace(" ", "_").replace(".", "_").lower()
-            competition_name = competition_code.replace(" ", "_").replace(".", "_").lower()
+            competition_name = (competition_code or "manual").replace(" ", "_").replace(".", "_").lower()
 
-            # team_match and team_matches require a valid competition_code for URL building
-            if competition_code and competition_code not in ("N/A", ""):
+            # ESPN needs a competition code; API-Football can fetch team fixtures by team id.
+            if provider == PROVIDER_API_FOOTBALL or (competition_code and competition_code not in ("N/A", "")):
                 sensors += [
                     SoccerLiveSensor(
                         hass, f"soccerlive_next_{competition_name}_{team_name_normalized}", competition_code, "team_match",
                         base_scan_interval + timedelta(seconds=random.randint(0, 30)), team_name=team_name,
                         config_entry_id=entry.entry_id, start_date=start_date, end_date=end_date, team_id=team_id, recent_match_hours=recent_match_hours,
                         enable_summary_enrichment=enable_summary_enrichment,
-                        max_matches=max_matches
+                        max_matches=max_matches, provider=provider, api_football_key=api_football_key,
+                        include_friendlies=include_friendlies, api_football_season=api_football_season,
+                        live_scan_interval=live_scan_interval
                     ),
                     SoccerLiveSensor(
                         hass, f"soccerlive_all_{competition_name}_{team_name_normalized}", competition_code, "team_matches",
                         base_scan_interval + timedelta(seconds=random.randint(0, 30)), team_name=team_name,
                         config_entry_id=entry.entry_id, start_date=start_date, end_date=end_date, team_id=team_id, recent_match_hours=recent_match_hours,
                         enable_summary_enrichment=enable_summary_enrichment,
-                        max_matches=max_matches
+                        max_matches=max_matches, provider=provider, api_football_key=api_football_key,
+                        include_friendlies=include_friendlies, api_football_season=api_football_season,
+                        live_scan_interval=live_scan_interval
                     ),
                 ]
             sensors += [
@@ -111,7 +142,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
                     base_scan_interval + timedelta(seconds=random.randint(0, 30)), team_name=team_name,
                     config_entry_id=entry.entry_id, start_date=start_date, end_date=end_date, team_id=team_id, recent_match_hours=recent_match_hours,
                     enable_summary_enrichment=enable_summary_enrichment,
-                    max_matches=max_matches
+                    max_matches=max_matches, provider=provider, api_football_key=api_football_key,
+                    include_friendlies=include_friendlies, api_football_season=api_football_season,
+                    live_scan_interval=live_scan_interval
                 )
             ]
         elif competition_code:
@@ -122,7 +155,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
                         base_scan_interval + timedelta(seconds=random.randint(0, 30)), config_entry_id=entry.entry_id,
                         start_date=start_date, end_date=end_date, team_id=team_id, recent_match_hours=recent_match_hours,
                         enable_summary_enrichment=enable_summary_enrichment,
-                        max_matches=max_matches
+                        max_matches=max_matches, provider=provider, api_football_key=api_football_key,
+                        include_friendlies=include_friendlies, api_football_season=api_football_season,
+                        live_scan_interval=live_scan_interval
                     )
                 ]
             else:
@@ -132,12 +167,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
                     SoccerLiveSensor(
                         hass, f"soccerlive_standings_{competition_name}", competition_code, "standings",
                         base_scan_interval + timedelta(seconds=random.randint(0, 30)), config_entry_id=entry.entry_id,
-                        start_date=start_date, end_date=end_date, team_id=team_id, max_matches=max_matches
+                        start_date=start_date, end_date=end_date, team_id=team_id, max_matches=max_matches,
+                        provider=provider, api_football_key=api_football_key, include_friendlies=include_friendlies,
+                        api_football_season=api_football_season, live_scan_interval=live_scan_interval
                     ),
                     SoccerLiveSensor(
                         hass, f"soccerlive_all_{competition_name}", competition_code, "match_day",
                         base_scan_interval + timedelta(seconds=random.randint(0, 30)), config_entry_id=entry.entry_id,
-                        start_date=start_date, end_date=end_date, team_id=team_id, max_matches=max_matches
+                        start_date=start_date, end_date=end_date, team_id=team_id, max_matches=max_matches,
+                        provider=provider, api_football_key=api_football_key, include_friendlies=include_friendlies,
+                        api_football_season=api_football_season, live_scan_interval=live_scan_interval
                     )
                 ]
                 # Top scorers sensor
@@ -146,7 +185,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
                         hass, f"soccerlive_scorers_{competition_name}", competition_code, "top_scorers",
                         base_scan_interval + timedelta(minutes=5) + timedelta(seconds=random.randint(0, 30)),
                         config_entry_id=entry.entry_id,
-                        start_date=start_date, end_date=end_date, team_id=team_id
+                        start_date=start_date, end_date=end_date, team_id=team_id,
+                        provider=provider, api_football_key=api_football_key, include_friendlies=include_friendlies,
+                        api_football_season=api_football_season, live_scan_interval=live_scan_interval
                     )
                 )
                 # Auto-add bracket sensor for knockout competitions
@@ -156,7 +197,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
                             hass, f"soccerlive_bracket_{competition_name}", competition_code, "bracket",
                             base_scan_interval + timedelta(minutes=10) + timedelta(seconds=random.randint(0, 30)),
                             config_entry_id=entry.entry_id,
-                            start_date=start_date, end_date=end_date, team_id=team_id, max_matches=max_matches
+                            start_date=start_date, end_date=end_date, team_id=team_id, max_matches=max_matches,
+                            provider=provider, api_football_key=api_football_key, include_friendlies=include_friendlies,
+                            api_football_season=api_football_season, live_scan_interval=live_scan_interval
                         )
                     )
 
@@ -173,10 +216,14 @@ class SoccerLiveSensor(Entity):
     _calendar_cache = {}
     _calendar_locks = {}
     _calendar_error_logs = {}
+    _api_football_endpoint_cache = {}
+    _api_football_endpoint_locks = {}
 
     def __init__(self, hass, name, code, sensor_type=None, scan_interval=timedelta(minutes=5),
                  team_name=None, config_entry_id=None, start_date=None, end_date=None, team_id=None,
-                 recent_match_hours=24, enable_summary_enrichment=True, max_matches=0):
+                 recent_match_hours=24, enable_summary_enrichment=True, max_matches=0,
+                 provider=PROVIDER_ESPN, api_football_key="", include_friendlies=True,
+                 api_football_season=None, live_scan_interval=60):
         self.hass = hass
         self._name = name
         self._code = code
@@ -190,6 +237,18 @@ class SoccerLiveSensor(Entity):
         self._recent_match_hours = recent_match_hours
         self._enable_summary_enrichment = enable_summary_enrichment
         self._max_matches = max_matches  # 0 = unlimited
+        try:
+            self._live_scan_interval = max(15, int(live_scan_interval or 60))
+        except (TypeError, ValueError):
+            self._live_scan_interval = 60
+        self._provider = provider or PROVIDER_ESPN
+        self._api_football_key = api_football_key or ""
+        self._include_friendlies = include_friendlies
+        try:
+            self._api_football_season = int(api_football_season) if api_football_season else None
+        except (TypeError, ValueError):
+            self._api_football_season = None
+        self._api_football_quota = {}
 
         # Parse date strings into datetime objects; empty/missing = no filter
         try:
@@ -234,6 +293,7 @@ class SoccerLiveSensor(Entity):
         self.base_url = "https://site.web.api.espn.com/apis/v2/sports/soccer"
         self.base_url_2 = "https://site.api.espn.com/apis/site/v2/sports/soccer"
         self.base_url_3 = "https://site.web.api.espn.com/apis/site/v2/sports/soccer"
+        self.api_football_base_url = "https://v3.football.api-sports.io"
 
     async def async_will_remove_from_hass(self):
         if self._live_unsub:
@@ -247,17 +307,27 @@ class SoccerLiveSensor(Entity):
         matches = self._attributes.get("matches", []) or []
         return any(m.get("state") in ("in", "live") for m in matches)
 
+    def _main_cache_ttl(self):
+        """Return cache TTL for the main provider request."""
+        if self._is_live():
+            return min(60, self._live_scan_interval)
+        return 60
+
     def _schedule_live_refresh(self):
-        """Schedule an extra refresh in 60 s when a match is live, replacing any pending timer."""
+        """Schedule an extra refresh while a match is live, replacing any pending timer."""
         if self._live_unsub:
             self._live_unsub()
             self._live_unsub = None
         if self._is_live():
             self._live_unsub = async_call_later(
-                self.hass, 60,
+                self.hass, self._live_scan_interval,
                 lambda _: self.async_schedule_update_ha_state(force_refresh=True),
             )
-            _LOGGER.debug(f"Live match active for {self._name} — refresh scheduled in 60 s")
+            _LOGGER.debug(
+                "Live match active for %s — refresh scheduled in %s s",
+                self._name,
+                self._live_scan_interval,
+            )
 
     async def async_added_to_hass(self):
         """Load previously dispatched match_finished keys from disk so HA restarts
@@ -298,6 +368,10 @@ class SoccerLiveSensor(Entity):
             "last_successful_update": self._last_successful_update,
             "last_error": self._last_error,
             "api_status": "error" if self._last_error else "ok",
+            "provider": self._provider,
+            "api_football_season": self._api_football_season,
+            "api_football_quota": self._api_football_quota,
+            "live_scan_interval": self._live_scan_interval,
             "start_date": self._filter_start_str(),
             "end_date": self._filter_end_str(),
             "sensor_type": self._sensor_type,
@@ -312,6 +386,15 @@ class SoccerLiveSensor(Entity):
         return True
 
     @property
+    def _provider_label(self):
+        return "API-Football" if self._provider == PROVIDER_API_FOOTBALL else "ESPN"
+
+    def _request_headers(self):
+        if self._provider == PROVIDER_API_FOOTBALL:
+            return {"x-apisports-key": self._api_football_key}
+        return {"Accept-Language": "en"}
+
+    @property
     def unique_id(self):
         return f"{self._config_entry_id}_{self._name}_{self._sensor_type}"
 
@@ -321,7 +404,7 @@ class SoccerLiveSensor(Entity):
         return {
             "identifiers": {(DOMAIN, self._config_entry_id)},
             "name": f"Soccer Live · {display}",
-            "manufacturer": "ESPN",
+            "manufacturer": "API-Football" if self._provider == PROVIDER_API_FOOTBALL else "ESPN",
             "entry_type": "service",
         }
 
@@ -357,13 +440,15 @@ class SoccerLiveSensor(Entity):
             k: v for k, v in SoccerLiveSensor._fetch_locks.items()
             if k in SoccerLiveSensor._cache or v.locked()
         }
+        self._prune_api_football_endpoint_cache(_now)
 
-        # Use the URL as cache key so sensors sharing the same ESPN endpoint share one fetch
+        # Use the request URL as cache key so sensors sharing the same provider endpoint share one fetch
         url = await self._build_url()
         if url is None:
             return
         cache_key = url
-        if cache_key in SoccerLiveSensor._cache and (datetime.now() - SoccerLiveSensor._cache[cache_key]["time"]).total_seconds() < 60:
+        main_cache_ttl = self._main_cache_ttl()
+        if cache_key in SoccerLiveSensor._cache and (datetime.now() - SoccerLiveSensor._cache[cache_key]["time"]).total_seconds() < main_cache_ttl:
             try:
                 await self._process_and_apply(SoccerLiveSensor._cache[cache_key]["data"])
                 self._last_successful_update = datetime.now().isoformat()
@@ -381,7 +466,7 @@ class SoccerLiveSensor(Entity):
         _fetch_lock = SoccerLiveSensor._fetch_locks.setdefault(cache_key, asyncio.Lock())
         async with _fetch_lock:
             # Double-check cache: another sensor may have fetched while we waited for the lock
-            if cache_key in SoccerLiveSensor._cache and (datetime.now() - SoccerLiveSensor._cache[cache_key]["time"]).total_seconds() < 60:
+            if cache_key in SoccerLiveSensor._cache and (datetime.now() - SoccerLiveSensor._cache[cache_key]["time"]).total_seconds() < main_cache_ttl:
                 try:
                     await self._process_and_apply(SoccerLiveSensor._cache[cache_key]["data"])
                     self._last_successful_update = datetime.now().isoformat()
@@ -392,19 +477,19 @@ class SoccerLiveSensor(Entity):
                 self._schedule_live_refresh()
                 return
 
-            _ESPN_HEADERS = {"Accept-Language": "en"}
+            headers = self._request_headers()
             _timeout = aiohttp.ClientTimeout(total=10)
             session = async_get_clientsession(self.hass)
             retries = 0
             while retries < 3:
                 try:
-                    async with session.get(url, headers=_ESPN_HEADERS, timeout=_timeout) as response:
+                    async with session.get(url, headers=headers, timeout=_timeout) as response:
                         if response.status == 200:
                             raw = await response.read()
                             try:
                                 data = await self.hass.async_add_executor_job(json.loads, raw)
                             except (ValueError, UnicodeDecodeError) as json_err:
-                                self._last_error = f"Invalid JSON from ESPN: {json_err}"
+                                self._last_error = f"Invalid JSON from {self._provider_label}: {json_err}"
                                 _LOGGER.error(f"Invalid JSON for {self._name}: {json_err}")
                                 break
                             _LOGGER.debug(f"Data received for {self._name}")
@@ -418,6 +503,7 @@ class SoccerLiveSensor(Entity):
                                     "data": data,
                                     "time": datetime.now(),
                                 }
+                                await self._refresh_api_football_status()
                                 self._last_successful_update = datetime.now().isoformat()
                                 self._last_error = None
                             self._schedule_live_refresh()
@@ -431,7 +517,7 @@ class SoccerLiveSensor(Entity):
                             if self._sensor_type == "top_scorers" and response.status == 404:
                                 self._state = "Not available"
                                 self._scorers_unavailable = True
-                                _LOGGER.info(f"Top scorers not available for {self._code} (ESPN leaders endpoint returned 404 — not supported for all competitions)")
+                                _LOGGER.info(f"Top scorers not available for {self._code} ({self._provider_label} endpoint returned 404 — not supported for all competitions)")
                             else:
                                 self._last_error = f"HTTP {response.status}"
                             break
@@ -444,12 +530,12 @@ class SoccerLiveSensor(Entity):
                     await asyncio.sleep(2)
                     retries += 1
                 except asyncio.TimeoutError:
-                    self._last_error = "Timeout while fetching ESPN data"
+                    self._last_error = f"Timeout while fetching {self._provider_label} data"
                     await asyncio.sleep(2)
                     retries += 1
             else:
-                self._last_error = "All attempts failed; no data received from ESPN"
-                _LOGGER.warning(f"All attempts failed for {self._name} — no data received from ESPN")
+                self._last_error = f"All attempts failed; no data received from {self._provider_label}"
+                _LOGGER.warning(f"All attempts failed for {self._name} — no data received from {self._provider_label}")
 
     async def _process_and_apply(self, data):
         """Process raw ESPN data and apply state/attributes to this sensor.
@@ -550,6 +636,11 @@ class SoccerLiveSensor(Entity):
     async def _enrich_with_summary(self):
         """For team_match sensors, add lineup, formation, key events, and h2h
         from the summary?event=ID endpoint for the current match."""
+        if self._provider == PROVIDER_API_FOOTBALL:
+            if self._sensor_type not in {"team_match", "team_matches", "team_matches_mixed"} or not self._enable_summary_enrichment:
+                return
+            await self._enrich_with_api_football_fixture()
+            return
         if self._sensor_type != "team_match" or not self._enable_summary_enrichment:
             return
         matches = self._attributes.get("matches") or []
@@ -583,6 +674,9 @@ class SoccerLiveSensor(Entity):
             self._summary_cache[event_id] = summary_data
 
     async def _build_url(self):
+        if self._provider == PROVIDER_API_FOOTBALL:
+            return self._build_api_football_url()
+
         season_start = ""
         season_end = ""
 
@@ -651,6 +745,75 @@ class SoccerLiveSensor(Entity):
 
         return None
 
+    def _build_api_football_url(self):
+        if not self._api_football_key:
+            self._last_error = "API-Football key is missing"
+            return None
+
+        season = self._api_football_effective_season()
+        start, end = self._api_football_date_range()
+        params = {}
+
+        if self._sensor_type in {"team_match", "team_matches", "team_matches_mixed"}:
+            if not self._team_id:
+                self._last_error = "API-Football team_id is missing"
+                return None
+            params = {"team": self._team_id, "season": season}
+            if start and end:
+                params.update({"from": start, "to": end})
+            return f"{self.api_football_base_url}/fixtures?{urlencode(params)}"
+
+        if self._sensor_type == "all_matches_today":
+            return f"{self.api_football_base_url}/fixtures?{urlencode({'date': self._local_today_str()})}"
+
+        if self._sensor_type == "match_day" and self._code:
+            params = {"league": self._code, "season": season}
+            if start and end:
+                params.update({"from": start, "to": end})
+            return f"{self.api_football_base_url}/fixtures?{urlencode(params)}"
+
+        if self._sensor_type == "standings" and self._code:
+            return f"{self.api_football_base_url}/standings?{urlencode({'league': self._code, 'season': season})}"
+
+        if self._sensor_type == "top_scorers" and self._code:
+            return f"{self.api_football_base_url}/players/topscorers?{urlencode({'league': self._code, 'season': season})}"
+
+        self._last_error = f"{self._sensor_type} is not supported by API-Football provider yet"
+        return None
+
+    def _local_today_str(self):
+        user_timezone = getattr(getattr(self.hass, "config", None), "time_zone", None) or "UTC"
+        try:
+            local_tz = ZoneInfo(user_timezone)
+        except Exception:
+            local_tz = timezone.utc
+        return datetime.now(local_tz).strftime("%Y-%m-%d")
+
+    def _api_football_effective_season(self):
+        if self._api_football_season:
+            return self._api_football_season
+        start = self._dyn_start_date or self._start_date
+        end = self._dyn_end_date or self._end_date
+        now = datetime.now()
+        if self._sensor_type in {"standings", "top_scorers"} and now.month < 8:
+            return now.year - 1
+        if start and end:
+            if start.year == end.year:
+                return start.year
+            if start <= now <= end:
+                return now.year
+            return start.year
+        if start:
+            return start.year
+        return now.year
+
+    def _api_football_date_range(self):
+        start = self._dyn_start_date or self._start_date
+        end = self._dyn_end_date or self._end_date
+        if start and end:
+            return start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
+        return "", ""
+
     async def _fetch_match_summary(self, event_id):
         """Fetch full match summary (lineup, formation, key events) for the current match."""
         if not event_id or not self._code:
@@ -665,6 +828,185 @@ class SoccerLiveSensor(Entity):
         except Exception as e:
             _LOGGER.debug(f"Error fetching summary for {event_id}: {e}")
         return None
+
+    async def _enrich_with_api_football_fixture(self):
+        matches = self._attributes.get("matches") or []
+        if not matches:
+            return
+
+        targets = matches
+        if self._sensor_type in {"team_matches", "team_matches_mixed"}:
+            targets = self._api_football_team_list_enrichment_targets(matches)
+
+        from .parsers.api_football import process_fixture_enrichment
+        for match in targets:
+            event_id = match.get("event_id")
+            if not event_id:
+                continue
+
+            if event_id in self._summary_cache:
+                match.update(self._summary_cache[event_id])
+                continue
+
+            events_data, statistics_data, lineups_data = await asyncio.gather(
+                self._fetch_api_football_json("fixtures/events", {"fixture": event_id}),
+                self._fetch_api_football_json("fixtures/statistics", {"fixture": event_id}),
+                self._fetch_api_football_json("fixtures/lineups", {"fixture": event_id}),
+            )
+            if not any(self._api_football_response_has_items(d) for d in (events_data, statistics_data, lineups_data)):
+                continue
+
+            enrichment = await self.hass.async_add_executor_job(
+                process_fixture_enrichment,
+                events_data,
+                statistics_data,
+                lineups_data,
+                match.get("home_id"),
+                match.get("away_id"),
+            )
+            match.update(enrichment)
+            if match.get("state") == "post":
+                if len(self._summary_cache) >= 20:
+                    self._summary_cache.pop(next(iter(self._summary_cache)))
+                self._summary_cache[event_id] = enrichment
+
+        self._detect_and_dispatch_goals(matches, self._pending_events)
+        self._detect_and_dispatch_cards(matches, self._pending_events)
+        self._detect_and_dispatch_match_finished(matches, self._pending_events)
+        self._detect_and_dispatch_match_started(matches, self._pending_events)
+        self._refresh_api_football_enriched_schedule_attributes(matches)
+
+    def _api_football_response_has_items(self, data):
+        if not isinstance(data, dict):
+            return False
+        response = data.get("response")
+        return isinstance(response, list) and bool(response)
+
+    def _api_football_team_list_enrichment_targets(self, matches):
+        now = datetime.now(timezone.utc)
+        live = [m for m in matches if m.get("state") == "in"]
+        recent_finished = [
+            m for m in matches
+            if self._should_enrich_recent_finished_api_football_match(m, now)
+        ]
+        latest_finished = [m for m in matches if m.get("state") == "post"][-5:]
+        targets = []
+        seen = set()
+        for match in live + recent_finished + latest_finished:
+            event_id = match.get("event_id")
+            key = event_id or f"{match.get('date_iso')}|{match.get('home_team')}|{match.get('away_team')}"
+            if key in seen:
+                continue
+            seen.add(key)
+            targets.append(match)
+        return targets
+
+    def _refresh_api_football_enriched_schedule_attributes(self, matches):
+        if self._sensor_type not in {"team_matches", "team_matches_mixed", "all_matches_today", "match_day"}:
+            return
+        self._attributes.update(self._compute_all_matches_attributes(matches, [], detect_events=False))
+        current_next = self._attributes.get("next_match")
+        if isinstance(current_next, dict):
+            current_id = current_next.get("event_id")
+            refreshed_next = next((m for m in matches if m.get("event_id") == current_id), None)
+            if refreshed_next:
+                self._attributes["next_match"] = refreshed_next
+
+    def _should_enrich_recent_finished_api_football_match(self, match, now):
+        if match.get("state") != "post":
+            return False
+        if match.get("match_details") or match.get("key_events"):
+            return False
+        raw_date = match.get("date_iso")
+        if not raw_date:
+            return False
+        try:
+            match_date = datetime.fromisoformat(str(raw_date).replace("Z", "+00:00"))
+            if match_date.tzinfo is None:
+                match_date = match_date.replace(tzinfo=timezone.utc)
+            match_date = match_date.astimezone(timezone.utc)
+        except ValueError:
+            return False
+        recent_hours = max(int(self._recent_match_hours or 0), 1)
+        return match_date <= now and now - match_date <= timedelta(hours=recent_hours)
+
+    async def _fetch_api_football_json(self, path, params=None):
+        if not self._api_football_key:
+            return None
+        cache_key = self._api_football_cache_key(path, params or {})
+        ttl = self._api_football_cache_ttl(path)
+        cached = SoccerLiveSensor._api_football_endpoint_cache.get(cache_key)
+        if cached and (datetime.now() - cached["time"]).total_seconds() < ttl:
+            return cached["data"]
+
+        lock = SoccerLiveSensor._api_football_endpoint_locks.setdefault(cache_key, asyncio.Lock())
+        async with lock:
+            cached = SoccerLiveSensor._api_football_endpoint_cache.get(cache_key)
+            if cached and (datetime.now() - cached["time"]).total_seconds() < ttl:
+                return cached["data"]
+
+            data = await self._fetch_api_football_json_uncached(path, params or {})
+            if data is not None:
+                SoccerLiveSensor._api_football_endpoint_cache[cache_key] = {
+                    "data": data,
+                    "time": datetime.now(),
+                    "ttl": ttl,
+                }
+            return data
+
+    async def _fetch_api_football_json_uncached(self, path, params=None):
+        try:
+            session = async_get_clientsession(self.hass)
+            async with session.get(
+                f"{self.api_football_base_url}/{path}",
+                headers=self._request_headers(),
+                params=params or {},
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as response:
+                if response.status == 200:
+                    raw = await response.read()
+                    return await self.hass.async_add_executor_job(json.loads, raw)
+                _LOGGER.debug("API-Football enrichment %s returned HTTP %s", path, response.status)
+        except Exception as e:
+            _LOGGER.debug("Error fetching API-Football enrichment %s: %s", path, e)
+        return None
+
+    async def _refresh_api_football_status(self):
+        if self._provider != PROVIDER_API_FOOTBALL or not self._api_football_key:
+            return
+        status = await self._fetch_api_football_json("status")
+        response = status.get("response", {}) if isinstance(status, dict) else {}
+        requests = response.get("requests", {}) if isinstance(response, dict) else {}
+        subscription = response.get("subscription", {}) if isinstance(response, dict) else {}
+        if requests or subscription:
+            self._api_football_quota = {
+                "plan": subscription.get("plan"),
+                "active": subscription.get("active"),
+                "requests_current": requests.get("current"),
+                "requests_limit_day": requests.get("limit_day"),
+            }
+
+    def _api_football_cache_key(self, path, params):
+        return path, tuple(sorted((params or {}).items()))
+
+    def _api_football_cache_ttl(self, path):
+        if path == "status":
+            return 1800
+        if path == "fixtures/events":
+            return 30
+        if path in {"fixtures/statistics", "fixtures/lineups"}:
+            return 300
+        return 300
+
+    def _prune_api_football_endpoint_cache(self, now):
+        SoccerLiveSensor._api_football_endpoint_cache = {
+            k: v for k, v in SoccerLiveSensor._api_football_endpoint_cache.items()
+            if (now - v["time"]).total_seconds() < v.get("ttl", 300)
+        }
+        SoccerLiveSensor._api_football_endpoint_locks = {
+            k: v for k, v in SoccerLiveSensor._api_football_endpoint_locks.items()
+            if k in SoccerLiveSensor._api_football_endpoint_cache or v.locked()
+        }
     
     
     async def _get_calendar_data(self):
@@ -1180,10 +1522,10 @@ class SoccerLiveSensor(Entity):
             "live_match_h2h_count": len(match.get("head_to_head") or []),
         }
 
-    def _compute_all_matches_attributes(self, matches, events: list = None):
+    def _compute_all_matches_attributes(self, matches, events: list = None, detect_events=True):
         if events is None:
             events = []
-        if self._sensor_type != "team_matches_mixed":
+        if detect_events and self._sensor_type != "team_matches_mixed":
             self._detect_and_dispatch_goals(matches, events)
             self._detect_and_dispatch_cards(matches, events)
             self._detect_and_dispatch_match_finished(matches, events)
@@ -1258,7 +1600,7 @@ class SoccerLiveSensor(Entity):
         recent = [m for m in unique_matches if m.get("state") == "post"][-5:]
 
         def compact(match):
-            return {
+            item = {
                 "event_id": match.get("event_id"),
                 "date": match.get("date"),
                 "state": match.get("state"),
@@ -1279,6 +1621,20 @@ class SoccerLiveSensor(Entity):
                 "season_info": match.get("season_info"),
                 "broadcasts": match.get("broadcasts") or [],
             }
+            for key in (
+                "match_details",
+                "key_events",
+                "home_statistics",
+                "away_statistics",
+                "lineup_home",
+                "lineup_away",
+                "formation_home",
+                "formation_away",
+            ):
+                value = match.get(key)
+                if value:
+                    item[key] = value
+            return item
 
         return {
             "schedule_match_count": len(unique_matches),
@@ -1291,12 +1647,199 @@ class SoccerLiveSensor(Entity):
         }
 
     def _process_data(self, data) -> dict:
-        """Parse ESPN data and return {"state": ..., "attributes": {...}, "events": [...]}.
+        """Parse provider data and return {"state": ..., "attributes": {...}, "events": [...]}.
         No mutations to self._state, self._attributes, or self._pending_events.
         The caller applies all returned values on the event loop.
         """
         events: list = []
         from .parsers.scoreboard import process_match_data, process_news_data
+        if self._provider == PROVIDER_API_FOOTBALL:
+            from .parsers.api_football import process_fixture_data
+
+            if self._sensor_type == "standings":
+                from .parsers.api_football import process_standings_data
+                standings = process_standings_data(data)
+                return {
+                    "state": "Standings",
+                    "attributes": {
+                        **standings,
+                        "competition_code": self._code,
+                        "provider": PROVIDER_API_FOOTBALL,
+                    },
+                    "events": events,
+                }
+
+            if self._sensor_type == "top_scorers":
+                from .parsers.api_football import process_scorers_data as process_api_football_scorers_data
+                scorer_data = process_api_football_scorers_data(data)
+                scorers = scorer_data.get("scorers", [])
+                return {
+                    "state": str(len(scorers)),
+                    "attributes": {
+                        **scorer_data,
+                        "competition_code": self._code,
+                        "provider": PROVIDER_API_FOOTBALL,
+                    },
+                    "events": events,
+                }
+
+            def get_team_match_data(next_match_only=False):
+                return process_fixture_data(
+                    data,
+                    self.hass,
+                    team_name=self._team_name,
+                    team_id=self._team_id,
+                    include_friendlies=self._include_friendlies,
+                )
+
+            if self._sensor_type in ["team_matches", "team_matches_mixed", "all_matches_today", "match_day"]:
+                from .parsers.scoreboard import is_within_recent_window
+                match_data = get_team_match_data()
+                matches = match_data.get("matches", []) or []
+                _live = [m for m in matches if m.get("state") == "in"]
+                _recent_post = [m for m in matches
+                    if m.get("state") == "post" and is_within_recent_window(m.get("date"), self._recent_match_hours)]
+                _upcoming = [m for m in matches if m.get("state") == "pre"]
+                if _live:
+                    next_match = _live[0]
+                elif _recent_post:
+                    next_match = _recent_post[-1]
+                elif _upcoming:
+                    next_match = _upcoming[0]
+                else:
+                    next_match = matches[-1] if matches else None
+
+                live_matches = [m for m in matches if m.get("state") == "in"]
+                if live_matches:
+                    lm = live_matches[0]
+                    state = f"🔴 {lm.get('home_team','?')} {lm.get('home_score','?')} - {lm.get('away_score','?')} {lm.get('away_team','?')} ({lm.get('clock','')})"
+                elif matches:
+                    finished_matches = [m for m in matches if m.get("state") == "post"]
+                    if finished_matches:
+                        fm = finished_matches[-1]
+                        state = f"✅ {fm.get('home_team','?')} {fm.get('home_score','?')} - {fm.get('away_score','?')} {fm.get('away_team','?')}"
+                    else:
+                        um = _upcoming[0] if _upcoming else matches[0]
+                        state = f"⏳ {um.get('home_team','?')} vs {um.get('away_team','?')} ({um.get('date','?')})"
+                else:
+                    state = "No matches available"
+
+                detect_now = not (self._sensor_type == "team_matches" and self._enable_summary_enrichment)
+                computed_attrs = self._compute_all_matches_attributes(matches, events, detect_events=detect_now)
+                return {
+                    "state": state,
+                    "attributes": {
+                        "league_info": match_data.get("league_info", []),
+                        "team_name": match_data.get("team_name", "N/A"),
+                        "team_logo": match_data.get("team_logo", "N/A"),
+                        "matches": matches,
+                        "next_match": next_match,
+                        "provider": PROVIDER_API_FOOTBALL,
+                        "friendlies_included": self._include_friendlies,
+                        **computed_attrs,
+                    },
+                    "events": events,
+                }
+
+            if self._sensor_type == "team_match":
+                all_data = get_team_match_data()
+                all_matches = all_data.get("matches", []) or []
+                if not self._enable_summary_enrichment:
+                    self._detect_and_dispatch_goals(all_matches, events)
+                    self._detect_and_dispatch_cards(all_matches, events)
+                    self._detect_and_dispatch_match_finished(all_matches, events)
+                    self._detect_and_dispatch_match_started(all_matches, events)
+
+                from .parsers.scoreboard import is_within_recent_window
+                _live = [m for m in all_matches if m.get("state") == "in"]
+                _recent_post = [m for m in all_matches
+                    if m.get("state") == "post" and is_within_recent_window(m.get("date"), self._recent_match_hours)]
+                _upcoming = [m for m in all_matches if m.get("state") == "pre"]
+                if _live:
+                    next_match = _live[0]
+                elif _recent_post:
+                    next_match = _recent_post[-1]
+                elif _upcoming:
+                    next_match = _upcoming[0]
+                else:
+                    next_match = None
+
+                if next_match:
+                    if next_match.get("state") == "in":
+                        state = f"{next_match.get('home_score','?')} - {next_match.get('away_score','?')} ({next_match.get('clock','')})"
+                    elif next_match.get("state") == "post":
+                        state = f"Last match: {next_match.get('home_team','N/A')} {next_match.get('home_score','?')} - {next_match.get('away_score','?')} {next_match.get('away_team','N/A')}"
+                    else:
+                        state = f"Next match: {next_match.get('home_team','N/A')} vs {next_match.get('away_team','N/A')}"
+                else:
+                    state = "No matches available"
+
+                finished_matches = [m for m in all_matches if m.get("state") == "post"]
+                previous_matches = [
+                    {
+                        "date": m.get("date"),
+                        "home_team": m.get("home_team"),
+                        "home_abbrev": m.get("home_abbrev"),
+                        "home_logo": m.get("home_logo"),
+                        "home_color": m.get("home_color"),
+                        "home_score": m.get("home_score"),
+                        "away_team": m.get("away_team"),
+                        "away_abbrev": m.get("away_abbrev"),
+                        "away_logo": m.get("away_logo"),
+                        "away_color": m.get("away_color"),
+                        "away_score": m.get("away_score"),
+                        "state": m.get("state"),
+                        "league_name": m.get("league_name", ""),
+                        "season_info": m.get("season_info", ""),
+                    }
+                    for m in list(reversed(finished_matches))[:10]
+                ]
+                pre_in_matches = [m for m in all_matches if m.get("state") in ("pre", "in")]
+                skip = 1 if next_match and next_match.get("state") in ("pre", "in") else 0
+                upcoming_matches = [
+                    {
+                        "date": m.get("date"),
+                        "state": m.get("state"),
+                        "home_team": m.get("home_team"),
+                        "home_abbrev": m.get("home_abbrev"),
+                        "home_logo": m.get("home_logo"),
+                        "home_color": m.get("home_color"),
+                        "home_score": m.get("home_score"),
+                        "away_team": m.get("away_team"),
+                        "away_abbrev": m.get("away_abbrev"),
+                        "away_logo": m.get("away_logo"),
+                        "away_color": m.get("away_color"),
+                        "away_score": m.get("away_score"),
+                        "clock": m.get("clock"),
+                        "head_to_head": (m.get("head_to_head") or [])[:3],
+                        "event_id": m.get("event_id"),
+                        "home_form": m.get("home_form", ""),
+                        "away_form": m.get("away_form", ""),
+                        "league_name": m.get("league_name", ""),
+                    }
+                    for m in pre_in_matches[skip:skip + 4]
+                ]
+                computed_attrs = self._compute_next_match_attributes(next_match) if next_match else {}
+                return {
+                    "state": state,
+                    "attributes": {
+                        **all_data,
+                        "matches": [next_match] if next_match else [],
+                        "next_match": next_match,
+                        "upcoming_matches": upcoming_matches,
+                        "previous_matches": previous_matches,
+                        "provider": PROVIDER_API_FOOTBALL,
+                        "friendlies_included": self._include_friendlies,
+                        **computed_attrs,
+                    },
+                    "events": events,
+                }
+
+            return {
+                "state": "Unsupported by API-Football provider",
+                "attributes": {"provider": PROVIDER_API_FOOTBALL, "matches": []},
+                "events": events,
+            }
 
         if self._sensor_type == "news":
             articles = process_news_data(data)

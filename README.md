@@ -1,6 +1,6 @@
 # ⚽ Soccer Live — Home Assistant Integration
 
-Real-time football data in Home Assistant via the ESPN API with multi-language support, extensive sensor types, HA events, device grouping and performance optimizations.
+Real-time football data in Home Assistant via ESPN, with optional API-Football support for users who provide their own API key.
 
 > Built on ideas from [Calcio Live](https://github.com/Bobsilvio/calcio-live) by @Bobsilvio
 
@@ -44,8 +44,36 @@ Configure via **Settings → Devices & Services → Soccer Live → Configure**:
 
 | Option | Default | Description |
 |---|---|---|
-| `enable_summary_enrichment` | `true` | Fetch ESPN summary endpoint for lineup, key events, H2H and stats. Disable to reduce API calls. |
+| `scan_interval` | `3` minutes | Normal polling interval when no match is live. |
+| `live_scan_interval` | `60` seconds | Extra refresh interval while a match is live (`30` / `45` / `60` / `90` / `120` seconds). Use `30` seconds for faster goal/card updates when your API quota allows it. |
+| `enable_summary_enrichment` | `true` | Fetch extra match details. ESPN uses the summary endpoint; API-Football uses fixture events, statistics and lineups. Disable to reduce API calls. |
+| `include_friendlies` | `true` | Include friendlies when using API-Football fixture data. |
+| `api_football_season` | `0` (auto) | API-Football season to query. For standings/top scorers, auto mode uses the previous season before August. |
 | `max_matches` | `0` (unlimited) | Limit the number of matches stored per sensor (5 / 10 / 15 / 20 / 30). Useful to reduce state size on large sensors. |
+
+---
+
+## 🌐 Data providers
+
+ESPN is the default provider and does not require an API key. API-Football can be selected during setup and requires your own API-Football key.
+
+Current API-Football support:
+- Team fixtures: `team_match`, `team_matches`, `team_matches_mixed`
+- Competition fixtures: `match_day`
+- `all_matches_today`
+- `standings`
+- `top_scorers`
+- Optional match enrichment for `team_match`, `team_matches` and `team_matches_mixed` via fixture events, statistics and lineups
+
+API-Football news and knockout brackets are not supported yet. News and bracket sensors remain ESPN-only.
+
+The integration caches API-Football calls to reduce quota use:
+- Main fixture/standings/scorers responses are shared by URL for up to 60 seconds. While a match is live, this cache follows `live_scan_interval` when that value is lower than 60 seconds.
+- Fixture events are cached for 30 seconds.
+- Fixture statistics and lineups are cached for 5 minutes.
+- The `api_football_quota` diagnostic attribute is refreshed through API-Football `/status` every 30 minutes.
+
+For API-Football team sensors, search teams directly by name during setup. Labels include the API-Football ID, because these IDs are different from ESPN IDs.
 
 ---
 
@@ -505,4 +533,4 @@ Available after kick-off when `enable_summary_enrichment` is on:
 
 ## 📜 License
 
-GPL-3.0 — data via ESPN public APIs.
+GPL-3.0 — data via ESPN public APIs or API-Football when configured with your own key.

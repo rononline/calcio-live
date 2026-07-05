@@ -5,7 +5,11 @@
         "title": "Soccer Live setup",
         "description": "Welcome to the Soccer Live configuration wizard.\n\nChoose what you want to monitor:\n\n- **League**: every match of a specific league (a knockout bracket sensor is created automatically for cup competitions).\n- **Team**: matches of a specific team.\n- **All matches today**: every match in the world played today.\n- **News**: news feed for a specific competition.\n- **Manual entry**: enter the team ID manually.",
         "data": {
-          "selection": "What do you want to monitor?"
+          "provider": "Data provider",
+          "selection": "What do you want to monitor?",
+          "api_football_key": "API-Football API key",
+          "api_football_season": "API-Football season (0 = auto)",
+          "include_friendlies": "Include friendlies"
         }
       },
       "news_competition": {
@@ -27,6 +31,20 @@
         "description": "Select the league the team you want to follow plays in.\n\nIn the next step you will pick the team from the list.",
         "data": {
           "competition_code": "Competition"
+        }
+      },
+      "api_football_team_method": {
+        "title": "API-Football team selection",
+        "description": "Choose how to find the team. Team search is usually faster and shows API-Football IDs directly.",
+        "data": {
+          "team_method": "Team selection method"
+        }
+      },
+      "api_football_team_search": {
+        "title": "Search API-Football team",
+        "description": "Enter at least three characters of the team name.",
+        "data": {
+          "team_search": "Team search"
         }
       },
       "team": {
@@ -68,10 +86,13 @@
         "description": "Tune the polling behavior and how long to keep the last finished match visible on the team card before switching to the next upcoming match.",
         "data": {
           "scan_interval": "Scan interval (minutes)",
+          "live_scan_interval": "Live refresh interval (seconds)",
           "start_date": "Start date (YYYY-MM-DD)",
           "end_date": "End date (YYYY-MM-DD)",
           "recent_match_hours": "Keep finished match visible for (hours)",
           "enable_summary_enrichment": "Fetch lineup, key events and H2H (summary enrichment)",
+          "include_friendlies": "Include friendlies",
+          "api_football_season": "API-Football season (0 = auto)",
           "max_matches": "Max matches in attributes (0 = unlimited)",
           "notify_service": "Notification service (e.g. notify.mobile_app)"
         }
@@ -79,7 +100,11 @@
     },
     "error": {
       "invalid_date": "Date must be in YYYY-MM-DD format (e.g. 2026-06-20).",
-      "end_before_start": "End date must be on or after start date."
+      "end_before_start": "End date must be on or after start date.",
+      "api_key_required": "API-Football requires an API key.",
+      "unsupported_provider_selection": "API-Football news is not supported yet.",
+      "search_too_short": "Enter at least three characters.",
+      "no_search_results": "No teams found for this search."
     },
     "abort": {
       "no_competitions": "Could not load the competition list. Check your internet connection and try again.",
