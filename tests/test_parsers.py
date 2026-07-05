@@ -357,6 +357,30 @@ class TestApiFootballParser:
         assert result["formation_home"] == "4-3-3"
         assert result["lineup_home"][0]["starter"] is True
 
+    def test_stoppage_time_kept_in_event_detail_and_key_event(self):
+        # elapsed=90, extra=7 must render as "90+7" in both the human-readable
+        # match_details string and the key_event minute/clock fields.
+        events = {"response": [{
+            "time": {"elapsed": 90, "extra": 7},
+            "team": {"id": 42, "name": "Arsenal"},
+            "player": {"name": "J. Alvarez"},
+            "type": "Card",
+            "detail": "Yellow Card",
+        }]}
+        result = process_api_football_fixture_enrichment(events, None, None, home_team_id=42, away_team_id=50)
+        assert result["match_details"][0] == "Yellow Card - 90+7': J. Alvarez"
+        assert result["key_events"][0]["clock"] == "90+7"
+        assert result["key_events"][0]["minute"] == "90+7"
+
+    def test_event_detail_without_extra_and_missing_minute(self):
+        events = {"response": [
+            {"time": {"elapsed": 45}, "player": {"name": "A"}, "type": "Goal", "detail": "Normal Goal"},
+            {"time": {}, "player": {"name": "B"}, "type": "Card", "detail": "Yellow Card"},
+        ]}
+        result = process_api_football_fixture_enrichment(events, None, None, home_team_id=1, away_team_id=2)
+        assert result["match_details"][0] == "Goal - 45': A"
+        assert result["match_details"][1] == "Yellow Card - N/A: B"
+
 
 # ---------------------------------------------------------------------------
 # Standings parser

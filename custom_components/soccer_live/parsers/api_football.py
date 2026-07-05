@@ -43,15 +43,27 @@ def _score(value):
     return "N/A" if value is None else str(value)
 
 
+def _minute(time_info):
+    """Return (elapsed, extra) as ints/None from an API-Football time object."""
+    time_info = _as_dict(time_info)
+    return time_info.get("elapsed"), time_info.get("extra")
+
+
+def _minute_text(time_info):
+    """Human-readable match minute, including stoppage time (e.g. '90+7')."""
+    elapsed, extra = _minute(time_info)
+    if elapsed is None:
+        return "N/A"
+    return f"{elapsed}+{extra}" if extra else f"{elapsed}"
+
+
 def _event_detail(event, home_id=None, away_id=None):
     event = _as_dict(event)
     player = _as_dict(event.get("player")).get("name", "N/A")
     event_type = event.get("type") or ""
     detail = event.get("detail") or event_type or "Event"
-    minute = event.get("time", {})
-    if isinstance(minute, dict):
-        minute = minute.get("elapsed")
-    minute_text = f"{minute}'" if minute is not None else "N/A"
+    minute = _minute_text(event.get("time"))
+    minute_text = minute if minute == "N/A" else f"{minute}'"
     event_type_lower = event_type.lower()
     detail_lower = detail.lower()
     if event_type_lower == "goal":
@@ -69,14 +81,12 @@ def _event_detail(event, home_id=None, away_id=None):
 
 def _key_event(event):
     event = _as_dict(event)
-    time_info = _as_dict(event.get("time"))
     team = _as_dict(event.get("team"))
     player = _as_dict(event.get("player"))
     assist = _as_dict(event.get("assist"))
     event_type = event.get("type") or ""
     detail = event.get("detail") or event_type
-    elapsed = time_info.get("elapsed")
-    extra = time_info.get("extra")
+    elapsed, extra = _minute(event.get("time"))
     minute = f"{elapsed}+{extra}" if elapsed is not None and extra else (str(elapsed) if elapsed is not None else "")
     return {
         "type": event_type,
