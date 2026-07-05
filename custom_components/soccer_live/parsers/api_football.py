@@ -44,9 +44,16 @@ def _score(value):
 
 
 def _minute(time_info):
-    """Return (elapsed, extra) as ints/None from an API-Football time object."""
+    """Return (elapsed, extra) from an API-Football time object.
+
+    API-Football reports pre-match incidents (e.g. a card shown in the tunnel)
+    with a negative ``elapsed`` such as -5. That is not a meaningful match
+    minute, so it is normalized to None rather than rendered as "-5'"."""
     time_info = _as_dict(time_info)
-    return time_info.get("elapsed"), time_info.get("extra")
+    elapsed = time_info.get("elapsed")
+    if isinstance(elapsed, (int, float)) and elapsed < 0:
+        elapsed = None
+    return elapsed, time_info.get("extra")
 
 
 def _minute_text(time_info):
@@ -57,7 +64,7 @@ def _minute_text(time_info):
     return f"{elapsed}+{extra}" if extra else f"{elapsed}"
 
 
-def _event_detail(event, home_id=None, away_id=None):
+def _event_detail(event):
     event = _as_dict(event)
     player = _as_dict(event.get("player")).get("name", "N/A")
     event_type = event.get("type") or ""
@@ -109,18 +116,25 @@ def _clean_percent(value):
     return value
 
 
+# API-Football stat name -> (normalized key, optional value transform).
+_STAT_KEY_MAP = {
+    "Ball Possession": ("possessionPct", _clean_percent),
+    "Total Shots": ("totalShots", None),
+    "Shots on Goal": ("shotsOnTarget", None),
+    "Fouls": ("foulsCommitted", None),
+    "Corner Kicks": ("cornerKicks", None),
+    "Offsides": ("offsides", None),
+    "Yellow Cards": ("yellowCards", None),
+    "Red Cards": ("redCards", None),
+}
+
+
 def _normalize_stat_key(name, value):
-    mapping = {
-        "Ball Possession": ("possessionPct", _clean_percent(value)),
-        "Total Shots": ("totalShots", value),
-        "Shots on Goal": ("shotsOnTarget", value),
-        "Fouls": ("foulsCommitted", value),
-        "Corner Kicks": ("cornerKicks", value),
-        "Offsides": ("offsides", value),
-        "Yellow Cards": ("yellowCards", value),
-        "Red Cards": ("redCards", value),
-    }
-    return mapping.get(name)
+    entry = _STAT_KEY_MAP.get(name)
+    if not entry:
+        return None
+    key, transform = entry
+    return key, (transform(value) if transform else value)
 
 
 def process_fixture_data(data, hass=None, team_name=None, team_id=None, include_friendlies=True):
@@ -159,7 +173,7 @@ def process_fixture_data(data, hass=None, team_name=None, team_id=None, include_
                 team_logo = away.get("logo") or team_logo
 
             events = [_as_dict(e) for e in (item.get("events") or []) if isinstance(e, dict)]
-            match_details = [_event_detail(e, home.get("id"), away.get("id")) for e in events]
+            match_details = [_event_detail(e) for e in events]
             key_events = [_key_event(e) for e in events]
             state = _status_state(status.get("short"))
             venue = _as_dict(fixture.get("venue"))
@@ -348,7 +362,7 @@ def process_fixture_enrichment(events_data=None, statistics_data=None, lineups_d
     if away_team_id is None and len(lineups) > 1:
         away_team_id = _as_dict(lineups[1].get("team")).get("id")
 
-    out["match_details"] = [_event_detail(e, home_team_id, away_team_id) for e in events]
+    out["match_details"] = [_event_detail(e) for e in events]
     out["key_events"] = [_key_event(e) for e in events]
 
     for index, item in enumerate(stats[:2]):
@@ -377,7 +391,9 @@ def process_fixture_enrichment(events_data=None, statistics_data=None, lineups_d
         api_team_id = _as_dict(item.get("team")).get("id")
         formation = item.get("formation", "")
         players = []
-        for raw_player in (item.get("startXI", []) or []) + (item.get("substitutes", []) or []):
+        start_xi = item.get("startXI", []) or []
+        subs = item.get("substitutes", []) or []
+        for raw_player, is_starter in [(p, True) for p in start_xi] + [(p, False) for p in subs]:
             player = _as_dict(_as_dict(raw_player).get("player"))
             if not player:
                 continue
@@ -386,7 +402,7 @@ def process_fixture_enrichment(events_data=None, statistics_data=None, lineups_d
                 "short_name": player.get("name", ""),
                 "jersey": player.get("number", ""),
                 "position": player.get("pos", ""),
-                "starter": raw_player in (item.get("startXI", []) or []),
+                "starter": is_starter,
                 "headshot": "",
             })
         if home_team_id is not None and str(api_team_id) == str(home_team_id):

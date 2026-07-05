@@ -381,6 +381,29 @@ class TestApiFootballParser:
         assert result["match_details"][0] == "Goal - 45': A"
         assert result["match_details"][1] == "Yellow Card - N/A: B"
 
+    def test_pre_match_negative_minute_normalized(self):
+        # API-Football uses elapsed=-5 for a tunnel/warmup card; it must not
+        # render as "-5'" and the key_event minute must be blank, not "-5".
+        events = {"response": [
+            {"time": {"elapsed": -5, "extra": None}, "player": {"name": "S. McTominay"},
+             "type": "Card", "detail": "Yellow Card"},
+        ]}
+        result = process_api_football_fixture_enrichment(events, None, None, home_team_id=1, away_team_id=2)
+        assert result["match_details"][0] == "Yellow Card - N/A: S. McTominay"
+        assert result["key_events"][0]["minute"] == ""
+
+    def test_substitutes_not_marked_as_starters(self):
+        lineups = {"response": [{
+            "team": {"id": 1, "name": "Home"},
+            "formation": "4-3-3",
+            "startXI": [{"player": {"name": "Starter", "number": 9, "pos": "F"}}],
+            "substitutes": [{"player": {"name": "Sub", "number": 20, "pos": "M"}}],
+        }]}
+        result = process_api_football_fixture_enrichment(None, None, lineups, home_team_id=1, away_team_id=2)
+        by_name = {p["name"]: p for p in result["lineup_home"]}
+        assert by_name["Starter"]["starter"] is True
+        assert by_name["Sub"]["starter"] is False
+
 
 # ---------------------------------------------------------------------------
 # Standings parser
