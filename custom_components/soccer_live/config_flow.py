@@ -58,6 +58,8 @@ class SoccerLiveConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 self._errors[CONF_API_FOOTBALL_KEY] = "api_key_required"
             elif provider == PROVIDER_API_FOOTBALL and selection == OPTION_NEWS:
                 self._errors["selection"] = "unsupported_provider_selection"
+            elif provider == PROVIDER_API_FOOTBALL and not await self._validate_api_football_key(api_football_key):
+                self._errors[CONF_API_FOOTBALL_KEY] = "invalid_api_key"
             else:
                 user_input[CONF_API_FOOTBALL_KEY] = api_football_key
                 user_input[CONF_INCLUDE_FRIENDLIES] = user_input.get(CONF_INCLUDE_FRIENDLIES, True)
@@ -322,6 +324,33 @@ class SoccerLiveConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         except (aiohttp.ClientError, asyncio.TimeoutError) as e:
             _LOGGER.error("Error loading teams for %s: %s", competition_code, repr(e))
             self._teams = []
+
+    async def _validate_api_football_key(self, api_key):
+        """Return True if API-Football accepts the key.
+
+        Rejects only on a clear invalid-credentials signal (HTTP 401/403 or an
+        ``errors.token`` in the body). On transient problems (timeout, 5xx,
+        network error) it returns True so a temporary outage cannot block setup.
+        """
+        try:
+            session = async_get_clientsession(self.hass)
+            async with session.get(
+                "https://v3.football.api-sports.io/status",
+                headers={"x-apisports-key": api_key},
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as response:
+                if response.status in (401, 403):
+                    return False
+                if response.status != 200:
+                    return True
+                data = await response.json()
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            _LOGGER.warning("Could not validate API-Football key (network issue): %s", repr(e))
+            return True
+        errors = data.get("errors") if isinstance(data, dict) else None
+        if isinstance(errors, dict) and errors.get("token"):
+            return False
+        return True
 
     async def _get_api_football_json(self, path, params=None):
         api_key = self._data.get(CONF_API_FOOTBALL_KEY, "")

@@ -77,6 +77,13 @@
           "competition_code": "Competitie"
         }
       }
+    },
+    "error": {
+      "api_key_required": "API-Football vereist een API-key.",
+      "unsupported_provider_selection": "API-Football nieuws wordt nog niet ondersteund.",
+      "search_too_short": "Voer minimaal drie tekens in.",
+      "no_search_results": "Geen teams gevonden voor deze zoekopdracht.",
+      "invalid_api_key": "Ongeldige API-Football-key. Controleer je key en probeer opnieuw."
     }
   },
   "options": {
@@ -104,7 +111,8 @@
       "api_key_required": "API-Football vereist een API-key.",
       "unsupported_provider_selection": "API-Football nieuws wordt nog niet ondersteund.",
       "search_too_short": "Voer minimaal drie tekens in.",
-      "no_search_results": "Geen teams gevonden voor deze zoekopdracht."
+      "no_search_results": "Geen teams gevonden voor deze zoekopdracht.",
+      "invalid_api_key": "Ongeldige API-Football-key. Controleer je key en probeer opnieuw."
     },
     "abort": {
       "no_competitions": "Kan de competitielijst niet laden. Controleer uw internetverbinding en probeer het opnieuw.",

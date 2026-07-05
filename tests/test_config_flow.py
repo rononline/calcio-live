@@ -101,8 +101,17 @@ _config_flow_mod = _load_config_flow_module()
 SoccerLiveConfigFlow = _config_flow_mod.SoccerLiveConfigFlow
 
 
+async def _always_valid(_key):
+    return True
+
+
+async def _always_invalid(_key):
+    return False
+
+
 def test_api_football_team_starts_team_search_step():
     flow = SoccerLiveConfigFlow()
+    flow._validate_api_football_key = _always_valid
 
     result = asyncio.run(flow.async_step_user({
         "provider": "api_football",
@@ -119,6 +128,7 @@ def test_api_football_team_starts_team_search_step():
 
 def test_api_football_label_value_is_normalized():
     flow = SoccerLiveConfigFlow()
+    flow._validate_api_football_key = _always_valid
 
     result = asyncio.run(flow.async_step_user({
         "provider": "API-Football",
@@ -131,3 +141,22 @@ def test_api_football_label_value_is_normalized():
     assert result["type"] == "form"
     assert result["step_id"] == "api_football_team_search"
     assert flow._data["provider"] == "api_football"
+
+
+def test_api_football_invalid_key_reports_error():
+    flow = SoccerLiveConfigFlow()
+    flow._validate_api_football_key = _always_invalid
+
+    result = asyncio.run(flow.async_step_user({
+        "provider": "api_football",
+        "selection": "Team",
+        "api_football_key": "bad-key",
+        "api_football_season": 0,
+        "include_friendlies": True,
+    }))
+
+    # Rejected keys re-show the user form with the invalid_api_key error and
+    # do not advance to the team search step.
+    assert result["type"] == "form"
+    assert result["step_id"] == "user"
+    assert flow._errors.get("api_football_key") == "invalid_api_key"

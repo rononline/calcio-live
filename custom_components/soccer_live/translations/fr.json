@@ -78,6 +78,13 @@
         }
       }
     },
+    "error": {
+      "api_key_required": "API-Football nécessite une clé API.",
+      "unsupported_provider_selection": "Les actualités API-Football ne sont pas encore prises en charge.",
+      "search_too_short": "Saisissez au moins trois caractères.",
+      "no_search_results": "Aucune équipe trouvée pour cette recherche.",
+      "invalid_api_key": "Clé API-Football invalide. Veuillez vérifier votre clé et réessayer."
+    },
     "abort": {
       "no_competitions": "Impossible de charger la liste des compétitions. Vérifiez votre connexion internet et réessayez.",
       "no_teams": "Impossible de charger la liste des équipes pour cette compétition. Vérifiez votre connexion internet et réessayez."
@@ -108,7 +115,8 @@
       "api_key_required": "API-Football nécessite une clé API.",
       "unsupported_provider_selection": "Les actualités API-Football ne sont pas encore prises en charge.",
       "search_too_short": "Saisissez au moins trois caractères.",
-      "no_search_results": "Aucune équipe trouvée pour cette recherche."
+      "no_search_results": "Aucune équipe trouvée pour cette recherche.",
+      "invalid_api_key": "Clé API-Football invalide. Veuillez vérifier votre clé et réessayer."
     }
   }
 }
