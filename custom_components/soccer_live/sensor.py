@@ -493,6 +493,11 @@ class SoccerLiveSensor(Entity):
                                 _LOGGER.error(f"Invalid JSON for {self._name}: {json_err}")
                                 break
                             _LOGGER.debug(f"Data received for {self._name}")
+                            af_error = self._api_football_error(data)
+                            if af_error:
+                                self._last_error = f"API-Football: {af_error}"
+                                _LOGGER.warning("API-Football returned an error for %s: %s", self._name, af_error)
+                                break
                             try:
                                 await self._process_and_apply(data)
                             except Exception as proc_err:
@@ -965,11 +970,27 @@ class SoccerLiveSensor(Entity):
             ) as response:
                 if response.status == 200:
                     raw = await response.read()
-                    return await self.hass.async_add_executor_job(json.loads, raw)
-                _LOGGER.debug("API-Football enrichment %s returned HTTP %s", path, response.status)
+                    data = await self.hass.async_add_executor_job(json.loads, raw)
+                    af_error = self._api_football_error(data)
+                    if af_error:
+                        _LOGGER.warning("API-Football %s returned an error: %s", path, af_error)
+                        return None
+                    return data
+                if response.status == 429:
+                    _LOGGER.warning("API-Football rate limit reached while fetching %s (HTTP 429)", path)
+                else:
+                    _LOGGER.debug("API-Football enrichment %s returned HTTP %s", path, response.status)
         except Exception as e:
             _LOGGER.debug("Error fetching API-Football enrichment %s: %s", path, e)
         return None
+
+    def _api_football_error(self, data):
+        """Human-readable API-Football error from a 200 body, or None (also None
+        for the ESPN provider, so callers can invoke it unconditionally)."""
+        if self._provider != PROVIDER_API_FOOTBALL:
+            return None
+        from .parsers.api_football import extract_error
+        return extract_error(data)
 
     async def _refresh_api_football_status(self):
         if self._provider != PROVIDER_API_FOOTBALL or not self._api_football_key:

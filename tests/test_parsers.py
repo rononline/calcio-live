@@ -30,6 +30,7 @@ process_api_football_fixture_data = _api_football.process_fixture_data
 process_api_football_standings_data = _api_football.process_standings_data
 process_api_football_scorers_data = _api_football.process_scorers_data
 process_api_football_fixture_enrichment = _api_football.process_fixture_enrichment
+api_football_extract_error = _api_football.extract_error
 process_bracket_data = _load_parser("bracket").process_bracket_data
 
 class _MockHass:
@@ -316,6 +317,28 @@ class TestApiFootballParser:
         assert scorer["assists"] == 2
         # Team/league come from the club where he scored the most.
         assert scorer["team_name"] == "Chelsea"
+
+    def test_extract_error_returns_none_on_success(self):
+        assert api_football_extract_error({"errors": [], "response": [1]}) is None
+        assert api_football_extract_error({"errors": {}, "response": []}) is None
+        assert api_football_extract_error({"response": []}) is None
+        assert api_football_extract_error(None) is None
+
+    def test_extract_error_reports_token_and_quota_messages(self):
+        token = api_football_extract_error({
+            "errors": {"token": "Error/Missing application key."},
+            "response": [],
+        })
+        assert token == "Error/Missing application key."
+
+        quota = api_football_extract_error({
+            "errors": {"requests": "You have reached the request limit for the day"},
+            "response": [],
+        })
+        assert quota == "You have reached the request limit for the day"
+
+        listed = api_football_extract_error({"errors": ["Bad request"], "response": []})
+        assert listed == "Bad request"
 
     def test_live_clock_includes_stoppage_time(self):
         data = {

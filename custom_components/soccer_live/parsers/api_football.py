@@ -11,6 +11,29 @@ def _as_dict(value):
     return value if isinstance(value, dict) else {}
 
 
+def extract_error(data):
+    """Return a human-readable API-Football error message, or None on success.
+
+    API-Football answers with HTTP 200 even for auth, parameter and quota
+    errors, placing the reason in a top-level ``errors`` field. That field is a
+    dict of ``field -> message`` (e.g. ``{"token": "..."}``,
+    ``{"requests": "You have reached the request limit for the day"}``,
+    ``{"rateLimit": "..."}``) or occasionally a list. An empty dict/list means
+    the call succeeded."""
+    if not isinstance(data, dict):
+        return None
+    errors = data.get("errors")
+    if not errors:
+        return None
+    if isinstance(errors, dict):
+        parts = [str(v) for v in errors.values() if v]
+        return "; ".join(parts) if parts else None
+    if isinstance(errors, list):
+        parts = [str(e) for e in errors if e]
+        return "; ".join(parts) if parts else None
+    return str(errors)
+
+
 def _status_state(status_short):
     short = (status_short or "").upper()
     if short in {"NS", "TBD", "PST", "CANC", "ABD", "AWD", "WO"}:
