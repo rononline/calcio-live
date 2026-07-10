@@ -372,6 +372,35 @@ class TestApiFootballParser:
         listed = api_football_extract_error({"errors": ["Bad request"], "response": []})
         assert listed == "Bad request"
 
+    def test_scored_penalty_keeps_goal_token_and_missed_does_not(self):
+        events = {"response": [
+            {
+                "time": {"elapsed": 20},
+                "team": {"id": 1, "name": "A"},
+                "player": {"name": "Scorer"},
+                "type": "Goal",
+                "detail": "Penalty",
+            },
+            {
+                "time": {"elapsed": 40},
+                "team": {"id": 1, "name": "A"},
+                "player": {"name": "Misser"},
+                "type": "Goal",
+                "detail": "Missed Penalty",
+            },
+        ]}
+
+        out = process_api_football_fixture_enrichment(events_data=events)
+
+        # Scored penalty keeps the "Goal" token so goal detection can attribute it.
+        assert out["match_details"][0] == "Goal - Penalty - 20': Scorer"
+        # A missed penalty must not read as scored, and carries no "Goal" token.
+        assert out["match_details"][1] == "Penalty - Missed - 40': Misser"
+        assert "Goal" not in out["match_details"][1]
+        # scoring_play must be True for the conversion and False for the miss.
+        assert out["key_events"][0]["scoring_play"] is True
+        assert out["key_events"][1]["scoring_play"] is False
+
     def test_live_clock_includes_stoppage_time(self):
         data = {
             "response": [{
@@ -448,7 +477,7 @@ class TestApiFootballParser:
 
         assert result["has_commentary"] is True
         assert result["match_details"][0] == "Goal - 12': Player One"
-        assert result["match_details"][1] == "Penalty - Scored - 36': Player Two"
+        assert result["match_details"][1] == "Goal - Penalty - 36': Player Two"
         assert result["match_details"][2] == "Yellow Card - 73': Player Three"
         assert result["key_events"][0]["type"] == "Goal"
         assert result["key_events"][0]["clock"] == "12"

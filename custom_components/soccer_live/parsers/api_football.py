@@ -149,8 +149,15 @@ def _event_detail(event):
     event_type_lower = event_type.lower()
     detail_lower = detail.lower()
     if event_type_lower == "goal":
+        # API-Football uses type "Goal" with detail "Missed Penalty" for a miss,
+        # which is NOT a goal — keep "Goal" out of the string so downstream goal
+        # detection ignores it.
+        if "missed" in detail_lower:
+            return f"Penalty - Missed - {minute_text}: {player}"
         if "penalty" in detail_lower:
-            return f"Penalty - Scored - {minute_text}: {player}"
+            # Keep "Goal" in the text so score-change goal detection can attribute
+            # the scorer (it matches on the "Goal" token).
+            return f"Goal - Penalty - {minute_text}: {player}"
         if "own goal" in detail_lower:
             return f"Goal - {minute_text}: {player} (own goal)"
         return f"Goal - {minute_text}: {player}"
@@ -170,6 +177,8 @@ def _key_event(event):
     detail = event.get("detail") or event_type
     elapsed, extra = _minute(event.get("time"))
     minute = f"{elapsed}+{extra}" if elapsed is not None and extra else (str(elapsed) if elapsed is not None else "")
+    # A missed penalty has type "Goal" but must not count as a scoring play.
+    is_missed_penalty = "missed" in str(detail).lower()
     return {
         "type": event_type,
         "type_text": detail,
@@ -181,7 +190,7 @@ def _key_event(event):
         "player": player.get("name", ""),
         "athletes": [name for name in [player.get("name", ""), assist.get("name", "")] if name],
         "assist": assist.get("name", ""),
-        "scoring_play": event_type.lower() == "goal",
+        "scoring_play": event_type.lower() == "goal" and not is_missed_penalty,
     }
 
 
