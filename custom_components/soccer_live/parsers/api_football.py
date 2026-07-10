@@ -43,6 +43,14 @@ def _score(value):
     return "N/A" if value is None else str(value)
 
 
+def _as_int(value):
+    """Coerce API-Football numeric fields (may be int, str or None) to int."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
 def _minute(time_info):
     """Return (elapsed, extra) from an API-Football time object.
 
@@ -197,7 +205,7 @@ def process_fixture_data(data, hass=None, team_name=None, team_id=None, include_
                 "state": state,
                 "status": status.get("long") or status.get("short") or "N/A",
                 "period": status.get("short", "N/A"),
-                "clock": status.get("elapsed") if state == "in" else "N/A",
+                "clock": _minute_text(status) if state == "in" else "N/A",
                 "venue": venue.get("name", "N/A"),
                 "attendance": fixture.get("attendance", "N/A"),
                 "neutral_site": False,
@@ -313,22 +321,30 @@ def process_scorers_data(data):
         item = _as_dict(item)
         player = _as_dict(item.get("player"))
         stats = [_as_dict(s) for s in (item.get("statistics") or []) if isinstance(s, dict)]
-        first_stats = stats[0] if stats else {}
-        team = _as_dict(first_stats.get("team"))
-        league = _as_dict(first_stats.get("league"))
-        goals = _as_dict(first_stats.get("goals"))
+        # A player transferred mid-season appears with one statistics entry per
+        # club, so totals must be summed across all of them; team/league come
+        # from the entry where the player scored the most.
+        total_goals = sum(_as_int(_as_dict(s.get("goals")).get("total")) for s in stats)
+        total_assists = sum(_as_int(_as_dict(s.get("goals")).get("assists")) for s in stats)
+        primary = max(
+            stats,
+            key=lambda s: _as_int(_as_dict(s.get("goals")).get("total")),
+            default={},
+        )
+        team = _as_dict(primary.get("team"))
+        league = _as_dict(primary.get("league"))
         if not league_name:
             league_name = league.get("name", "")
             league_logo = league.get("logo", "")
         scorers.append({
             "rank": index,
-            "goals": goals.get("total", "0"),
+            "goals": total_goals,
             "player": player.get("name", ""),
             "short_name": player.get("name", ""),
             "headshot": player.get("photo", ""),
             "team_name": team.get("name", ""),
             "team_logo": team.get("logo", "") or "",
-            "assists": goals.get("assists", "N/A"),
+            "assists": total_assists,
             "provider": "api_football",
         })
     return {

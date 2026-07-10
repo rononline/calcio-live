@@ -292,6 +292,54 @@ class TestApiFootballParser:
         assert result["scorers"][0]["player"] == "Player One"
         assert result["scorers"][0]["goals"] == 21
 
+    def test_scorers_sum_goals_across_transferred_clubs(self):
+        data = {"response": [{
+            "player": {"id": 1, "name": "Player One", "photo": "player.png"},
+            "statistics": [
+                {
+                    "team": {"id": 42, "name": "Arsenal", "logo": "arsenal.png"},
+                    "league": {"id": 39, "name": "Premier League", "logo": "league.png"},
+                    "goals": {"total": 8, "assists": 2},
+                },
+                {
+                    "team": {"id": 50, "name": "Chelsea", "logo": "chelsea.png"},
+                    "league": {"id": 39, "name": "Premier League", "logo": "league.png"},
+                    "goals": {"total": 13, "assists": None},
+                },
+            ],
+        }]}
+
+        result = process_api_football_scorers_data(data)
+
+        scorer = result["scorers"][0]
+        assert scorer["goals"] == 21
+        assert scorer["assists"] == 2
+        # Team/league come from the club where he scored the most.
+        assert scorer["team_name"] == "Chelsea"
+
+    def test_live_clock_includes_stoppage_time(self):
+        data = {
+            "response": [{
+                "fixture": {
+                    "id": 9,
+                    "date": "2026-07-20T18:00:00+00:00",
+                    "status": {"short": "2H", "long": "Second Half", "elapsed": 90, "extra": 4},
+                },
+                "league": {"id": 39, "name": "Premier League"},
+                "teams": {
+                    "home": {"id": 1, "name": "Arsenal"},
+                    "away": {"id": 2, "name": "Chelsea"},
+                },
+                "goals": {"home": 1, "away": 1},
+            }]
+        }
+
+        result = process_api_football_fixture_data(data, _MockHass())
+
+        match = result["matches"][0]
+        assert match["state"] == "in"
+        assert match["clock"] == "90+4"
+
     def test_fixture_enrichment_maps_events_stats_and_lineups(self):
         events = {"response": [{
             "time": {"elapsed": 12},
