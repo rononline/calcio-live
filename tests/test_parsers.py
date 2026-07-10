@@ -234,7 +234,39 @@ class TestApiFootballParser:
         assert match["home_team"] == "Feyenoord"
         assert match["away_team"] == "PSV"
         assert match["state"] == "pre"
-        assert match["league_name"] == "Friendlies Clubs"
+        # league_name is localized (default language "en" -> canonical English)
+        assert match["league_name"] == "Club Friendlies"
+        # league_info keeps the raw provider name
+        assert result["league_info"][0]["name"] == "Friendlies Clubs"
+
+    def test_league_name_is_localized_to_hass_language(self):
+        class _DutchHass:
+            class config:
+                time_zone = "Europe/Amsterdam"
+                language = "nl"
+
+        data = {
+            "response": [{
+                "fixture": {"id": 1, "date": "2026-07-20T18:00:00+00:00", "status": {"short": "NS"}},
+                "league": {"id": 667, "name": "Friendlies Clubs"},
+                "teams": {
+                    "home": {"id": 1, "name": "Feyenoord"},
+                    "away": {"id": 2, "name": "Club Brugge"},
+                },
+                "goals": {"home": None, "away": None},
+            }]
+        }
+
+        result = process_api_football_fixture_data(data, _DutchHass())
+
+        match = result["matches"][0]
+        assert match["league_name"] == "Oefenwedstrijd"
+        assert match["competition_name"] == "Oefenwedstrijd"
+
+    def test_normalize_competition_name_passes_through_unknown(self):
+        assert _api_football.normalize_competition_name("UEFA Champions League", "nl") == "UEFA Champions League"
+        assert _api_football.normalize_competition_name("Friendlies", "nl") == "Oefenwedstrijden"
+        assert _api_football.normalize_competition_name("", "nl") == ""
 
     def test_friendlies_can_be_filtered_out(self):
         data = {

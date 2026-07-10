@@ -11,6 +11,50 @@ def _as_dict(value):
     return value if isinstance(value, dict) else {}
 
 
+_CLUB_FRIENDLIES = {
+    "en": "Club Friendlies",
+    "nl": "Oefenwedstrijd",
+    "de": "Vereinsfreundschaftsspiele",
+    "es": "Amistosos de clubes",
+    "fr": "Matchs amicaux clubs",
+    "it": "Amichevoli club",
+    "pt": "Amistosos de clubes",
+}
+_FRIENDLIES = {
+    "en": "Friendlies",
+    "nl": "Oefenwedstrijden",
+    "de": "Freundschaftsspiele",
+    "es": "Amistosos",
+    "fr": "Matchs amicaux",
+    "it": "Amichevoli",
+    "pt": "Amistosos",
+}
+_CLUB_FRIENDLY_KEYS = {
+    "friendlies clubs", "friendlies club", "friendly clubs", "friendly club",
+    "club friendlies", "club friendly",
+}
+_FRIENDLY_KEYS = {"friendlies", "friendly"}
+
+
+def normalize_competition_name(name, lang="en"):
+    """Localize provider competition names the same way the card does.
+
+    Mirrors the frontend ``displayCompetitionName`` so the sensor's
+    ``league_name`` reads sensibly in automations (e.g. API-Football's
+    "Friendlies Clubs" becomes the Dutch "Oefenwedstrijd"). Unknown names are
+    returned unchanged."""
+    raw = str(name or "").strip()
+    if not raw or raw == "N/A":
+        return raw
+    key = " ".join(raw.lower().replace("_", " ").replace("-", " ").split())
+    lang = (lang or "en").split("-")[0].lower()
+    if key in _CLUB_FRIENDLY_KEYS:
+        return _CLUB_FRIENDLIES.get(lang, _CLUB_FRIENDLIES["en"])
+    if key in _FRIENDLY_KEYS:
+        return _FRIENDLIES.get(lang, _FRIENDLIES["en"])
+    return raw
+
+
 def extract_error(data):
     """Return a human-readable API-Football error message, or None on success.
 
@@ -172,6 +216,7 @@ def process_fixture_data(data, hass=None, team_name=None, team_id=None, include_
     """Normalize API-Football /fixtures responses to Soccer Live's ESPN-shaped model."""
     matches = []
     team_logo = None
+    lang = getattr(getattr(hass, "config", None), "language", None) or "en"
     response = data.get("response", []) if isinstance(data, dict) else []
     for item in response or []:
         try:
@@ -189,6 +234,7 @@ def process_fixture_data(data, hass=None, team_name=None, team_id=None, include_
             league_name = league.get("name", "")
             if not include_friendlies and "friendl" in league_name.lower():
                 continue
+            league_name_display = normalize_competition_name(league_name, lang)
 
             selected_team_id = str(team_id or "")
             if selected_team_id and selected_team_id not in {str(home.get("id", "")), str(away.get("id", ""))}:
@@ -232,9 +278,9 @@ def process_fixture_data(data, hass=None, team_name=None, team_id=None, include_
                 "venue": venue.get("name", "N/A"),
                 "attendance": fixture.get("attendance", "N/A"),
                 "neutral_site": False,
-                "league_name": league_name or "N/A",
+                "league_name": league_name_display or "N/A",
                 "league_logo": league.get("logo", ""),
-                "competition_name": league_name or "N/A",
+                "competition_name": league_name_display or "N/A",
                 "season_info": league.get("season", ""),
                 "week_number": None,
                 "match_details": match_details,
