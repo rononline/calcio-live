@@ -1203,13 +1203,24 @@ class SoccerLiveSensor(Entity):
             self._previous_scores[match_id]["away"] = away_score
             self._previous_scores[match_id]["match_details"] = curr_details.copy()
 
+    @staticmethod
+    def _is_scored_goal_detail(d):
+        """Whether a match-detail string represents a goal that changed the score.
+
+        ESPN writes scored penalties as "Penalty - Scored", API-Football as
+        "Goal - Penalty"; both must be attributable. Disallowed goals and missed
+        penalties never changed the score and are excluded."""
+        if "Disallowed" in d or "Missed" in d:
+            return False
+        return "Goal" in d or "Penalty - Scored" in d
+
     def _pick_goal_strings(self, curr_details, dispatched, team_abbrev, count):
         """Return up to `count` new goal strings for a team.
         Filters by [ABBREV] tag when available; falls back to positional order.
         Uses the most-recent strings ([-count:]) so a late-arriving string from a
-        previous goal is not attributed to the next goal. Disallowed goals are excluded
-        so they cannot pollute future goal attribution."""
-        all_new = [d for d in curr_details if "Goal" in d and "Disallowed" not in d and d not in dispatched]
+        previous goal is not attributed to the next goal. Disallowed goals and
+        missed penalties are excluded so they cannot pollute future attribution."""
+        all_new = [d for d in curr_details if self._is_scored_goal_detail(d) and d not in dispatched]
         if team_abbrev:
             tagged = [d for d in all_new if f"[{team_abbrev}]" in d]
             if tagged:

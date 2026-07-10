@@ -107,6 +107,24 @@ def _sensor(sensor_type, code="ned.1", team_name=None, team_id="1234", provider=
     return sensor
 
 
+def test_pick_goal_strings_attributes_penalties_across_providers():
+    sensor = _sensor("team_match")
+    # ESPN scored-penalty string ("Penalty - Scored") and API-Football's
+    # ("Goal - Penalty") must both be picked up; a miss and a disallowed goal
+    # must be ignored.
+    details = [
+        "Penalty - Scored [ARS] - 20': Saka",       # ESPN
+        "Goal - Penalty - 55': De Bruyne",           # API-Football
+        "Penalty - Missed [ARS] - 70': Odegaard",    # miss -> ignore
+        "Goal - Disallowed [ARS] - 80': Jesus",      # VAR -> ignore
+    ]
+    picked = sensor._pick_goal_strings(details, dispatched=set(), team_abbrev="", count=4)
+    assert picked == [
+        "Penalty - Scored [ARS] - 20': Saka",
+        "Goal - Penalty - 55': De Bruyne",
+    ]
+
+
 def test_live_refresh_uses_configured_interval(monkeypatch):
     sensor = _sensor("team_match")
     sensor._live_scan_interval = 30
