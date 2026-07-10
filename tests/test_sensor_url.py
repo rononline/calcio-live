@@ -125,6 +125,28 @@ def test_pick_goal_strings_attributes_penalties_across_providers():
     ]
 
 
+def test_single_match_enrichment_skips_far_future_pre_match():
+    sensor = _sensor("team_match", provider="api_football")
+    now = datetime(2026, 7, 10, 12, 0, tzinfo=timezone.utc)
+
+    def _m(state, hours_ahead=None):
+        m = {"state": state}
+        if hours_ahead is not None:
+            m["date_iso"] = (now + timedelta(hours=hours_ahead)).isoformat()
+        return m
+
+    # Live and finished are always enriched.
+    assert sensor._should_enrich_api_football_target(_m("in"), now) is True
+    assert sensor._should_enrich_api_football_target(_m("post"), now) is True
+    # Upcoming match close to kickoff -> enrich; days away -> skip.
+    assert sensor._should_enrich_api_football_target(_m("pre", 2), now) is True
+    assert sensor._should_enrich_api_football_target(_m("pre", 26), now) is False
+    # A pre match whose kickoff already passed (delayed) is still enriched.
+    assert sensor._should_enrich_api_football_target(_m("pre", -1), now) is True
+    # Missing date -> skip rather than fetch blindly.
+    assert sensor._should_enrich_api_football_target(_m("pre"), now) is False
+
+
 def test_live_refresh_uses_configured_interval(monkeypatch):
     sensor = _sensor("team_match")
     sensor._live_scan_interval = 30

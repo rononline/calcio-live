@@ -30,10 +30,15 @@ async def async_get_config_entry_diagnostics(
         sensor_info: dict[str, Any] = {
             "entity_id": entity_entry.entity_id,
             "state": state.state,
+            "provider": attrs.get("provider", "N/A"),
             "competition_code": attrs.get("competition_code", "N/A"),
             "sensor_type": attrs.get("sensor_type", "N/A"),
             "request_count": attrs.get("request_count", "N/A"),
             "last_request_time": attrs.get("last_request_time", "N/A"),
+            "last_successful_update": attrs.get("last_successful_update", "N/A"),
+            "api_status": attrs.get("api_status", "N/A"),
+            "last_error": attrs.get("last_error"),
+            "api_football_quota": attrs.get("api_football_quota", {}),
             "match_count": len(matches),
             "previous_match_count": len(previous),
             "has_live_match": any(m.get("state") == "in" for m in matches),
@@ -55,6 +60,8 @@ async def async_get_config_entry_diagnostics(
 
     return {
         "config_entry": {
+            "provider": entry.data.get("provider", "N/A"),
+            "has_api_football_key": bool(entry.data.get("api_football_key")),
             "competition_code": entry.data.get("competition_code", "N/A"),
             "team_name": entry.data.get("team_name", "N/A"),
             "team_id": entry.data.get("team_id", "N/A"),

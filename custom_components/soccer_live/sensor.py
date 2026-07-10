@@ -839,9 +839,13 @@ class SoccerLiveSensor(Entity):
         if not matches:
             return
 
-        targets = matches
         if self._sensor_type in {"team_matches", "team_matches_mixed"}:
             targets = self._api_football_team_list_enrichment_targets(matches)
+        else:
+            # Single-match card: don't burn quota enriching a match that is still
+            # far off — events/statistics/lineups only exist close to kickoff.
+            now = datetime.now(timezone.utc)
+            targets = [m for m in matches if self._should_enrich_api_football_target(m, now)]
 
         from .parsers.api_football import process_fixture_enrichment
         for match in targets:
@@ -916,6 +920,27 @@ class SoccerLiveSensor(Entity):
             refreshed_next = next((m for m in matches if m.get("event_id") == current_id), None)
             if refreshed_next:
                 self._attributes["next_match"] = refreshed_next
+
+    def _should_enrich_api_football_target(self, match, now):
+        """Whether a single-match card should fetch enrichment for this match.
+
+        Live and finished matches are always enriched. An upcoming match is only
+        enriched once kickoff is within reach (lineups appear ~1h before, stats
+        and events only during play), so a match days away doesn't repeatedly
+        fetch three empty endpoints and waste the API quota."""
+        if match.get("state") != "pre":
+            return True
+        raw_date = match.get("date_iso")
+        if not raw_date:
+            return False
+        try:
+            kickoff = datetime.fromisoformat(str(raw_date).replace("Z", "+00:00"))
+            if kickoff.tzinfo is None:
+                kickoff = kickoff.replace(tzinfo=timezone.utc)
+            kickoff = kickoff.astimezone(timezone.utc)
+        except ValueError:
+            return False
+        return (kickoff - now) <= timedelta(hours=3)
 
     def _should_enrich_recent_finished_api_football_match(self, match, now):
         if match.get("state") != "post":
