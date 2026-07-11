@@ -84,6 +84,16 @@ class TestScoreboardParser:
         assert match.get("has_stats") is False
         assert match.get("has_commentary") is False
 
+    def test_score_value_coerces_object_scores(self):
+        # ESPN returns an object score for in-progress matches; it must be
+        # flattened to a scalar so cards don't render "[object Object]".
+        assert _scoreboard._score_value({"value": 2, "displayValue": "2"}) == "2"
+        assert _scoreboard._score_value({"value": 3}) == 3
+        assert _scoreboard._score_value("1") == "1"
+        assert _scoreboard._score_value(0) == 0
+        assert _scoreboard._score_value(None) == "N/A"
+        assert _scoreboard._score_value({}) == "N/A"
+
     def test_graceful_on_empty_data(self):
         result = process_match_data({}, _MockHass())
         assert isinstance(result, dict)

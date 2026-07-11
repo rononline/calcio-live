@@ -9,6 +9,21 @@ def _as_dict(v):
     null or a scalar where an object is expected (e.g. "team": null, "league": "N/A")."""
     return v if isinstance(v, dict) else {}
 
+def _score_value(value):
+    """Normalize an ESPN competitor score to a plain scalar.
+
+    ESPN usually returns a string like "2", but for in-progress matches the
+    score can arrive as an object ({"value": 2, "displayValue": "2"}). Passing
+    that straight through renders as "[object Object]" in the cards, so extract
+    the display value here."""
+    if isinstance(value, dict):
+        display = value.get("displayValue")
+        if display is not None:
+            return display
+        inner = value.get("value")
+        return inner if inner is not None else "N/A"
+    return value if value is not None else "N/A"
+
 def process_league_data(data, hass=None):
     leagues_data = data.get("leagues", []) or []
     league_info = []
@@ -175,7 +190,7 @@ def process_match_data(data, hass, team_name=None, team_id=None, next_match_only
                     home_logos = [x for x in (home_team_data.get("logos") or []) if isinstance(x, dict)]
                     home_logo = home_logos[0].get("href", "N/A") if home_logos else "N/A"
                 home_form = home_comp.get("form") or ""
-                home_score = home_comp.get("score", "N/A")
+                home_score = _score_value(home_comp.get("score", "N/A"))
                 home_statistics = _get_statistics(home_comp)
 
                 away_team_data = _as_dict(away_comp.get("team"))
@@ -185,7 +200,7 @@ def process_match_data(data, hass, team_name=None, team_id=None, next_match_only
                     away_logos = [x for x in (away_team_data.get("logos") or []) if isinstance(x, dict)]
                     away_logo = away_logos[0].get("href", "N/A") if away_logos else "N/A"
                 away_form = away_comp.get("form") or ""
-                away_score = away_comp.get("score", "N/A")
+                away_score = _score_value(away_comp.get("score", "N/A"))
                 away_statistics = _get_statistics(away_comp)
 
                 # Prefer competition-level status (more reliable for live clock/period);
@@ -539,9 +554,9 @@ def process_summary_data(data):
                 out["head_to_head"].append({
                     "date": e.get("date", ""),
                     "home_team": _as_dict(home_c.get("team")).get("displayName", ""),
-                    "home_score": home_c.get("score", ""),
+                    "home_score": _score_value(home_c.get("score", "")),
                     "away_team": _as_dict(away_c.get("team")).get("displayName", ""),
-                    "away_score": away_c.get("score", ""),
+                    "away_score": _score_value(away_c.get("score", "")),
                 })
     except Exception as e:
         _LOGGER.warning(f"Error processing summary head-to-head: {e}")
