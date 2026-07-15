@@ -71,6 +71,13 @@ class TestScoreboardParser:
         assert match["home_team"] == "Ajax"
         assert match["away_team"] == "PSV"
 
+    def test_match_exposes_raw_iso_date(self):
+        # date_iso carries the raw ESPN kickoff timestamp (used for kickoff-time
+        # weather forecasts); date stays the localized display string.
+        match = self._parse()["matches"][0]
+        assert match["date_iso"] == "2026-06-20T17:00Z"
+        assert match["date"] != match["date_iso"]
+
     def test_match_state_scheduled(self):
         match = self._parse()["matches"][0]
         assert match["state"] == "pre"

@@ -250,6 +250,7 @@ def process_match_data(data, hass, team_name=None, team_id=None, next_match_only
                 matches.append({
                     "event_id": match.get("id"),
                     "date": _parse_date(hass, match.get("date")),
+                    "date_iso": match.get("date", ""),
                     "season_info": season_info,
                     "week_number": week_number,
                     "league_name": league_name,
