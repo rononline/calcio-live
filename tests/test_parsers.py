@@ -415,6 +415,24 @@ class TestApiFootballParser:
             home_team_id=1, away_team_id=2,
         ) is None
 
+    def test_prediction_suppresses_neutral_placeholder(self):
+        # 33/33/33 with no winner is API-Football's "no real prediction" filler.
+        assert process_api_football_prediction({"response": [{
+            "predictions": {
+                "winner": {"name": None},
+                "advice": "No predictions available",
+                "percent": {"home": "33%", "draw": "33%", "away": "33%"},
+            },
+        }]}) is None
+        # But an equal split WITH a named winner is kept.
+        kept = process_api_football_prediction({"response": [{
+            "predictions": {
+                "winner": {"name": "Feyenoord"},
+                "percent": {"home": "33%", "draw": "33%", "away": "33%"},
+            },
+        }]})
+        assert kept is not None and kept["winner_name"] == "Feyenoord"
+
     def test_prediction_returns_none_without_usable_data(self):
         assert process_api_football_prediction({"response": []}) is None
         assert process_api_football_prediction({"response": [{"predictions": {}}]}) is None

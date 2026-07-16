@@ -229,6 +229,11 @@ def process_prediction_data(data):
     # Nothing worth showing.
     if home is None and draw is None and away is None and not advice and not winner_name:
         return None
+    # API-Football returns a neutral placeholder (e.g. 33/33/33 with no winner)
+    # for matches that are still too far out or pre-season to predict — that is
+    # not a real lean, so don't surface it.
+    if not winner_name and home is not None and home == draw == away:
+        return None
     return {
         "percent_home": home,
         "percent_draw": draw,
