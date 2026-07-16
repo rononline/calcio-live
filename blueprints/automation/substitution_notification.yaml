@@ -1,0 +1,37 @@
+blueprint:
+  name: Soccer Live - Substitution notification
+  description: Send a notification when a Soccer Live sensor reports a substitution.
+  domain: automation
+  input:
+    soccer_sensor:
+      name: Soccer Live sensor
+      selector:
+        entity:
+          domain: sensor
+    notify_service:
+      name: Notify service
+      description: "Example: notify.mobile_app_iphone"
+      selector:
+        text:
+
+trigger:
+  - platform: state
+    entity_id: !input soccer_sensor
+    attribute: last_event
+
+condition:
+  - condition: template
+    value_template: "{{ trigger.to_state.attributes.last_event_type == 'soccer_live_substitution' }}"
+  - condition: template
+    value_template: "{{ trigger.from_state is none or trigger.from_state.attributes.last_event != trigger.to_state.attributes.last_event }}"
+
+action:
+  - service: !input notify_service
+    data:
+      title: "Substitution"
+      message: >-
+        {% set event = trigger.to_state.attributes.last_event %}
+        {{ event.player }} · {{ event.team }}
+        {% if event.minute is defined %}({{ event.minute }}'){% endif %}
+
+mode: queued

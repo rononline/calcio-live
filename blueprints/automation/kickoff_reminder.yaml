@@ -1,0 +1,49 @@
+blueprint:
+  name: Soccer Live - Kick-off reminder
+  description: >-
+    Send a notification a chosen number of minutes before the next match kicks off.
+    Use a "next match" sensor (e.g. sensor.soccer_live_next_...).
+  domain: automation
+  input:
+    soccer_sensor:
+      name: Soccer Live next-match sensor
+      selector:
+        entity:
+          domain: sensor
+    notify_service:
+      name: Notify service
+      description: "Example: notify.mobile_app_iphone"
+      selector:
+        text:
+    minutes_before:
+      name: Minutes before kick-off
+      description: How many minutes before kick-off to send the reminder.
+      default: 15
+      selector:
+        number:
+          min: 1
+          max: 240
+          unit_of_measurement: min
+          mode: box
+
+trigger:
+  - platform: numeric_state
+    entity_id: !input soccer_sensor
+    attribute: next_match_minutes_until
+    below: !input minutes_before
+
+condition:
+  - condition: template
+    value_template: "{{ state_attr(trigger.entity_id, 'next_match_status') == 'pre' }}"
+
+action:
+  - service: !input notify_service
+    data:
+      title: "⚽ Match starting soon"
+      message: >-
+        {{ state_attr(trigger.entity_id, 'next_match_home_team') }}
+        vs {{ state_attr(trigger.entity_id, 'next_match_away_team') }}
+        {% set mins = state_attr(trigger.entity_id, 'next_match_minutes_until') %}
+        {% if mins is not none %}· {{ mins }} min{% endif %}
+
+mode: single

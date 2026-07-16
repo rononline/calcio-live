@@ -417,7 +417,8 @@ mode: queued
 | `soccer_live_match_finished` | Full time | `home_score`, `away_score`, `goal_scorers`, `goal_scorers_str`, `league_name` |
 
 Example automation blueprints are available in [`blueprints/automation`](blueprints/automation):
-goal notification, red card notification and match started notification.
+goal, yellow card, red card, substitution, match started, full time (final score)
+and a configurable kick-off reminder (choose how many minutes before kick-off).
 
 ---
 

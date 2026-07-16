@@ -1,5 +1,8 @@
 # Changelog
 
+## v3.6.74 (2026-07-16)
+- blueprints: add yellow card, substitution, full time (final score) and configurable kick-off reminder notification blueprints, alongside the existing goal / red card / match started ones
+
 ## v3.6.73 (2026-07-16)
 - parser: normalize the API-Football `expected_goals` statistic to home/away `expectedGoals` so cards can show xG alongside possession and shots (for leagues where API-Football provides xG)
 
