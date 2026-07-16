@@ -401,7 +401,7 @@ mode: queued
 `last_event`, `last_event_type`, `last_event_timestamp`, `last_goal_event`, `last_card_event`, `last_match_started_event`, `last_match_finished_event`
 
 **Health/debug attributes**:
-`api_status`, `last_successful_update`, `last_error`, `request_count`, `last_request_time`, `sensor_type`, `start_date`, `end_date`
+`api_status`, `last_successful_update`, `last_error`, `request_count`, `last_request_time`, `sensor_type`, `start_date`, `end_date`, `provider`, `api_football_season`, `api_football_quota`
 
 ---
 
@@ -436,7 +436,8 @@ These attributes are guaranteed to be present when available. Card developers ca
 | `home_score` / `away_score` | int\|str | Score or `N/A` |
 | `home_form` / `away_form` | string | Recent form string, e.g. `WDWLW` |
 | `state` | string | `pre` / `in` / `post` |
-| `date` | string | `DD-MM-YYYY HH:MM` |
+| `date` | string | `DD-MM-YYYY HH:MM` (localized display) |
+| `date_iso` | string | Raw ISO kickoff timestamp (used for kickoff-time weather) |
 | `venue` / `venue_city` | string | Stadium info |
 | `league_name` / `league_logo` | string | Resolved league identity for mixed/all sensors |
 | `competition_name` / `competition_logo` | string | Competition identity |
@@ -449,6 +450,17 @@ These attributes are guaranteed to be present when available. Card developers ca
 | `has_commentary` | bool | Play-by-play available |
 | `clock` | string | Match clock (live) |
 | `league_info` | list | Competition metadata: `name`, `abbreviation`, `logo_href`, `startDate`, `endDate` |
+| `home_statistics` / `away_statistics` | dict | Per-team stats; includes `expectedGoals` (xG) when the provider supplies it |
+
+#### API-Football pre-match enrichment (next upcoming match only)
+
+These are attached to the nearest upcoming match, and **only when real data exists** (they populate close to competitive matches — generally not friendlies or far-out fixtures):
+
+| Attribute | Type | Description |
+|---|---|---|
+| `prediction` | dict | `percent_home` / `percent_draw` / `percent_away` (int %), `advice`, `winner_name`, `winner_comment` |
+| `injuries_home` / `injuries_away` | list | Absentees: `player`, `reason`, `type`, `suspended` (bool) |
+| `odds` | dict | Averaged Match-Winner odds: `home` / `draw` / `away` (float), `bookmaker_count` |
 
 ### Compact match objects (`previous_matches`)
 

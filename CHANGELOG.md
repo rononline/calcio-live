@@ -1,5 +1,52 @@
 # Changelog
 
+## v3.6.73 (2026-07-16)
+- parser: normalize the API-Football `expected_goals` statistic to home/away `expectedGoals` so cards can show xG alongside possession and shots (for leagues where API-Football provides xG)
+
+## v3.6.72 (2026-07-16)
+- sensor: attach averaged 1X2 odds (home/draw/away from the Match Winner market, across bookmakers) to the next upcoming match via API-Football `/odds`; cached 1h, attached only when odds exist (API-Football carries odds ~1–14 days pre-match, generally not for friendlies)
+
+## v3.6.71 (2026-07-16)
+- parser: suppress API-Football's neutral placeholder prediction (equal percentages with no named winner, e.g. 33/33/33) so nothing is attached until a meaningful prediction exists
+
+## v3.6.70 (2026-07-16)
+- sensor: attach per-team injuries/suspensions (player + reason + `suspended` flag) to the next upcoming match via API-Football `/injuries`; fetched in parallel with predictions/odds, attached only when data exists
+
+## v3.6.69 (2026-07-16)
+- sensor: attach a pre-match `prediction` (home/draw/away win percentages + betting advice) to the next upcoming match via API-Football `/predictions`; one call, cached 6h, attached only when data exists
+
+## v3.6.68 (2026-07-15)
+- parser: ESPN match model now includes `date_iso` (raw ISO kickoff) alongside the localized display date, enabling kickoff-time weather forecasts in the cards
+
+## v3.6.67 (2026-07-11)
+- parser: flatten ESPN object scores (`{value, displayValue}`) to their display value in the live match model and head-to-head list — fixes "[object Object]" scores on live ESPN matches
+
+## v3.6.66 (2026-07-10)
+- sensor: single-match cards no longer fetch API-Football enrichment for upcoming matches more than 3h away (those endpoints are empty until close to kickoff), saving daily API quota
+- diagnostics: config-entry diagnostics now include provider, api_status, last_error and the API-Football quota (the API key itself is never included, only a `has_api_football_key` boolean)
+
+## v3.6.65 (2026-07-10)
+- sensor: goal detection now attributes scored penalties for both providers (ESPN "Penalty - Scored", API-Football "Goal - Penalty"); missed penalties and VAR-disallowed goals stay excluded
+
+## v3.6.64 (2026-07-10)
+- parser: API-Football missed penalties now read "Penalty - Missed" and no longer count as a scoring play; scored penalties are written as "Goal - Penalty" so the scorer/minute reach the goal notification
+
+## v3.6.63 (2026-07-10)
+- parser: API-Football `league_name`/`competition_name` are localized to Home Assistant's language (e.g. "Friendlies Clubs" → "Oefenwedstrijd"); the raw name is kept for the friendlies filter and `league_info`
+
+## v3.6.62 (2026-07-10)
+- sensor: surface API-Football error payloads (HTTP 200 with a top-level `errors` field) to `last_error` and the log instead of caching them as valid-but-empty data; warn on HTTP 429 rate limits
+
+## v3.6.61 (2026-07-10)
+- sensor: the live match clock now includes stoppage time (e.g. 90+4)
+- parser: topscorer goals/assists are summed across clubs for players transferred mid-season
+
+## v3.6.60 (2026-07-05)
+- config flow: add matching `config/error` translations (all six languages) so first-time setup shows proper messages instead of raw keys; validate the API-Football key during setup (fails open on transient network errors)
+
+## v3.6.59 (2026-07-05)
+- parser: keep stoppage time in API-Football `match_details`; normalize pre-match incidents (negative `elapsed`) to `N/A`; misc cleanups (event formatter params, O(n²) lineup tagging, module-level stat-key table)
+
 ## v3.6.58 (2026-07-05)
 - provider: add optional API-Football support alongside ESPN, including provider setup, API key handling, direct team search, season selection and friendlies filtering
 - sensor: API-Football supports team fixtures (`team_match`, `team_matches`, `team_matches_mixed`), competition fixtures, all matches today, standings and top scorers; news and knockout brackets remain ESPN-only
