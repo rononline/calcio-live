@@ -909,13 +909,24 @@ class SoccerLiveSensor(Entity):
             process_prediction_data,
             process_injuries_data,
             process_odds_data,
+            process_standings_summary,
         )
 
-        pred_data, inj_data, odds_data = await asyncio.gather(
+        league_id = match.get("league_id")
+        season = match.get("season_info")
+        fetch_standings = bool(league_id) and season not in (None, "")
+
+        tasks = [
             self._fetch_api_football_json("predictions", {"fixture": fixture_id}),
             self._fetch_api_football_json("injuries", {"fixture": fixture_id}),
             self._fetch_api_football_json("odds", {"fixture": fixture_id}),
-        )
+        ]
+        if fetch_standings:
+            tasks.append(self._fetch_api_football_json("standings", {"league": league_id, "season": season}))
+
+        results = await asyncio.gather(*tasks)
+        pred_data, inj_data, odds_data = results[0], results[1], results[2]
+        standings_data = results[3] if fetch_standings else None
 
         if pred_data is not None:
             prediction = await self.hass.async_add_executor_job(process_prediction_data, pred_data)
@@ -934,6 +945,18 @@ class SoccerLiveSensor(Entity):
             odds = await self.hass.async_add_executor_job(process_odds_data, odds_data)
             if odds:
                 match["odds"] = odds
+
+        if standings_data is not None:
+            home_sum = await self.hass.async_add_executor_job(
+                process_standings_summary, standings_data, match.get("home_id")
+            )
+            away_sum = await self.hass.async_add_executor_job(
+                process_standings_summary, standings_data, match.get("away_id")
+            )
+            if home_sum:
+                match["home_standing_summary"] = home_sum
+            if away_sum:
+                match["away_standing_summary"] = away_sum
 
     def _api_football_response_has_items(self, data):
         if not isinstance(data, dict):
@@ -1098,6 +1121,8 @@ class SoccerLiveSensor(Entity):
             return 10800  # team news updates occasionally; cache for 3 hours
         if path == "odds":
             return 3600  # bookmaker odds update a few times a day; cache 1 hour
+        if path == "standings":
+            return 21600  # league table changes at most daily; cache for 6 hours
         return 300
 
     def _prune_api_football_endpoint_cache(self, now):

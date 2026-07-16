@@ -1,5 +1,8 @@
 # Changelog
 
+## v3.6.75 (2026-07-16)
+- sensor: populate `home_standing_summary`/`away_standing_summary` for API-Football matches (league position + points, e.g. "#2 · 65 pts") via the /standings endpoint for the next upcoming match; the Team card already renders these. Cached 6h, only for league matches (friendlies have no standings)
+
 ## v3.6.74 (2026-07-16)
 - blueprints: add yellow card, substitution, full time (final score) and configurable kick-off reminder notification blueprints, alongside the existing goal / red card / match started ones
 

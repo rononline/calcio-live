@@ -416,6 +416,7 @@ def process_fixture_data(data, hass=None, team_name=None, team_id=None, include_
                 "attendance": fixture.get("attendance", "N/A"),
                 "neutral_site": False,
                 "league_name": league_name_display or "N/A",
+                "league_id": league.get("id"),
                 "league_logo": league.get("logo", ""),
                 "competition_name": league_name_display or "N/A",
                 "season_info": league.get("season", ""),
@@ -462,6 +463,26 @@ def _league_info(response):
                 "logo_href": league.get("logo", "N/A"),
             })
     return leagues
+
+
+def process_standings_summary(data, team_id):
+    """Return a compact league-position summary for a team (e.g. "#3 · 45 pts"),
+    or None when the team isn't in the standings (e.g. friendlies have none)."""
+    if team_id is None:
+        return None
+    response = data.get("response", []) if isinstance(data, dict) else []
+    league = _as_dict(_as_dict(response[0]).get("league")) if response else {}
+    for group in (league.get("standings", []) or []):
+        for entry in (group or []):
+            if not isinstance(entry, dict):
+                continue
+            if str(_as_dict(entry.get("team")).get("id")) == str(team_id):
+                rank = entry.get("rank")
+                if rank is None:
+                    return None
+                points = entry.get("points")
+                return f"#{rank} · {points} pts" if points is not None else f"#{rank}"
+    return None
 
 
 def process_standings_data(data):
