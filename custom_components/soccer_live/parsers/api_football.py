@@ -465,9 +465,12 @@ def _league_info(response):
     return leagues
 
 
-def process_standings_summary(data, team_id):
-    """Return a compact league-position summary for a team (e.g. "#3 · 45 pts"),
-    or None when the team isn't in the standings (e.g. friendlies have none)."""
+def extract_team_standing(data, team_id):
+    """Return a team's league standing as structured data ``{"rank", "points"}``,
+    or None when the team isn't in the standings (e.g. friendlies have none).
+
+    Structured fields (rather than a pre-formatted string) let the card format
+    and localize the label itself."""
     if team_id is None:
         return None
     response = data.get("response", []) if isinstance(data, dict) else []
@@ -480,8 +483,7 @@ def process_standings_summary(data, team_id):
                 rank = entry.get("rank")
                 if rank is None:
                     return None
-                points = entry.get("points")
-                return f"#{rank} · {points} pts" if points is not None else f"#{rank}"
+                return {"rank": rank, "points": entry.get("points")}
     return None
 
 

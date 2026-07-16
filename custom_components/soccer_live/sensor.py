@@ -909,7 +909,7 @@ class SoccerLiveSensor(Entity):
             process_prediction_data,
             process_injuries_data,
             process_odds_data,
-            process_standings_summary,
+            extract_team_standing,
         )
 
         league_id = match.get("league_id")
@@ -947,16 +947,18 @@ class SoccerLiveSensor(Entity):
                 match["odds"] = odds
 
         if standings_data is not None:
-            home_sum = await self.hass.async_add_executor_job(
-                process_standings_summary, standings_data, match.get("home_id")
+            home_standing = await self.hass.async_add_executor_job(
+                extract_team_standing, standings_data, match.get("home_id")
             )
-            away_sum = await self.hass.async_add_executor_job(
-                process_standings_summary, standings_data, match.get("away_id")
+            away_standing = await self.hass.async_add_executor_job(
+                extract_team_standing, standings_data, match.get("away_id")
             )
-            if home_sum:
-                match["home_standing_summary"] = home_sum
-            if away_sum:
-                match["away_standing_summary"] = away_sum
+            if home_standing:
+                match["home_rank"] = home_standing["rank"]
+                match["home_points"] = home_standing["points"]
+            if away_standing:
+                match["away_rank"] = away_standing["rank"]
+                match["away_points"] = away_standing["points"]
 
     def _api_football_response_has_items(self, data):
         if not isinstance(data, dict):

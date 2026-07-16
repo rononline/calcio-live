@@ -1,5 +1,8 @@
 # Changelog
 
+## v3.6.77 (2026-07-16)
+- sensor: expose API-Football standings as structured `home_rank`/`home_points`/`away_rank`/`away_points` fields instead of a pre-formatted string, so the cards can format and localize the label themselves
+
 ## v3.6.76 (2026-07-16)
 - calendar: add a calendar platform — each config entry now exposes a calendar entity with the team/competition fixtures as events (kick-off, teams, venue, competition; score for finished matches), reusing the match data the sensors already fetch. Enables the HA calendar view and time-based (Calendar trigger) automations
 

@@ -468,6 +468,8 @@ These are attached to the nearest upcoming match, and **only when real data exis
 | `prediction` | dict | `percent_home` / `percent_draw` / `percent_away` (int %), `advice`, `winner_name`, `winner_comment` |
 | `injuries_home` / `injuries_away` | list | Absentees: `player`, `reason`, `type`, `suspended` (bool) |
 | `odds` | dict | Averaged Match-Winner odds: `home` / `draw` / `away` (float), `bookmaker_count` |
+| `home_rank` / `away_rank` | int | League position (structured, so cards can localize the label) |
+| `home_points` / `away_points` | int | League points |
 
 ### Compact match objects (`previous_matches`)
 

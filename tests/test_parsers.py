@@ -33,7 +33,7 @@ process_api_football_fixture_enrichment = _api_football.process_fixture_enrichme
 process_api_football_prediction = _api_football.process_prediction_data
 process_api_football_injuries = _api_football.process_injuries_data
 process_api_football_odds = _api_football.process_odds_data
-process_api_football_standings_summary = _api_football.process_standings_summary
+api_football_extract_team_standing = _api_football.extract_team_standing
 api_football_extract_error = _api_football.extract_error
 process_bracket_data = _load_parser("bracket").process_bracket_data
 
@@ -427,20 +427,20 @@ class TestApiFootballParser:
         assert odds["away"] == 5.90   # (6.00 + 5.80) / 2
         assert odds["bookmaker_count"] == 2
 
-    def test_standings_summary_finds_team_rank_and_points(self):
+    def test_extract_team_standing_returns_rank_and_points(self):
         data = {"response": [{"league": {"standings": [[
             {"rank": 1, "team": {"id": 42}, "points": 80},
             {"rank": 3, "team": {"id": 209}, "points": 45},
         ]]}}]}
-        assert process_api_football_standings_summary(data, 209) == "#3 · 45 pts"
-        assert process_api_football_standings_summary(data, 42) == "#1 · 80 pts"
+        assert api_football_extract_team_standing(data, 209) == {"rank": 3, "points": 45}
+        assert api_football_extract_team_standing(data, 42) == {"rank": 1, "points": 80}
 
-    def test_standings_summary_returns_none_when_absent(self):
+    def test_extract_team_standing_returns_none_when_absent(self):
         data = {"response": [{"league": {"standings": [[{"rank": 1, "team": {"id": 42}, "points": 80}]]}}]}
-        assert process_api_football_standings_summary(data, 999) is None
-        assert process_api_football_standings_summary({"response": []}, 209) is None
-        assert process_api_football_standings_summary({}, 209) is None
-        assert process_api_football_standings_summary(data, None) is None
+        assert api_football_extract_team_standing(data, 999) is None
+        assert api_football_extract_team_standing({"response": []}, 209) is None
+        assert api_football_extract_team_standing({}, 209) is None
+        assert api_football_extract_team_standing(data, None) is None
 
     def test_odds_returns_none_without_match_winner(self):
         assert process_api_football_odds({"response": []}) is None
