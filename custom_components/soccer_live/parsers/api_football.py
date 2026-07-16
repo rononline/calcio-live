@@ -239,6 +239,37 @@ def process_prediction_data(data):
     }
 
 
+def process_injuries_data(data, home_team_id=None, away_team_id=None):
+    """Normalize an API-Football /injuries response into per-team absentee lists.
+
+    Each entry carries the player, the reason (e.g. an injury description or
+    "Suspended") and a ``suspended`` flag. Returns None when neither team has a
+    listed absentee, so callers attach it only when data exists."""
+    response = data.get("response", []) if isinstance(data, dict) else []
+    home, away = [], []
+    for item in response or []:
+        item = _as_dict(item)
+        player = _as_dict(item.get("player"))
+        name = player.get("name")
+        if not name:
+            continue
+        reason = player.get("reason") or ""
+        entry = {
+            "player": name,
+            "reason": reason,
+            "type": player.get("type") or "",
+            "suspended": "suspend" in reason.lower(),
+        }
+        team_id = _as_dict(item.get("team")).get("id")
+        if home_team_id is not None and str(team_id) == str(home_team_id):
+            home.append(entry)
+        elif away_team_id is not None and str(team_id) == str(away_team_id):
+            away.append(entry)
+    if not home and not away:
+        return None
+    return {"injuries_home": home, "injuries_away": away}
+
+
 # API-Football stat name -> (normalized key, optional value transform).
 _STAT_KEY_MAP = {
     "Ball Possession": ("possessionPct", _clean_percent),

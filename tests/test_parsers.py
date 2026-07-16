@@ -31,6 +31,7 @@ process_api_football_standings_data = _api_football.process_standings_data
 process_api_football_scorers_data = _api_football.process_scorers_data
 process_api_football_fixture_enrichment = _api_football.process_fixture_enrichment
 process_api_football_prediction = _api_football.process_prediction_data
+process_api_football_injuries = _api_football.process_injuries_data
 api_football_extract_error = _api_football.extract_error
 process_bracket_data = _load_parser("bracket").process_bracket_data
 
@@ -384,6 +385,35 @@ class TestApiFootballParser:
         assert pred["percent_away"] == 20
         assert pred["advice"] == "Double chance : Feyenoord or draw"
         assert pred["winner_name"] == "Feyenoord"
+
+    def test_injuries_split_by_team_with_suspension_flag(self):
+        data = {"response": [
+            {"player": {"name": "G. Trauner", "type": "Missing Fixture", "reason": "Achilles tendon problems"},
+             "team": {"id": 209, "name": "Feyenoord"}},
+            {"player": {"name": "Q. Timber", "type": "Missing Fixture", "reason": "Suspended"},
+             "team": {"id": 209, "name": "Feyenoord"}},
+            {"player": {"name": "H. Vanaken", "type": "Questionable", "reason": "Knock"},
+             "team": {"id": 569, "name": "Club Brugge"}},
+            {"player": {"name": "", "reason": "Injury"}, "team": {"id": 209}},  # no name -> skipped
+        ]}
+
+        out = process_api_football_injuries(data, home_team_id=209, away_team_id=569)
+
+        assert len(out["injuries_home"]) == 2
+        assert len(out["injuries_away"]) == 1
+        assert out["injuries_home"][0]["player"] == "G. Trauner"
+        assert out["injuries_home"][0]["suspended"] is False
+        assert out["injuries_home"][1]["suspended"] is True  # "Suspended"
+        assert out["injuries_away"][0]["player"] == "H. Vanaken"
+
+    def test_injuries_returns_none_when_empty_or_unmatched(self):
+        assert process_api_football_injuries({"response": []}, 1, 2) is None
+        assert process_api_football_injuries({}, 1, 2) is None
+        # team ids that don't match either side -> nothing attributed -> None
+        assert process_api_football_injuries(
+            {"response": [{"player": {"name": "X", "reason": "Injury"}, "team": {"id": 999}}]},
+            home_team_id=1, away_team_id=2,
+        ) is None
 
     def test_prediction_returns_none_without_usable_data(self):
         assert process_api_football_prediction({"response": []}) is None
