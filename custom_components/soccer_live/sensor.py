@@ -879,11 +879,32 @@ class SoccerLiveSensor(Entity):
                     self._summary_cache.pop(next(iter(self._summary_cache)))
                 self._summary_cache[event_id] = enrichment
 
+        await self._enrich_api_football_prediction(matches)
+
         self._detect_and_dispatch_goals(matches, self._pending_events)
         self._detect_and_dispatch_cards(matches, self._pending_events)
         self._detect_and_dispatch_match_finished(matches, self._pending_events)
         self._detect_and_dispatch_match_started(matches, self._pending_events)
         self._refresh_api_football_enriched_schedule_attributes(matches)
+
+    async def _enrich_api_football_prediction(self, matches):
+        """Attach a pre-match prediction to the next upcoming match.
+
+        API-Football provides win percentages and betting advice per fixture.
+        Only the nearest upcoming match is fetched (one call, cached for hours),
+        and the result is attached only when real data exists."""
+        upcoming = [m for m in matches if m.get("state") == "pre" and m.get("event_id")]
+        if not upcoming:
+            return
+        upcoming.sort(key=lambda m: m.get("date_iso") or "")
+        match = upcoming[0]
+        data = await self._fetch_api_football_json("predictions", {"fixture": match["event_id"]})
+        if data is None:
+            return
+        from .parsers.api_football import process_prediction_data
+        prediction = await self.hass.async_add_executor_job(process_prediction_data, data)
+        if prediction:
+            match["prediction"] = prediction
 
     def _api_football_response_has_items(self, data):
         if not isinstance(data, dict):
@@ -1042,6 +1063,8 @@ class SoccerLiveSensor(Entity):
             return 30
         if path in {"fixtures/statistics", "fixtures/lineups"}:
             return 300
+        if path == "predictions":
+            return 21600  # predictions change rarely; cache for 6 hours
         return 300
 
     def _prune_api_football_endpoint_cache(self, now):

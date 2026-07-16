@@ -200,6 +200,45 @@ def _clean_percent(value):
     return value
 
 
+def _percent_int(value):
+    """Parse an API-Football percentage ("45%") to an int, or None."""
+    cleaned = _clean_percent(value)
+    try:
+        return int(float(cleaned))
+    except (TypeError, ValueError):
+        return None
+
+
+def process_prediction_data(data):
+    """Normalize an API-Football /predictions response to a compact prediction.
+
+    Returns None when there is no usable prediction, so callers can attach it
+    only when data actually exists."""
+    response = data.get("response", []) if isinstance(data, dict) else []
+    first = _as_dict(response[0]) if response else {}
+    predictions = _as_dict(first.get("predictions"))
+    if not predictions:
+        return None
+    percent = _as_dict(predictions.get("percent"))
+    winner = _as_dict(predictions.get("winner"))
+    home = _percent_int(percent.get("home"))
+    draw = _percent_int(percent.get("draw"))
+    away = _percent_int(percent.get("away"))
+    advice = predictions.get("advice") or ""
+    winner_name = winner.get("name") or ""
+    # Nothing worth showing.
+    if home is None and draw is None and away is None and not advice and not winner_name:
+        return None
+    return {
+        "percent_home": home,
+        "percent_draw": draw,
+        "percent_away": away,
+        "advice": advice,
+        "winner_name": winner_name,
+        "winner_comment": winner.get("comment") or "",
+    }
+
+
 # API-Football stat name -> (normalized key, optional value transform).
 _STAT_KEY_MAP = {
     "Ball Possession": ("possessionPct", _clean_percent),

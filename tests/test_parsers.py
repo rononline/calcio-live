@@ -30,6 +30,7 @@ process_api_football_fixture_data = _api_football.process_fixture_data
 process_api_football_standings_data = _api_football.process_standings_data
 process_api_football_scorers_data = _api_football.process_scorers_data
 process_api_football_fixture_enrichment = _api_football.process_fixture_enrichment
+process_api_football_prediction = _api_football.process_prediction_data
 api_football_extract_error = _api_football.extract_error
 process_bracket_data = _load_parser("bracket").process_bracket_data
 
@@ -366,6 +367,32 @@ class TestApiFootballParser:
         assert scorer["assists"] == 2
         # Team/league come from the club where he scored the most.
         assert scorer["team_name"] == "Chelsea"
+
+    def test_prediction_maps_percentages_and_advice(self):
+        data = {"response": [{
+            "predictions": {
+                "winner": {"id": 209, "name": "Feyenoord", "comment": "Win or draw"},
+                "advice": "Double chance : Feyenoord or draw",
+                "percent": {"home": "55%", "draw": "25%", "away": "20%"},
+            },
+        }]}
+
+        pred = process_api_football_prediction(data)
+
+        assert pred["percent_home"] == 55
+        assert pred["percent_draw"] == 25
+        assert pred["percent_away"] == 20
+        assert pred["advice"] == "Double chance : Feyenoord or draw"
+        assert pred["winner_name"] == "Feyenoord"
+
+    def test_prediction_returns_none_without_usable_data(self):
+        assert process_api_football_prediction({"response": []}) is None
+        assert process_api_football_prediction({"response": [{"predictions": {}}]}) is None
+        assert process_api_football_prediction({}) is None
+        # percentages absent and no advice/winner -> None
+        assert process_api_football_prediction(
+            {"response": [{"predictions": {"percent": {"home": None, "draw": None, "away": None}}}]}
+        ) is None
 
     def test_extract_error_returns_none_on_success(self):
         assert api_football_extract_error({"errors": [], "response": [1]}) is None
