@@ -905,11 +905,16 @@ class SoccerLiveSensor(Entity):
         if not match:
             return
         fixture_id = match["event_id"]
-        from .parsers.api_football import process_prediction_data, process_injuries_data
+        from .parsers.api_football import (
+            process_prediction_data,
+            process_injuries_data,
+            process_odds_data,
+        )
 
-        pred_data, inj_data = await asyncio.gather(
+        pred_data, inj_data, odds_data = await asyncio.gather(
             self._fetch_api_football_json("predictions", {"fixture": fixture_id}),
             self._fetch_api_football_json("injuries", {"fixture": fixture_id}),
+            self._fetch_api_football_json("odds", {"fixture": fixture_id}),
         )
 
         if pred_data is not None:
@@ -924,6 +929,11 @@ class SoccerLiveSensor(Entity):
             if injuries:
                 match["injuries_home"] = injuries["injuries_home"]
                 match["injuries_away"] = injuries["injuries_away"]
+
+        if odds_data is not None:
+            odds = await self.hass.async_add_executor_job(process_odds_data, odds_data)
+            if odds:
+                match["odds"] = odds
 
     def _api_football_response_has_items(self, data):
         if not isinstance(data, dict):
@@ -1086,6 +1096,8 @@ class SoccerLiveSensor(Entity):
             return 21600  # predictions change rarely; cache for 6 hours
         if path == "injuries":
             return 10800  # team news updates occasionally; cache for 3 hours
+        if path == "odds":
+            return 3600  # bookmaker odds update a few times a day; cache 1 hour
         return 300
 
     def _prune_api_football_endpoint_cache(self, now):

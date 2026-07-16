@@ -32,6 +32,7 @@ process_api_football_scorers_data = _api_football.process_scorers_data
 process_api_football_fixture_enrichment = _api_football.process_fixture_enrichment
 process_api_football_prediction = _api_football.process_prediction_data
 process_api_football_injuries = _api_football.process_injuries_data
+process_api_football_odds = _api_football.process_odds_data
 api_football_extract_error = _api_football.extract_error
 process_bracket_data = _load_parser("bracket").process_bracket_data
 
@@ -405,6 +406,32 @@ class TestApiFootballParser:
         assert out["injuries_home"][0]["suspended"] is False
         assert out["injuries_home"][1]["suspended"] is True  # "Suspended"
         assert out["injuries_away"][0]["player"] == "H. Vanaken"
+
+    def test_odds_average_match_winner_across_bookmakers(self):
+        data = {"response": [{
+            "bookmakers": [
+                {"name": "A", "bets": [{"name": "Match Winner", "values": [
+                    {"value": "Home", "odd": "1.50"}, {"value": "Draw", "odd": "4.00"}, {"value": "Away", "odd": "6.00"}]}]},
+                {"name": "B", "bets": [
+                    {"name": "Over/Under", "values": [{"value": "Over 2.5", "odd": "1.80"}]},
+                    {"name": "Match Winner", "values": [
+                        {"value": "Home", "odd": "1.60"}, {"value": "Draw", "odd": "4.20"}, {"value": "Away", "odd": "5.80"}]}]},
+            ],
+        }]}
+
+        odds = process_api_football_odds(data)
+
+        assert odds["home"] == 1.55   # (1.50 + 1.60) / 2
+        assert odds["draw"] == 4.10   # (4.00 + 4.20) / 2
+        assert odds["away"] == 5.90   # (6.00 + 5.80) / 2
+        assert odds["bookmaker_count"] == 2
+
+    def test_odds_returns_none_without_match_winner(self):
+        assert process_api_football_odds({"response": []}) is None
+        assert process_api_football_odds({}) is None
+        assert process_api_football_odds({"response": [{"bookmakers": [
+            {"name": "A", "bets": [{"name": "Over/Under", "values": [{"value": "Over 2.5", "odd": "1.8"}]}]}
+        ]}]}) is None
 
     def test_injuries_returns_none_when_empty_or_unmatched(self):
         assert process_api_football_injuries({"response": []}, 1, 2) is None

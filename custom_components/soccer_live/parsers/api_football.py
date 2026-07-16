@@ -209,6 +209,58 @@ def _percent_int(value):
         return None
 
 
+def _as_float(value):
+    """Coerce a numeric string/number to float, or None."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def process_odds_data(data):
+    """Normalize an API-Football /odds response to averaged 1X2 odds.
+
+    Averages the "Match Winner" (home/draw/away) odds across all bookmakers.
+    Returns None when no such odds are present, so callers attach it only when
+    real data exists (API-Football only carries odds 1-14 days pre-match)."""
+    response = data.get("response", []) if isinstance(data, dict) else []
+    first = _as_dict(response[0]) if response else {}
+    homes, draws, aways = [], [], []
+    for bookmaker in (first.get("bookmakers") or []):
+        if not isinstance(bookmaker, dict):
+            continue
+        for bet in (bookmaker.get("bets") or []):
+            if not isinstance(bet, dict) or (bet.get("name") or "").lower() != "match winner":
+                continue
+            for entry in (bet.get("values") or []):
+                if not isinstance(entry, dict):
+                    continue
+                odd = _as_float(entry.get("odd"))
+                if odd is None:
+                    continue
+                label = (entry.get("value") or "").lower()
+                if label == "home":
+                    homes.append(odd)
+                elif label == "draw":
+                    draws.append(odd)
+                elif label == "away":
+                    aways.append(odd)
+            break  # one Match Winner market per bookmaker
+
+    def _avg(values):
+        return round(sum(values) / len(values), 2) if values else None
+
+    home, draw, away = _avg(homes), _avg(draws), _avg(aways)
+    if home is None and draw is None and away is None:
+        return None
+    return {
+        "home": home,
+        "draw": draw,
+        "away": away,
+        "bookmaker_count": max(len(homes), len(draws), len(aways)),
+    }
+
+
 def process_prediction_data(data):
     """Normalize an API-Football /predictions response to a compact prediction.
 
