@@ -405,6 +405,12 @@ mode: queued
 
 ---
 
+## 📅 Calendar
+
+Each config entry also creates a **calendar entity** (`calendar.soccer_live_<team>`) with the team's/competition's fixtures as events (kick-off time, `Home - Away` title, venue as location, competition as description; finished matches include the score). It reuses the match data the sensors already fetch — no extra polling — so the fixtures show up in the Home Assistant calendar and can drive time-based automations (e.g. a **Calendar** trigger a set time before an event starts).
+
+---
+
 ## 📡 Available events
 
 | Event | Fired when | Key fields |
