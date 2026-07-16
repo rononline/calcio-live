@@ -578,6 +578,7 @@ class TestApiFootballParser:
                 {"type": "Total Shots", "value": 14},
                 {"type": "Shots on Goal", "value": 7},
                 {"type": "Fouls", "value": 9},
+                {"type": "expected_goals", "value": "1.20"},
             ],
         }]}
         lineups = {"response": [{
@@ -605,6 +606,7 @@ class TestApiFootballParser:
         assert result["home_statistics"]["totalShots"] == 14
         assert result["home_statistics"]["shotsOnTarget"] == 7
         assert result["home_statistics"]["foulsCommitted"] == 9
+        assert result["home_statistics"]["expectedGoals"] == "1.20"
         assert result["formation_home"] == "4-3-3"
         assert result["lineup_home"][0]["starter"] is True
 

@@ -337,6 +337,7 @@ _STAT_KEY_MAP = {
     "Offsides": ("offsides", None),
     "Yellow Cards": ("yellowCards", None),
     "Red Cards": ("redCards", None),
+    "expected_goals": ("expectedGoals", None),
 }
 
 
