@@ -70,9 +70,24 @@ class SoccerLiveCalendar(CalendarEntity):
         self._attr_unique_id = f"{entry.entry_id}_calendar"
 
     def _source_matches(self):
-        """Return the richest match list among this entry's sensors (the entity
-        exposing the most matches, so past + future fixtures are all covered)."""
+        """Return the richest match list published by this entry's sensors.
+
+        Sensors publish their matches to a shared per-entry store, so the
+        calendar reads that directly rather than depending on entity states.
+        Falls back to scanning the entry's sensor entities (e.g. before the
+        first sensor update has populated the store)."""
         best = []
+        store = (
+            self.hass.data.get(DOMAIN, {})
+            .get(self._entry.entry_id, {})
+            .get("match_sources", {})
+        )
+        for matches in store.values():
+            if isinstance(matches, list) and len(matches) > len(best):
+                best = matches
+        if best:
+            return best
+
         registry = er.async_get(self.hass)
         for entity in er.async_entries_for_config_entry(registry, self._entry.entry_id):
             state = self.hass.states.get(entity.entity_id)

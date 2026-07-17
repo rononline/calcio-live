@@ -564,6 +564,20 @@ class SoccerLiveSensor(Entity):
         self._save_store_needed = any(e[0] == "soccer_live_match_finished" for e in self._pending_events)
         await self._enrich_with_summary()
         await self._flush_pending_events()
+        self._publish_matches(self._attributes.get("matches") or [])
+
+    def _publish_matches(self, matches):
+        """Publish this sensor's match list to a shared per-entry store so other
+        platforms (e.g. the calendar) can read it directly instead of scanning
+        entity states."""
+        if not self._config_entry_id:
+            return
+        store = (
+            self.hass.data.setdefault(DOMAIN, {})
+            .setdefault(self._config_entry_id, {})
+            .setdefault("match_sources", {})
+        )
+        store[self.unique_id] = matches
 
     def _filter_start_str(self):
         d = self._dyn_start_date or self._start_date

@@ -1,5 +1,8 @@
 # Changelog
 
+## v3.6.78 (2026-07-17)
+- calendar: sensors now publish their match list to a shared per-entry store, and the calendar reads from it directly instead of depending on entity states/registry selection (entity-scan kept as a fallback). Makes the calendar independent of entity availability
+
 ## v3.6.77 (2026-07-16)
 - sensor: expose API-Football standings as structured `home_rank`/`home_points`/`away_rank`/`away_points` fields instead of a pre-formatted string, so the cards can format and localize the label themselves
 

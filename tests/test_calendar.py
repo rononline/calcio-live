@@ -101,3 +101,52 @@ def test_missing_or_bad_input_returns_none():
     assert match_to_event({"date_iso": "not-a-date"}) is None
     assert match_to_event(None) is None
     assert match_to_event("nope") is None
+
+
+class _Hass:
+    def __init__(self, data):
+        self.data = data
+        self.states = {}
+
+
+class _Entry:
+    def __init__(self, entry_id, data):
+        self.entry_id = entry_id
+        self.data = data
+
+
+def _calendar(store):
+    entry = _Entry("e1", {"team_name": "Feyenoord"})
+    hass = _Hass({_cal.DOMAIN: {"e1": {"match_sources": store}}})
+    return _cal.SoccerLiveCalendar(hass, entry)
+
+
+def test_calendar_reads_richest_list_from_shared_store():
+    small = [{"date_iso": "2027-07-17T11:30:00+00:00", "home_team": "A", "away_team": "B", "state": "pre"}]
+    big = small + [{"date_iso": "2027-07-20T11:30:00+00:00", "home_team": "C", "away_team": "D", "state": "pre"}]
+    cal = _calendar({"s1": small, "s2": big})
+    # Picks the source exposing the most matches.
+    assert cal._source_matches() is big
+    events = cal._events()
+    assert len(events) == 2
+    # Sorted by start time.
+    assert events[0].start < events[1].start
+
+
+def test_calendar_get_events_filters_by_range():
+    matches = [
+        {"date_iso": "2027-07-17T11:30:00+00:00", "home_team": "A", "away_team": "B", "state": "pre"},
+        {"date_iso": "2027-08-01T18:00:00+00:00", "home_team": "C", "away_team": "D", "state": "pre"},
+    ]
+    cal = _calendar({"s1": matches})
+    start = _dt.datetime(2027, 7, 1, tzinfo=_dt.timezone.utc)
+    end = _dt.datetime(2027, 7, 31, tzinfo=_dt.timezone.utc)
+    import asyncio
+    events = asyncio.run(cal.async_get_events(cal.hass, start, end))
+    assert len(events) == 1
+    assert events[0].summary == "A - B"
+
+
+def test_calendar_empty_store_returns_no_matches():
+    cal = _calendar({})
+    assert cal._source_matches() == []
