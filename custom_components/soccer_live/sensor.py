@@ -218,6 +218,10 @@ class SoccerLiveSensor(Entity):
     _calendar_error_logs = {}
     _api_football_endpoint_cache = {}
     _api_football_endpoint_locks = {}
+    # API-usage diagnostics (shared across sensors): per-endpoint calls,
+    # cache hits, last success and last HTTP status, plus a rate-limit marker.
+    _api_football_stats = {}
+    _api_football_rate_limited_at = None
 
     def __init__(self, hass, name, code, sensor_type=None, scan_interval=timedelta(minutes=5),
                  team_name=None, config_entry_id=None, start_date=None, end_date=None, team_id=None,
@@ -1049,6 +1053,12 @@ class SoccerLiveSensor(Entity):
         recent_hours = max(int(self._recent_match_hours or 0), 1)
         return match_date <= now and now - match_date <= timedelta(hours=recent_hours)
 
+    @staticmethod
+    def _af_stat(path):
+        return SoccerLiveSensor._api_football_stats.setdefault(
+            path, {"calls": 0, "cache_hits": 0, "last_success": None, "last_status": None}
+        )
+
     async def _fetch_api_football_json(self, path, params=None):
         if not self._api_football_key:
             return None
@@ -1056,14 +1066,17 @@ class SoccerLiveSensor(Entity):
         ttl = self._api_football_cache_ttl(path)
         cached = SoccerLiveSensor._api_football_endpoint_cache.get(cache_key)
         if cached and (datetime.now() - cached["time"]).total_seconds() < ttl:
+            SoccerLiveSensor._af_stat(path)["cache_hits"] += 1
             return cached["data"]
 
         lock = SoccerLiveSensor._api_football_endpoint_locks.setdefault(cache_key, asyncio.Lock())
         async with lock:
             cached = SoccerLiveSensor._api_football_endpoint_cache.get(cache_key)
             if cached and (datetime.now() - cached["time"]).total_seconds() < ttl:
+                SoccerLiveSensor._af_stat(path)["cache_hits"] += 1
                 return cached["data"]
 
+            SoccerLiveSensor._af_stat(path)["calls"] += 1
             data = await self._fetch_api_football_json_uncached(path, params or {})
             if data is not None:
                 SoccerLiveSensor._api_football_endpoint_cache[cache_key] = {
@@ -1082,6 +1095,7 @@ class SoccerLiveSensor(Entity):
                 params=params or {},
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as response:
+                SoccerLiveSensor._af_stat(path)["last_status"] = response.status
                 if response.status == 200:
                     raw = await response.read()
                     data = await self.hass.async_add_executor_job(json.loads, raw)
@@ -1089,8 +1103,10 @@ class SoccerLiveSensor(Entity):
                     if af_error:
                         _LOGGER.warning("API-Football %s returned an error: %s", path, af_error)
                         return None
+                    SoccerLiveSensor._af_stat(path)["last_success"] = datetime.now().isoformat()
                     return data
                 if response.status == 429:
+                    SoccerLiveSensor._api_football_rate_limited_at = datetime.now().isoformat()
                     _LOGGER.warning("API-Football rate limit reached while fetching %s (HTTP 429)", path)
                 else:
                     _LOGGER.debug("API-Football enrichment %s returned HTTP %s", path, response.status)

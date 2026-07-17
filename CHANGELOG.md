@@ -1,5 +1,8 @@
 # Changelog
 
+## v3.6.79 (2026-07-17)
+- diagnostics: add an `api_football` section for monitoring API usage — per-endpoint call counts and cache hits, last successful update and last HTTP status per endpoint, endpoint cache size, and a `rate_limited_at` marker set on HTTP 429. Helps diagnose why a pre-match section is temporarily missing
+
 ## v3.6.78 (2026-07-17)
 - calendar: sensors now publish their match list to a shared per-entry store, and the calendar reads from it directly instead of depending on entity states/registry selection (entity-scan kept as a fallback). Makes the calendar independent of entity availability
 

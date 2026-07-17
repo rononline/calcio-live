@@ -58,7 +58,16 @@ async def async_get_config_entry_diagnostics(
 
         sensors.append(sensor_info)
 
+    api_football = {}
+    if SoccerLiveSensor is not None:
+        api_football = {
+            "endpoint_stats": dict(getattr(SoccerLiveSensor, "_api_football_stats", {}) or {}),
+            "rate_limited_at": getattr(SoccerLiveSensor, "_api_football_rate_limited_at", None),
+            "endpoint_cache_entries": len(getattr(SoccerLiveSensor, "_api_football_endpoint_cache", {}) or {}),
+        }
+
     return {
+        "api_football": api_football,
         "config_entry": {
             "provider": entry.data.get("provider", "N/A"),
             "has_api_football_key": bool(entry.data.get("api_football_key")),

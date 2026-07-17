@@ -71,7 +71,10 @@ The integration caches API-Football calls to reduce quota use:
 - Main fixture/standings/scorers responses are shared by URL for up to 60 seconds. While a match is live, this cache follows `live_scan_interval` when that value is lower than 60 seconds.
 - Fixture events are cached for 30 seconds.
 - Fixture statistics and lineups are cached for 5 minutes.
+- Predictions are cached for 6 hours, standings for 6 hours, injuries for 3 hours, and odds for 1 hour.
 - The `api_football_quota` diagnostic attribute is refreshed through API-Football `/status` every 30 minutes.
+
+The config-entry **diagnostics** (Settings → Devices & services → the entry → Download diagnostics) include an `api_football` section for monitoring API usage: per-endpoint call counts and cache hits, the last successful update and last HTTP status per endpoint, the endpoint cache size, and a `rate_limited_at` marker (set on an HTTP 429). This helps explain when a section is temporarily missing.
 
 For API-Football team sensors, search teams directly by name during setup. Labels include the API-Football ID, because these IDs are different from ESPN IDs.
 

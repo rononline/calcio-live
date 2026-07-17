@@ -147,6 +147,29 @@ def test_single_match_enrichment_skips_far_future_pre_match():
     assert sensor._should_enrich_api_football_target(_m("pre"), now) is False
 
 
+def test_api_football_stats_track_calls_and_cache_hits():
+    import asyncio
+    SoccerLiveSensor._api_football_stats = {}
+    SoccerLiveSensor._api_football_endpoint_cache = {}
+    SoccerLiveSensor._api_football_endpoint_locks = {}
+    sensor = _sensor("team_match", provider="api_football")
+
+    async def _fake_uncached(path, params=None):
+        return {"response": [1]}
+
+    sensor._fetch_api_football_json_uncached = _fake_uncached
+
+    async def _run():
+        await sensor._fetch_api_football_json("predictions", {"fixture": 1})
+        await sensor._fetch_api_football_json("predictions", {"fixture": 1})
+
+    asyncio.run(_run())
+
+    stat = SoccerLiveSensor._api_football_stats["predictions"]
+    assert stat["calls"] == 1        # only the first request hit the network
+    assert stat["cache_hits"] == 1   # the second was served from cache
+
+
 def test_live_refresh_uses_configured_interval(monkeypatch):
     sensor = _sensor("team_match")
     sensor._live_scan_interval = 30
