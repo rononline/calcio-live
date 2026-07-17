@@ -159,6 +159,63 @@ def test_large_attributes_are_excluded_from_recorder():
         assert attr not in unrecorded, attr
 
 
+def test_rate_limit_backoff_pauses_and_resets():
+    import datetime as _dt
+    SoccerLiveSensor._af_backoff = 0
+    SoccerLiveSensor._af_enrich_pause_until = None
+    assert SoccerLiveSensor._af_enrichment_paused() is False
+
+    # First 429 → paused with a backoff; a second doubles it.
+    SoccerLiveSensor._af_note_rate_limited()
+    first = SoccerLiveSensor._af_backoff
+    assert first == 60
+    assert SoccerLiveSensor._af_enrichment_paused() is True
+    SoccerLiveSensor._af_note_rate_limited()
+    assert SoccerLiveSensor._af_backoff == 120
+
+    # Backoff is capped.
+    SoccerLiveSensor._af_backoff = 1800
+    SoccerLiveSensor._af_note_rate_limited()
+    assert SoccerLiveSensor._af_backoff == 1800
+
+    # A success clears the pause.
+    SoccerLiveSensor._af_note_success()
+    assert SoccerLiveSensor._af_backoff == 0
+    assert SoccerLiveSensor._af_enrich_pause_until is None
+    assert SoccerLiveSensor._af_enrichment_paused() is False
+
+
+def test_paused_enrichment_serves_cache_and_skips_network():
+    import asyncio
+    SoccerLiveSensor._api_football_endpoint_cache = {}
+    SoccerLiveSensor._api_football_endpoint_locks = {}
+    SoccerLiveSensor._api_football_stats = {}
+    sensor = _sensor("team_match", provider="api_football")
+
+    calls = {"n": 0}
+
+    async def _fake_uncached(path, params=None):
+        calls["n"] += 1
+        return {"response": [1]}
+
+    sensor._fetch_api_football_json_uncached = _fake_uncached
+
+    async def _run():
+        # Prime the cache with one real fetch.
+        await sensor._fetch_api_football_json("odds", {"fixture": 1})
+        # Now simulate a rate-limit pause and force the cache to be stale.
+        import datetime as _dt
+        SoccerLiveSensor._af_enrich_pause_until = _dt.datetime.now() + _dt.timedelta(seconds=300)
+        for entry in SoccerLiveSensor._api_football_endpoint_cache.values():
+            entry["time"] = _dt.datetime.now() - _dt.timedelta(hours=1)
+        return await sensor._fetch_api_football_json("odds", {"fixture": 1})
+
+    result = asyncio.run(_run())
+    SoccerLiveSensor._af_enrich_pause_until = None
+    assert result == {"response": [1]}   # served from (stale) cache
+    assert calls["n"] == 1               # no second network call while paused
+
+
 def test_api_football_stats_track_calls_and_cache_hits():
     import asyncio
     SoccerLiveSensor._api_football_stats = {}

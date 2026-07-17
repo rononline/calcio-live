@@ -234,6 +234,10 @@ class SoccerLiveSensor(Entity):
     # cache hits, last success and last HTTP status, plus a rate-limit marker.
     _api_football_stats = {}
     _api_football_rate_limited_at = None
+    # Rate-limit backoff: after an HTTP 429, pause new enrichment requests until
+    # this time, doubling the wait on each consecutive 429 (reset on success).
+    _af_enrich_pause_until = None
+    _af_backoff = 0
 
     def __init__(self, hass, name, code, sensor_type=None, scan_interval=timedelta(minutes=5),
                  team_name=None, config_entry_id=None, start_date=None, end_date=None, team_id=None,
@@ -1071,6 +1075,23 @@ class SoccerLiveSensor(Entity):
             path, {"calls": 0, "cache_hits": 0, "last_success": None, "last_status": None}
         )
 
+    @staticmethod
+    def _af_enrichment_paused():
+        pause = SoccerLiveSensor._af_enrich_pause_until
+        return pause is not None and datetime.now() < pause
+
+    @staticmethod
+    def _af_note_rate_limited():
+        SoccerLiveSensor._af_backoff = min(max(60, SoccerLiveSensor._af_backoff * 2), 1800)
+        SoccerLiveSensor._af_enrich_pause_until = datetime.now() + timedelta(seconds=SoccerLiveSensor._af_backoff)
+        SoccerLiveSensor._api_football_rate_limited_at = datetime.now().isoformat()
+
+    @staticmethod
+    def _af_note_success():
+        if SoccerLiveSensor._af_backoff or SoccerLiveSensor._af_enrich_pause_until:
+            SoccerLiveSensor._af_backoff = 0
+            SoccerLiveSensor._af_enrich_pause_until = None
+
     async def _fetch_api_football_json(self, path, params=None):
         if not self._api_football_key:
             return None
@@ -1081,12 +1102,19 @@ class SoccerLiveSensor(Entity):
             SoccerLiveSensor._af_stat(path)["cache_hits"] += 1
             return cached["data"]
 
+        if self._af_enrichment_paused():
+            # Rate-limited: don't make a new request; serve the last cached value
+            # (even if stale) so sections don't disappear.
+            return cached["data"] if cached else None
+
         lock = SoccerLiveSensor._api_football_endpoint_locks.setdefault(cache_key, asyncio.Lock())
         async with lock:
             cached = SoccerLiveSensor._api_football_endpoint_cache.get(cache_key)
             if cached and (datetime.now() - cached["time"]).total_seconds() < ttl:
                 SoccerLiveSensor._af_stat(path)["cache_hits"] += 1
                 return cached["data"]
+            if self._af_enrichment_paused():
+                return cached["data"] if cached else None
 
             SoccerLiveSensor._af_stat(path)["calls"] += 1
             data = await self._fetch_api_football_json_uncached(path, params or {})
@@ -1116,10 +1144,14 @@ class SoccerLiveSensor(Entity):
                         _LOGGER.warning("API-Football %s returned an error: %s", path, af_error)
                         return None
                     SoccerLiveSensor._af_stat(path)["last_success"] = datetime.now().isoformat()
+                    self._af_note_success()
                     return data
                 if response.status == 429:
-                    SoccerLiveSensor._api_football_rate_limited_at = datetime.now().isoformat()
-                    _LOGGER.warning("API-Football rate limit reached while fetching %s (HTTP 429)", path)
+                    self._af_note_rate_limited()
+                    _LOGGER.warning(
+                        "API-Football rate limit reached while fetching %s (HTTP 429) — pausing enrichment for %s s",
+                        path, SoccerLiveSensor._af_backoff,
+                    )
                 else:
                     _LOGGER.debug("API-Football enrichment %s returned HTTP %s", path, response.status)
         except Exception as e:

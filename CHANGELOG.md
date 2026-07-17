@@ -1,5 +1,8 @@
 # Changelog
 
+## v3.6.81 (2026-07-17)
+- rate limiting: on an API-Football HTTP 429, new enrichment requests are paused with an exponential backoff (60s doubling up to 30 min, reset on the next success) while the last cached data keeps being served, so sections don't disappear. The pause state (`enrichment_paused_until`) is exposed in diagnostics
+
 ## v3.6.80 (2026-07-17)
 - recorder: mark the large, high-churn attributes (`matches`, `previous_matches`, `upcoming_matches`, `next_match`, `schedule_*`, `standings_groups`, `scorers`, `articles`, `rounds`, `head_to_head`, `league_info`, `last_*_event`) as unrecorded, so they no longer bloat the Home Assistant database. The sensor state and small scalar attributes are still recorded
 
