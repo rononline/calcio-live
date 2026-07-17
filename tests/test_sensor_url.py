@@ -228,12 +228,19 @@ def test_rate_limit_backoff_pauses_and_resets():
     SoccerLiveSensor._af_note_rate_limited()
     assert SoccerLiveSensor._af_backoff == 120
 
+    # A straggler success during the pause window must NOT clear the backoff.
+    SoccerLiveSensor._af_note_success()
+    assert SoccerLiveSensor._af_backoff == 120
+    assert SoccerLiveSensor._af_enrichment_paused() is True
+
     # Backoff is capped.
     SoccerLiveSensor._af_backoff = 1800
     SoccerLiveSensor._af_note_rate_limited()
     assert SoccerLiveSensor._af_backoff == 1800
 
-    # A success clears the pause.
+    # Once the pause window has elapsed, a success clears it.
+    import datetime as _dt
+    SoccerLiveSensor._af_enrich_pause_until = _dt.datetime.now() - _dt.timedelta(seconds=1)
     SoccerLiveSensor._af_note_success()
     assert SoccerLiveSensor._af_backoff == 0
     assert SoccerLiveSensor._af_enrich_pause_until is None

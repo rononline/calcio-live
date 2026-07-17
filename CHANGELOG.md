@@ -1,5 +1,9 @@
 # Changelog
 
+## v3.6.84 (2026-07-17)
+- rate limiting: fix a race where an in-flight enrichment request that started before a concurrent HTTP 429 could clear a fresh backoff — the backoff is now only reset once the pause window has elapsed and a request succeeds
+- pre-match data: persist the prediction/odds/injuries/standing snapshot to HA storage (debounced), so a Home Assistant restart during a match no longer loses this context
+
 ## v3.6.83 (2026-07-17)
 - pre-match data: also fetch the prediction/injuries/standing for the live match itself (API-Football keeps returning them during the game), not only the next upcoming match — so the prediction shows during a match that was already live when the update landed. The pre-match snapshot cache now merges, so pre-match odds (which API-Football drops once live) are retained
 

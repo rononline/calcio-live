@@ -352,6 +352,7 @@ class SoccerLiveSensor(Entity):
     async def async_added_to_hass(self):
         """Load previously dispatched match_finished keys from disk so HA restarts
         do not re-fire events for matches that already ended."""
+        await self._load_prematch_cache()
         store_key = f"soccer_live_{self._config_entry_id or 'default'}_{self._name}_finished"
         self._store = Store(self.hass, 1, store_key)
         stored = await self._store.async_load()
@@ -1014,6 +1015,22 @@ class SoccerLiveSensor(Entity):
         "home_rank", "home_points", "away_rank", "away_points",
     )
     _prematch_cache = {}
+    _prematch_store = None
+    _prematch_loaded = False
+
+    async def _load_prematch_cache(self):
+        """Load the persisted pre-match snapshots once, so a restart during a
+        match doesn't lose the prediction/odds/injuries context."""
+        if SoccerLiveSensor._prematch_loaded:
+            return
+        SoccerLiveSensor._prematch_loaded = True
+        try:
+            SoccerLiveSensor._prematch_store = Store(self.hass, 1, "soccer_live_prematch")
+            stored = await SoccerLiveSensor._prematch_store.async_load()
+            if isinstance(stored, dict):
+                SoccerLiveSensor._prematch_cache.update(stored)
+        except Exception as err:  # pragma: no cover - storage best-effort
+            _LOGGER.debug("Could not load pre-match cache: %s", err)
 
     def _store_prematch(self, match):
         fixture_id = str(match.get("event_id") or "")
@@ -1031,6 +1048,11 @@ class SoccerLiveSensor(Entity):
         # Bound the cache so it can't grow without limit.
         if len(cache) > 60:
             cache.pop(next(iter(cache)))
+        # Persist (debounced) so the snapshot survives an HA restart.
+        if SoccerLiveSensor._prematch_store is not None:
+            SoccerLiveSensor._prematch_store.async_delay_save(
+                lambda: dict(SoccerLiveSensor._prematch_cache), 60
+            )
 
     def _reattach_prematch(self, matches):
         """Re-attach cached pre-match data to any match (e.g. now live) that had it
@@ -1141,7 +1163,12 @@ class SoccerLiveSensor(Entity):
 
     @staticmethod
     def _af_note_success():
-        if SoccerLiveSensor._af_backoff or SoccerLiveSensor._af_enrich_pause_until:
+        pause = SoccerLiveSensor._af_enrich_pause_until
+        # An in-flight request that started before a concurrent 429 must not
+        # clear a fresh backoff — only reset once the pause window has elapsed.
+        if pause is not None and datetime.now() < pause:
+            return
+        if SoccerLiveSensor._af_backoff or pause is not None:
             SoccerLiveSensor._af_backoff = 0
             SoccerLiveSensor._af_enrich_pause_until = None
 
