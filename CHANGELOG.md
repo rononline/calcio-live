@@ -1,5 +1,8 @@
 # Changelog
 
+## v3.6.85 (2026-07-17)
+- providers: add a declarative `PROVIDER_CAPABILITIES` map and a `provider_supports()` helper, and expose the selected provider's capabilities as the `provider_capabilities` sensor attribute, so cards and automations can adapt to what the provider actually supports (ESPN: news/brackets; API-Football: predictions/odds/injuries/top_assists/xg)
+
 ## v3.6.84 (2026-07-17)
 - rate limiting: fix a race where an in-flight enrichment request that started before a concurrent HTTP 429 could clear a fresh backoff — the backoff is now only reset once the pause window has elapsed and a request succeeds
 - pre-match data: persist the prediction/odds/injuries/standing snapshot to HA storage (debounced), so a Home Assistant restart during a match no longer loses this context

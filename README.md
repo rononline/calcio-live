@@ -406,7 +406,9 @@ mode: queued
 `last_event`, `last_event_type`, `last_event_timestamp`, `last_goal_event`, `last_card_event`, `last_match_started_event`, `last_match_finished_event`
 
 **Health/debug attributes**:
-`api_status`, `last_successful_update`, `last_error`, `request_count`, `last_request_time`, `sensor_type`, `start_date`, `end_date`, `provider`, `api_football_season`, `api_football_quota`
+`api_status`, `last_successful_update`, `last_error`, `request_count`, `last_request_time`, `sensor_type`, `start_date`, `end_date`, `provider`, `provider_capabilities`, `api_football_season`, `api_football_quota`
+
+**Provider capabilities**: the `provider_capabilities` attribute lists what the selected provider can supply, so cards and automations can adapt. ESPN: `fixtures`, `scores`, `standings`, `top_scorers`, `news`, `brackets`, `lineups`, `statistics`, `head_to_head`. API-Football also adds `top_assists`, `predictions`, `odds`, `injuries` and `xg` (but not `news`/`brackets`).
 
 ---
 

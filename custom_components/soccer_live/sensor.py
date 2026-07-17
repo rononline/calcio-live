@@ -22,6 +22,7 @@ from .const import (
     CONF_PROVIDER,
     DOMAIN,
     PROVIDER_API_FOOTBALL,
+    PROVIDER_CAPABILITIES,
     PROVIDER_ESPN,
 )
 
@@ -390,6 +391,7 @@ class SoccerLiveSensor(Entity):
             "last_error": self._last_error,
             "api_status": "error" if self._last_error else "ok",
             "provider": self._provider,
+            "provider_capabilities": list(PROVIDER_CAPABILITIES.get(self._provider, ())),
             "api_football_season": self._api_football_season,
             "api_football_quota": self._api_football_quota,
             "live_scan_interval": self._live_scan_interval,
