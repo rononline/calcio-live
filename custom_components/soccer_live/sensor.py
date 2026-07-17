@@ -933,10 +933,19 @@ class SoccerLiveSensor(Entity):
         """Attach pre-match prediction/odds/injuries/standing to the next match,
         cache the snapshot by fixture id, and re-attach it to a match that is now
         live/finished so the pre-match context stays visible without new requests."""
-        match = self._next_upcoming_api_football_match(matches)
+        match = self._prematch_target_match(matches)
         if match:
             await self._fetch_and_store_prematch(match)
         self._reattach_prematch(matches)
+
+    def _prematch_target_match(self, matches):
+        """Which match to fetch pre-match data for: the live match when there is
+        one (API-Football keeps returning the prediction during the game),
+        otherwise the nearest upcoming match."""
+        live = [m for m in matches if m.get("state") == "in" and m.get("event_id")]
+        if live:
+            return live[0]
+        return self._next_upcoming_api_football_match(matches)
 
     async def _fetch_and_store_prematch(self, match):
         """Fetch and attach pre-match prediction/odds/injuries/standing for the
@@ -1014,7 +1023,11 @@ class SoccerLiveSensor(Entity):
         if not snapshot:
             return
         cache = SoccerLiveSensor._prematch_cache
-        cache[fixture_id] = snapshot
+        # Merge, so pre-match odds (which API-Football drops once the match is
+        # live) aren't wiped by a later live fetch that no longer returns them.
+        existing = cache.pop(fixture_id, None) or {}
+        existing.update(snapshot)
+        cache[fixture_id] = existing
         # Bound the cache so it can't grow without limit.
         if len(cache) > 60:
             cache.pop(next(iter(cache)))

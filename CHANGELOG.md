@@ -1,5 +1,8 @@
 # Changelog
 
+## v3.6.83 (2026-07-17)
+- pre-match data: also fetch the prediction/injuries/standing for the live match itself (API-Football keeps returning them during the game), not only the next upcoming match — so the prediction shows during a match that was already live when the update landed. The pre-match snapshot cache now merges, so pre-match odds (which API-Football drops once live) are retained
+
 ## v3.6.82 (2026-07-17)
 - pre-match data: cache the prediction/odds/injuries/standing snapshot per fixture id and re-attach it once the match goes live (or is rebuilt from /fixtures), so this context stays visible during the game without any new API requests. Previously these fields were only present while the match was still upcoming
 

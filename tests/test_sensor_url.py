@@ -170,6 +170,29 @@ def test_prematch_snapshot_reattached_when_match_goes_live():
     assert live["home_rank"] == 2
 
 
+def test_prematch_target_prefers_live_match():
+    sensor = _sensor("team_match", provider="api_football")
+    matches = [
+        {"event_id": "1", "state": "pre", "date_iso": "2026-08-01T12:00:00+00:00"},
+        {"event_id": "2", "state": "in"},
+    ]
+    assert sensor._prematch_target_match(matches)["event_id"] == "2"
+    # No live match -> nearest upcoming.
+    assert sensor._prematch_target_match([matches[0]])["event_id"] == "1"
+
+
+def test_store_prematch_merges_and_keeps_pre_match_odds():
+    SoccerLiveSensor._prematch_cache = {}
+    sensor = _sensor("team_match", provider="api_football")
+    # Stored while pre (has odds).
+    sensor._store_prematch({"event_id": "7", "prediction": {"p": 1}, "odds": {"home": 1.5}})
+    # Live fetch: prediction present, odds gone.
+    sensor._store_prematch({"event_id": "7", "prediction": {"p": 2}})
+    snap = SoccerLiveSensor._prematch_cache["7"]
+    assert snap["prediction"] == {"p": 2}   # updated
+    assert snap["odds"] == {"home": 1.5}     # pre-match odds retained
+
+
 def test_reattach_does_not_overwrite_existing_fields():
     SoccerLiveSensor._prematch_cache = {}
     sensor = _sensor("team_match", provider="api_football")
