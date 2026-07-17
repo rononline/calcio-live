@@ -211,6 +211,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 
 
 class SoccerLiveSensor(Entity):
+    # Keep large / high-churn attributes out of the recorder history so the HA
+    # database doesn't balloon. The state itself (the score summary) and the
+    # small scalar attributes are still recorded.
+    _unrecorded_attributes = frozenset({
+        "matches", "previous_matches", "upcoming_matches", "next_match",
+        "schedule_live_matches", "schedule_upcoming_matches", "schedule_recent_matches",
+        "standings_groups", "scorers", "articles", "rounds",
+        "head_to_head", "league_info",
+        "last_event", "last_goal_event", "last_card_event",
+        "last_match_started_event", "last_match_finished_event",
+    })
+
     _cache = {}
     _fetch_locks = {}
     _calendar_cache = {}

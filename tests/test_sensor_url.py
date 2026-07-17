@@ -147,6 +147,18 @@ def test_single_match_enrichment_skips_far_future_pre_match():
     assert sensor._should_enrich_api_football_target(_m("pre"), now) is False
 
 
+def test_large_attributes_are_excluded_from_recorder():
+    # The big / high-churn attributes should be kept out of recorder history.
+    unrecorded = SoccerLiveSensor._unrecorded_attributes
+    for attr in ("matches", "previous_matches", "upcoming_matches", "next_match",
+                 "standings_groups", "scorers", "articles", "rounds",
+                 "last_event", "last_goal_event", "last_match_finished_event"):
+        assert attr in unrecorded, attr
+    # Small scalar attributes must stay recordable (state history stays useful).
+    for attr in ("last_event_type", "provider", "request_count", "api_status"):
+        assert attr not in unrecorded, attr
+
+
 def test_api_football_stats_track_calls_and_cache_hits():
     import asyncio
     SoccerLiveSensor._api_football_stats = {}

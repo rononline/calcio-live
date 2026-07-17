@@ -1,5 +1,8 @@
 # Changelog
 
+## v3.6.80 (2026-07-17)
+- recorder: mark the large, high-churn attributes (`matches`, `previous_matches`, `upcoming_matches`, `next_match`, `schedule_*`, `standings_groups`, `scorers`, `articles`, `rounds`, `head_to_head`, `league_info`, `last_*_event`) as unrecorded, so they no longer bloat the Home Assistant database. The sensor state and small scalar attributes are still recorded
+
 ## v3.6.79 (2026-07-17)
 - diagnostics: add an `api_football` section for monitoring API usage — per-endpoint call counts and cache hits, last successful update and last HTTP status per endpoint, endpoint cache size, and a `rate_limited_at` marker set on HTTP 429. Helps diagnose why a pre-match section is temporarily missing
 

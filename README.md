@@ -80,9 +80,11 @@ For API-Football team sensors, search teams directly by name during setup. Label
 
 ---
 
-## ⚙️ Exclude from recorder
+## ⚙️ Recorder / database size
 
-Add this to `configuration.yaml` to avoid database warnings:
+The large, high-churn attributes (`matches`, `previous_matches`, `upcoming_matches`, `next_match`, the `schedule_*` lists, `standings_groups`, `scorers`, `articles`, `rounds`, `head_to_head`, `league_info` and the `last_*_event` payloads) are **automatically excluded from the recorder history** — the integration marks them as unrecorded, so the Home Assistant database stays small out of the box. The sensor *state* (the score summary) and small scalar attributes are still recorded, so state history keeps working.
+
+If you'd rather drop the sensors from history entirely, you can still add this to `configuration.yaml`:
 
 ```yaml
 recorder:
