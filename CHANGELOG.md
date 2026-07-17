@@ -1,5 +1,8 @@
 # Changelog
 
+## v3.6.82 (2026-07-17)
+- pre-match data: cache the prediction/odds/injuries/standing snapshot per fixture id and re-attach it once the match goes live (or is rebuilt from /fixtures), so this context stays visible during the game without any new API requests. Previously these fields were only present while the match was still upcoming
+
 ## v3.6.81 (2026-07-17)
 - rate limiting: on an API-Football HTTP 429, new enrichment requests are paused with an exponential backoff (60s doubling up to 30 min, reset on the next success) while the last cached data keeps being served, so sections don't disappear. The pause state (`enrichment_paused_until`) is exposed in diagnostics
 

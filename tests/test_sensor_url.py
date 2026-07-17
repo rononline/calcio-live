@@ -147,6 +147,38 @@ def test_single_match_enrichment_skips_far_future_pre_match():
     assert sensor._should_enrich_api_football_target(_m("pre"), now) is False
 
 
+def test_prematch_snapshot_reattached_when_match_goes_live():
+    SoccerLiveSensor._prematch_cache = {}
+    sensor = _sensor("team_match", provider="api_football")
+
+    pre = {
+        "event_id": "555", "state": "pre",
+        "prediction": {"percent_home": 60}, "odds": {"home": 1.5},
+        "injuries_home": [{"player": "X"}], "injuries_away": [],
+        "home_rank": 2, "home_points": 65,
+    }
+    sensor._store_prematch(pre)
+    assert "555" in SoccerLiveSensor._prematch_cache
+
+    # The same fixture is rebuilt as a live match without the pre-match fields.
+    live = {"event_id": "555", "state": "in", "home_score": "1", "away_score": "0"}
+    sensor._reattach_prematch([live])
+
+    assert live["prediction"] == {"percent_home": 60}
+    assert live["odds"] == {"home": 1.5}
+    assert live["injuries_home"] == [{"player": "X"}]
+    assert live["home_rank"] == 2
+
+
+def test_reattach_does_not_overwrite_existing_fields():
+    SoccerLiveSensor._prematch_cache = {}
+    sensor = _sensor("team_match", provider="api_football")
+    sensor._store_prematch({"event_id": "9", "state": "pre", "odds": {"home": 2.0}})
+    live = {"event_id": "9", "state": "in", "odds": {"home": 9.9}}
+    sensor._reattach_prematch([live])
+    assert live["odds"] == {"home": 9.9}  # current value kept
+
+
 def test_large_attributes_are_excluded_from_recorder():
     # The big / high-churn attributes should be kept out of recorder history.
     unrecorded = SoccerLiveSensor._unrecorded_attributes

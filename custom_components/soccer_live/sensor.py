@@ -930,14 +930,17 @@ class SoccerLiveSensor(Entity):
         return upcoming[0]
 
     async def _enrich_api_football_prematch(self, matches):
-        """Attach pre-match prediction and injury/suspension data to the next match.
-
-        API-Football provides win percentages/advice and per-team absentees per
-        fixture. Only the nearest upcoming match is fetched (two cached calls,
-        in parallel), and each result is attached only when real data exists."""
+        """Attach pre-match prediction/odds/injuries/standing to the next match,
+        cache the snapshot by fixture id, and re-attach it to a match that is now
+        live/finished so the pre-match context stays visible without new requests."""
         match = self._next_upcoming_api_football_match(matches)
-        if not match:
-            return
+        if match:
+            await self._fetch_and_store_prematch(match)
+        self._reattach_prematch(matches)
+
+    async def _fetch_and_store_prematch(self, match):
+        """Fetch and attach pre-match prediction/odds/injuries/standing for the
+        given (upcoming) match, then cache the snapshot by fixture id."""
         fixture_id = match["event_id"]
         from .parsers.api_football import (
             process_prediction_data,
@@ -993,6 +996,43 @@ class SoccerLiveSensor(Entity):
             if away_standing:
                 match["away_rank"] = away_standing["rank"]
                 match["away_points"] = away_standing["points"]
+
+        self._store_prematch(match)
+
+    # Pre-match snapshot fields to preserve across the pre -> live transition.
+    _PREMATCH_FIELDS = (
+        "prediction", "odds", "injuries_home", "injuries_away",
+        "home_rank", "home_points", "away_rank", "away_points",
+    )
+    _prematch_cache = {}
+
+    def _store_prematch(self, match):
+        fixture_id = str(match.get("event_id") or "")
+        if not fixture_id:
+            return
+        snapshot = {k: match[k] for k in self._PREMATCH_FIELDS if k in match}
+        if not snapshot:
+            return
+        cache = SoccerLiveSensor._prematch_cache
+        cache[fixture_id] = snapshot
+        # Bound the cache so it can't grow without limit.
+        if len(cache) > 60:
+            cache.pop(next(iter(cache)))
+
+    def _reattach_prematch(self, matches):
+        """Re-attach cached pre-match data to any match (e.g. now live) that had it
+        but lost it when the fixture was rebuilt from /fixtures. Never overwrites
+        fields the current match already carries."""
+        cache = SoccerLiveSensor._prematch_cache
+        if not cache:
+            return
+        for match in matches:
+            snapshot = cache.get(str(match.get("event_id") or ""))
+            if not snapshot:
+                continue
+            for key, value in snapshot.items():
+                if key not in match:
+                    match[key] = value
 
     def _api_football_response_has_items(self, data):
         if not isinstance(data, dict):
