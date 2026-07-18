@@ -900,3 +900,23 @@ def test_live_odds_pause_on_403_and_empty_streak():
         SoccerLiveSensor._note_live_odds_result(200, has_response=False)
     assert SoccerLiveSensor._live_odds_available() is False
     SoccerLiveSensor._live_odds_pause_until = None
+
+
+def test_club_cache_rejects_old_version_and_expired():
+    import datetime as _dt
+    SoccerLiveSensor._club_cache = {}
+    sensor = _sensor("team_match", provider="api_football")
+    v = SoccerLiveSensor._CLUB_CACHE_VERSION
+    now = _dt.datetime.now().isoformat()
+    # Fresh blob at the current version is served.
+    SoccerLiveSensor._club_cache["209"] = {"club": {"coach": "R. van Persie"}, "ts": now, "v": v}
+    assert sensor._get_cached_club("209") == {"coach": "R. van Persie"}
+    # A blob from an older code version (e.g. no version tag) is rejected so the
+    # fix lands on the next refetch instead of being masked for 24h.
+    SoccerLiveSensor._club_cache["209"] = {"club": {"coach": "P. Bosschaart"}, "ts": now}
+    assert sensor._get_cached_club("209") is None
+    # An expired blob is rejected too.
+    old = (_dt.datetime.now() - _dt.timedelta(hours=25)).isoformat()
+    SoccerLiveSensor._club_cache["209"] = {"club": {"coach": "X"}, "ts": old, "v": v}
+    assert sensor._get_cached_club("209") is None
+    SoccerLiveSensor._club_cache = {}

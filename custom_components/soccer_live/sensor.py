@@ -1036,6 +1036,9 @@ class SoccerLiveSensor(Entity):
     _club_store = None
     _club_loaded = False
     _CLUB_TTL = 86400  # seconds; matches the per-endpoint club cache TTL
+    # Bump when the club blob's shape or parsing changes, so an upgrade doesn't
+    # keep serving a stale blob (e.g. an old, wrongly-picked coach) for 24h.
+    _CLUB_CACHE_VERSION = 2
 
     async def _load_club_cache(self):
         """Load the persisted club blobs once so a restart re-uses fresh club
@@ -1057,6 +1060,8 @@ class SoccerLiveSensor(Entity):
         entry = SoccerLiveSensor._club_cache.get(str(team_id))
         if not isinstance(entry, dict):
             return None
+        if entry.get("v") != self._CLUB_CACHE_VERSION:
+            return None  # blob from an older code version -> refetch
         club = entry.get("club")
         ts = entry.get("ts")
         if not club or not ts:
@@ -1071,7 +1076,11 @@ class SoccerLiveSensor(Entity):
 
     def _store_club(self, team_id, club):
         cache = SoccerLiveSensor._club_cache
-        cache[str(team_id)] = {"club": club, "ts": datetime.now().isoformat()}
+        cache[str(team_id)] = {
+            "club": club,
+            "ts": datetime.now().isoformat(),
+            "v": self._CLUB_CACHE_VERSION,
+        }
         if len(cache) > 60:
             cache.pop(next(iter(cache)))
         if SoccerLiveSensor._club_store is not None:

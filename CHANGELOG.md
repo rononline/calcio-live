@@ -1,5 +1,11 @@
 # Changelog
 
+## v3.6.90 (2026-07-18)
+- club cache: version the persisted club blob and reject blobs written by an
+  older code version, so a parsing fix (e.g. the coach selection) lands on the
+  next refetch instead of being masked by the 24h cache. Bumped for the coach fix
+  in v3.6.89, so the correct current coach appears right after upgrading
+
 ## v3.6.89 (2026-07-18)
 - club coach: fix the current head coach being wrong (e.g. Feyenoord showing a former assistant). `/coachs?team=X` lists everyone who coached the team and each coach's whole career, so a former coach now in charge elsewhere could win. We now only weigh career spells at the queried team, prefer an open one, and break ties on the most recent start
 - live odds: made opt-in. New `enable_live_odds` option (default off, shown only for providers with the new `live_odds` capability) because `/odds/live` polls often. When off, live matches keep showing the last pre-match odds via the snapshot re-attach (no extra requests). The feature pauses itself on HTTP 403 (plan doesn't include it) for 6h and after several empty responses for 1h, independent of the 429 backoff. Diagnostics now expose `live_odds_calls`, `live_odds_last_status` and `live_odds_paused_until`
