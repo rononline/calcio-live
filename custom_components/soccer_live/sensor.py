@@ -88,6 +88,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
         )
         recent_match_hours = entry.options.get("recent_match_hours", 24)
         enable_summary_enrichment = entry.options.get("enable_summary_enrichment", True)
+        enable_club_data = entry.options.get("enable_club_data", True)
         max_matches = entry.options.get("max_matches", 0)
         sensors = []
 
@@ -103,6 +104,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
                     config_entry_id=entry.entry_id,
                     start_date=start_date, end_date=end_date, team_id=team_id, recent_match_hours=recent_match_hours,
                     enable_summary_enrichment=enable_summary_enrichment,
+                    enable_club_data=enable_club_data,
                     max_matches=max_matches, provider=provider, api_football_key=api_football_key,
                     include_friendlies=include_friendlies, api_football_season=api_football_season,
                     live_scan_interval=live_scan_interval
@@ -123,6 +125,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
                         base_scan_interval + timedelta(seconds=random.randint(0, 30)), team_name=team_name,
                         config_entry_id=entry.entry_id, start_date=start_date, end_date=end_date, team_id=team_id, recent_match_hours=recent_match_hours,
                         enable_summary_enrichment=enable_summary_enrichment,
+                        enable_club_data=enable_club_data,
                         max_matches=max_matches, provider=provider, api_football_key=api_football_key,
                         include_friendlies=include_friendlies, api_football_season=api_football_season,
                         live_scan_interval=live_scan_interval
@@ -132,6 +135,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
                         base_scan_interval + timedelta(seconds=random.randint(0, 30)), team_name=team_name,
                         config_entry_id=entry.entry_id, start_date=start_date, end_date=end_date, team_id=team_id, recent_match_hours=recent_match_hours,
                         enable_summary_enrichment=enable_summary_enrichment,
+                        enable_club_data=enable_club_data,
                         max_matches=max_matches, provider=provider, api_football_key=api_football_key,
                         include_friendlies=include_friendlies, api_football_season=api_football_season,
                         live_scan_interval=live_scan_interval
@@ -143,6 +147,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
                     base_scan_interval + timedelta(seconds=random.randint(0, 30)), team_name=team_name,
                     config_entry_id=entry.entry_id, start_date=start_date, end_date=end_date, team_id=team_id, recent_match_hours=recent_match_hours,
                     enable_summary_enrichment=enable_summary_enrichment,
+                    enable_club_data=enable_club_data,
                     max_matches=max_matches, provider=provider, api_football_key=api_football_key,
                     include_friendlies=include_friendlies, api_football_season=api_football_season,
                     live_scan_interval=live_scan_interval
@@ -156,6 +161,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
                         base_scan_interval + timedelta(seconds=random.randint(0, 30)), config_entry_id=entry.entry_id,
                         start_date=start_date, end_date=end_date, team_id=team_id, recent_match_hours=recent_match_hours,
                         enable_summary_enrichment=enable_summary_enrichment,
+                        enable_club_data=enable_club_data,
                         max_matches=max_matches, provider=provider, api_football_key=api_football_key,
                         include_friendlies=include_friendlies, api_football_season=api_football_season,
                         live_scan_interval=live_scan_interval
@@ -218,7 +224,7 @@ class SoccerLiveSensor(Entity):
     _unrecorded_attributes = frozenset({
         "matches", "previous_matches", "upcoming_matches", "next_match",
         "schedule_live_matches", "schedule_upcoming_matches", "schedule_recent_matches",
-        "standings_groups", "scorers", "articles", "rounds",
+        "standings_groups", "scorers", "assists", "articles", "rounds",
         "head_to_head", "league_info", "club",
         "last_event", "last_goal_event", "last_card_event",
         "last_match_started_event", "last_match_finished_event",
@@ -244,7 +250,7 @@ class SoccerLiveSensor(Entity):
                  team_name=None, config_entry_id=None, start_date=None, end_date=None, team_id=None,
                  recent_match_hours=24, enable_summary_enrichment=True, max_matches=0,
                  provider=PROVIDER_ESPN, api_football_key="", include_friendlies=True,
-                 api_football_season=None, live_scan_interval=60):
+                 api_football_season=None, live_scan_interval=60, enable_club_data=True):
         self.hass = hass
         self._name = name
         self._code = code
@@ -257,6 +263,7 @@ class SoccerLiveSensor(Entity):
         self._team_name = team_name
         self._recent_match_hours = recent_match_hours
         self._enable_summary_enrichment = enable_summary_enrichment
+        self._enable_club_data = enable_club_data
         self._max_matches = max_matches  # 0 = unlimited
         try:
             self._live_scan_interval = max(15, int(live_scan_interval or 60))
@@ -354,6 +361,7 @@ class SoccerLiveSensor(Entity):
         """Load previously dispatched match_finished keys from disk so HA restarts
         do not re-fire events for matches that already ended."""
         await self._load_prematch_cache()
+        await self._load_club_cache()
         store_key = f"soccer_live_{self._config_entry_id or 'default'}_{self._name}_finished"
         self._store = Store(self.hass, 1, store_key)
         stored = await self._store.async_load()
@@ -587,6 +595,7 @@ class SoccerLiveSensor(Entity):
         self._save_store_needed = any(e[0] == "soccer_live_match_finished" for e in self._pending_events)
         await self._enrich_with_summary()
         await self._enrich_club_data()
+        await self._enrich_api_football_assists()
         await self._flush_pending_events()
         self._publish_matches(self._attributes.get("matches") or [])
 
@@ -942,17 +951,44 @@ class SoccerLiveSensor(Entity):
             await self._fetch_and_store_prematch(match)
         self._reattach_prematch(matches)
 
+    async def _enrich_api_football_assists(self):
+        """Attach a real top-assists ranking (API-Football /players/topassists) to
+        a top_scorers sensor, so the Scorers card's assists mode is the actual
+        competition-wide assist leaders, not just assists among the top scorers."""
+        if self._provider != PROVIDER_API_FOOTBALL or self._sensor_type != "top_scorers" or not self._code:
+            return
+        season = self._api_football_effective_season()
+        data = await self._fetch_api_football_json(
+            "players/topassists", {"league": self._code, "season": season}
+        )
+        if data is None:
+            return
+        from .parsers.api_football import process_scorers_data
+        parsed = await self.hass.async_add_executor_job(process_scorers_data, data)
+        assists = (parsed or {}).get("scorers") or []
+        if assists:
+            self._attributes["assists"] = assists
+
     async def _enrich_club_data(self):
         """Attach the club profile, coach, squad and recent transfers for the
-        tracked team (API-Football, team sensors). All four are cached 24h, so
-        this is roughly four requests per day per team sensor."""
-        if self._provider != PROVIDER_API_FOOTBALL or not self._enable_summary_enrichment:
+        tracked team (API-Football, team sensors). The assembled blob is cached
+        24h and persisted to disk, so an HA restart re-uses it instead of
+        spending four requests per team sensor on every startup."""
+        if self._provider != PROVIDER_API_FOOTBALL or not self._enable_club_data:
             return
         if self._sensor_type not in {"team_match", "team_matches", "team_matches_mixed"}:
             return
         team_id = self._team_id
         if not team_id:
             return
+
+        # Re-use the persisted club blob while it is still fresh (< 24h),
+        # avoiding four API requests after every restart.
+        cached = self._get_cached_club(team_id)
+        if cached is not None:
+            self._attributes["club"] = cached
+            return
+
         from .parsers.api_football import (
             process_team_profile,
             process_coach,
@@ -986,6 +1022,54 @@ class SoccerLiveSensor(Entity):
                 club["transfers"] = transfers
         if club:
             self._attributes["club"] = club
+            self._store_club(team_id, club)
+
+    _club_cache = {}
+    _club_store = None
+    _club_loaded = False
+    _CLUB_TTL = 86400  # seconds; matches the per-endpoint club cache TTL
+
+    async def _load_club_cache(self):
+        """Load the persisted club blobs once so a restart re-uses fresh club
+        data (profile/coach/squad/transfers) instead of re-fetching it."""
+        if SoccerLiveSensor._club_loaded:
+            return
+        SoccerLiveSensor._club_loaded = True
+        try:
+            SoccerLiveSensor._club_store = Store(self.hass, 1, "soccer_live_club")
+            stored = await SoccerLiveSensor._club_store.async_load()
+            if isinstance(stored, dict):
+                SoccerLiveSensor._club_cache.update(stored)
+        except Exception as err:  # pragma: no cover - storage best-effort
+            _LOGGER.debug("Could not load club cache: %s", err)
+
+    def _get_cached_club(self, team_id):
+        """Return the cached club blob for team_id if present and younger than
+        the TTL, else None."""
+        entry = SoccerLiveSensor._club_cache.get(str(team_id))
+        if not isinstance(entry, dict):
+            return None
+        club = entry.get("club")
+        ts = entry.get("ts")
+        if not club or not ts:
+            return None
+        try:
+            age = (datetime.now() - datetime.fromisoformat(ts)).total_seconds()
+        except (ValueError, TypeError):
+            return None
+        if age < 0 or age > self._CLUB_TTL:
+            return None
+        return club
+
+    def _store_club(self, team_id, club):
+        cache = SoccerLiveSensor._club_cache
+        cache[str(team_id)] = {"club": club, "ts": datetime.now().isoformat()}
+        if len(cache) > 60:
+            cache.pop(next(iter(cache)))
+        if SoccerLiveSensor._club_store is not None:
+            SoccerLiveSensor._club_store.async_delay_save(
+                lambda: dict(SoccerLiveSensor._club_cache), 60
+            )
 
     def _prematch_target_match(self, matches):
         """Which match to fetch pre-match data for: the live match when there is
@@ -1004,17 +1088,22 @@ class SoccerLiveSensor(Entity):
             process_prediction_data,
             process_injuries_data,
             process_odds_data,
+            process_live_odds_data,
             extract_team_standing,
         )
 
         league_id = match.get("league_id")
         season = match.get("season_info")
         fetch_standings = bool(league_id) and season not in (None, "")
+        # Once the match is live, API-Football drops the pre-match /odds; the
+        # /odds/live in-play feed carries the real live 1X2 instead.
+        is_live = match.get("state") == "in"
+        odds_path = "odds/live" if is_live else "odds"
 
         tasks = [
             self._fetch_api_football_json("predictions", {"fixture": fixture_id}),
             self._fetch_api_football_json("injuries", {"fixture": fixture_id}),
-            self._fetch_api_football_json("odds", {"fixture": fixture_id}),
+            self._fetch_api_football_json(odds_path, {"fixture": fixture_id}),
         ]
         if fetch_standings:
             tasks.append(self._fetch_api_football_json("standings", {"league": league_id, "season": season}))
@@ -1037,7 +1126,8 @@ class SoccerLiveSensor(Entity):
                 match["injuries_away"] = injuries["injuries_away"]
 
         if odds_data is not None:
-            odds = await self.hass.async_add_executor_job(process_odds_data, odds_data)
+            odds_parser = process_live_odds_data if is_live else process_odds_data
+            odds = await self.hass.async_add_executor_job(odds_parser, odds_data)
             if odds:
                 match["odds"] = odds
 
@@ -1325,10 +1415,14 @@ class SoccerLiveSensor(Entity):
             return 10800  # team news updates occasionally; cache for 3 hours
         if path == "odds":
             return 3600  # bookmaker odds update a few times a day; cache 1 hour
+        if path == "odds/live":
+            return 45  # in-play odds move fast; short cache dedups sensors on the same fixture
         if path == "standings":
             return 21600  # league table changes at most daily; cache for 6 hours
         if path in {"teams", "coachs", "players/squads", "transfers"}:
             return 86400  # club profile / squad / transfers change rarely; cache 24h
+        if path == "players/topassists":
+            return 21600  # top assists change at most daily; cache 6h
         return 300
 
     def _prune_api_football_endpoint_cache(self, now):

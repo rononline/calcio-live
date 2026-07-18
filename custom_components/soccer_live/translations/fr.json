@@ -102,6 +102,7 @@
           "end_date": "Date de fin (AAAA-MM-JJ)",
           "recent_match_hours": "Garder le match terminé visible (heures)",
           "enable_summary_enrichment": "Récupérer compos, événements et H2H",
+          "enable_club_data": "Récupérer profil du club, entraîneur, effectif et transferts (API-Football)",
           "include_friendlies": "Inclure les matchs amicaux",
           "api_football_season": "Saison API-Football (0 = automatique)",
           "max_matches": "Max matchs dans les attributs (0 = illimité)",

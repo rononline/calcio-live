@@ -261,6 +261,44 @@ def process_odds_data(data):
     }
 
 
+def process_live_odds_data(data):
+    """Normalize an API-Football /odds/live response to in-play 1X2 odds.
+
+    Live odds come from a single in-play feed (not per-bookmaker). Returns None
+    when the market is suspended (stopped/blocked) or absent, so callers keep the
+    last shown odds instead of flashing empty during a suspension (e.g. right
+    after a goal)."""
+    response = data.get("response", []) if isinstance(data, dict) else []
+    first = _as_dict(response[0]) if response else {}
+    status = _as_dict(first.get("status"))
+    if status.get("stopped") or status.get("blocked"):
+        return None
+    home = draw = away = None
+    for bet in (first.get("odds") or []):
+        if not isinstance(bet, dict):
+            continue
+        name = (bet.get("name") or "").lower()
+        if name not in ("match winner", "fulltime result", "full time result", "1x2"):
+            continue
+        for entry in (bet.get("values") or []):
+            if not isinstance(entry, dict) or entry.get("suspended"):
+                continue
+            odd = _as_float(entry.get("odd"))
+            if odd is None:
+                continue
+            label = (entry.get("value") or "").lower()
+            if label == "home":
+                home = odd
+            elif label == "draw":
+                draw = odd
+            elif label == "away":
+                away = odd
+        break  # one Match Winner market per fixture
+    if home is None and draw is None and away is None:
+        return None
+    return {"home": home, "draw": draw, "away": away, "live": True}
+
+
 def process_prediction_data(data):
     """Normalize an API-Football /predictions response to a compact prediction.
 
@@ -734,6 +772,7 @@ def process_transfers(data, team_id, limit=15):
     given team (most recent first), each tagged in/out relative to the team."""
     response = data.get("response", []) if isinstance(data, dict) else []
     items = []
+    seen = set()
     for entry in response or []:
         entry = _as_dict(entry)
         player = _as_dict(entry.get("player")).get("name", "")
@@ -748,12 +787,21 @@ def process_transfers(data, team_id, limit=15):
                 direction = "out"
             else:
                 continue
+            date = transfer.get("date") or ""
+            from_name = team_out.get("name", "")
+            to_name = team_in.get("name", "")
+            # API-Football can return the same move more than once; a composite
+            # key on player + date + from + to drops those duplicates.
+            key = (player, date, from_name, to_name)
+            if key in seen:
+                continue
+            seen.add(key)
             items.append({
                 "player": player,
-                "date": transfer.get("date") or "",
+                "date": date,
                 "type": transfer.get("type") or "",
-                "from": team_out.get("name", ""),
-                "to": team_in.get("name", ""),
+                "from": from_name,
+                "to": to_name,
                 "direction": direction,
             })
     items.sort(key=lambda x: x["date"], reverse=True)

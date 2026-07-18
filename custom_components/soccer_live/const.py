@@ -23,7 +23,7 @@ PROVIDER_CAPABILITIES = {
     PROVIDER_API_FOOTBALL: (
         "fixtures", "scores", "standings", "top_scorers", "top_assists",
         "lineups", "statistics", "head_to_head",
-        "predictions", "odds", "injuries", "xg",
+        "predictions", "odds", "injuries", "xg", "club",
     ),
 }
 

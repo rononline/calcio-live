@@ -16,6 +16,7 @@ from .const import (
     DOMAIN,
     PROVIDER_API_FOOTBALL,
     PROVIDER_ESPN,
+    provider_supports,
 )
 from .data import parse_competitions, parse_teams
 
@@ -485,6 +486,9 @@ class SoccerLiveOptionsFlow(config_entries.OptionsFlow):
         )
         notify_service = self.config_entry.options.get("notify_service", "")
         enable_summary_enrichment = self.config_entry.options.get("enable_summary_enrichment", True)
+        enable_club_data = self.config_entry.options.get("enable_club_data", True)
+        provider = _normalize_provider(self.config_entry.data.get(CONF_PROVIDER, PROVIDER_ESPN))
+        supports_club = provider_supports(provider, "club")
         max_matches = self.config_entry.options.get("max_matches", 0)
         include_friendlies = self.config_entry.options.get(
             CONF_INCLUDE_FRIENDLIES,
@@ -495,20 +499,27 @@ class SoccerLiveOptionsFlow(config_entries.OptionsFlow):
             self.config_entry.data.get(CONF_API_FOOTBALL_SEASON, 0),
         )
 
+        schema = {
+            vol.Optional("scan_interval", default=scan_interval): vol.In([1, 2, 3, 5, 10]),
+            vol.Optional(CONF_LIVE_SCAN_INTERVAL, default=live_scan_interval): vol.In([30, 45, 60, 90, 120]),
+            vol.Optional("recent_match_hours", default=recent_match_hours): vol.In([6, 12, 24, 48]),
+            vol.Optional("start_date", default=start_date): str,
+            vol.Optional("end_date", default=end_date): str,
+            vol.Optional("notify_service", default=notify_service): str,
+            vol.Optional("enable_summary_enrichment", default=enable_summary_enrichment): bool,
+        }
+        # Club enrichment (profile/coach/squad/transfers) is API-Football only.
+        if supports_club:
+            schema[vol.Optional("enable_club_data", default=enable_club_data)] = bool
+        schema.update({
+            vol.Optional(CONF_INCLUDE_FRIENDLIES, default=include_friendlies): bool,
+            vol.Optional(CONF_API_FOOTBALL_SEASON, default=api_football_season): vol.Coerce(int),
+            vol.Optional("max_matches", default=max_matches): vol.In([0, 5, 10, 15, 20, 30]),
+        })
+
         return self.async_show_form(
             step_id="init",
-            data_schema=vol.Schema({
-                vol.Optional("scan_interval", default=scan_interval): vol.In([1, 2, 3, 5, 10]),
-                vol.Optional(CONF_LIVE_SCAN_INTERVAL, default=live_scan_interval): vol.In([30, 45, 60, 90, 120]),
-                vol.Optional("recent_match_hours", default=recent_match_hours): vol.In([6, 12, 24, 48]),
-                vol.Optional("start_date", default=start_date): str,
-                vol.Optional("end_date", default=end_date): str,
-                vol.Optional("notify_service", default=notify_service): str,
-                vol.Optional("enable_summary_enrichment", default=enable_summary_enrichment): bool,
-                vol.Optional(CONF_INCLUDE_FRIENDLIES, default=include_friendlies): bool,
-                vol.Optional(CONF_API_FOOTBALL_SEASON, default=api_football_season): vol.Coerce(int),
-                vol.Optional("max_matches", default=max_matches): vol.In([0, 5, 10, 15, 20, 30]),
-            }),
+            data_schema=vol.Schema(schema),
             errors=errors,
         )
         

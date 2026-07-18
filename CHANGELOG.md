@@ -1,5 +1,14 @@
 # Changelog
 
+## v3.6.88 (2026-07-18)
+- live odds (API-Football): once a match is live, fetch the real in-play `/odds/live` 1X2 feed instead of the pre-match `/odds` (which API-Football drops at kick-off), so the odds shown during the game are actually live rather than a frozen pre-match snapshot. Tagged `live` on the odds, cached 45s (dedups sensors on the same fixture), suspended markets (stopped/blocked/individually suspended) return nothing so the last shown odds stay. Only runs while a match is live and rides the existing 429 backoff
+
+## v3.6.87 (2026-07-18)
+- top assists (API-Football): the top scorers sensor now fetches the real `/players/topassists` ranking and exposes it as a separate `assists` attribute, instead of the Scorers card re-sorting the top scorers by their assists (which missed assist leaders with few goals). Cached 6h and marked unrecorded
+- club data: moved behind its own `enable_club_data` option (default on) instead of piggybacking on `enable_summary_enrichment`, and the option only appears for providers that support it via `provider_supports()`. Added a `club` provider capability
+- club cache: the assembled club blob is now persisted to HA storage with a timestamp and re-used while younger than 24h, so a restart no longer spends four requests per team sensor on startup
+- transfers: drop duplicate records via a composite key (player + date + from + to)
+
 ## v3.6.86 (2026-07-18)
 - club data (API-Football, team sensors): attach a club attribute with the team profile (venue, founded, country), current coach, full squad (sorted by position then shirt number) and recent transfers (in/out, player, fee, date). Fetched from /teams, /coachs, /players/squads and /transfers, cached 24h (~4 requests/day), and marked unrecorded. Feeds the upcoming Club card
 

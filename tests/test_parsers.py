@@ -33,6 +33,7 @@ process_api_football_fixture_enrichment = _api_football.process_fixture_enrichme
 process_api_football_prediction = _api_football.process_prediction_data
 process_api_football_injuries = _api_football.process_injuries_data
 process_api_football_odds = _api_football.process_odds_data
+process_api_football_live_odds = _api_football.process_live_odds_data
 api_football_extract_team_standing = _api_football.extract_team_standing
 process_api_football_team_profile = _api_football.process_team_profile
 process_api_football_coach = _api_football.process_coach
@@ -431,6 +432,34 @@ class TestApiFootballParser:
         assert odds["away"] == 5.90   # (6.00 + 5.80) / 2
         assert odds["bookmaker_count"] == 2
 
+    def test_live_odds_reads_in_play_match_winner(self):
+        data = {"response": [{
+            "status": {"stopped": False, "blocked": False, "finished": False},
+            "odds": [
+                {"id": 33, "name": "Over/Under", "values": [{"value": "Over", "odd": "1.80"}]},
+                {"id": 59, "name": "Match Winner", "values": [
+                    {"value": "Home", "odd": "2.50", "suspended": False},
+                    {"value": "Draw", "odd": "3.10", "suspended": False},
+                    {"value": "Away", "odd": "2.70", "suspended": False}]},
+            ],
+        }]}
+        odds = process_api_football_live_odds(data)
+        assert odds == {"home": 2.50, "draw": 3.10, "away": 2.70, "live": True}
+
+    def test_live_odds_none_when_suspended(self):
+        # Whole market stopped (e.g. right after a goal) -> keep last shown odds.
+        blocked = {"response": [{"status": {"stopped": True, "blocked": False},
+                                 "odds": [{"name": "Match Winner", "values": [{"value": "Home", "odd": "2.0"}]}]}]}
+        assert process_api_football_live_odds(blocked) is None
+        # Individual suspended values are skipped.
+        partial = {"response": [{"status": {"stopped": False, "blocked": False}, "odds": [
+            {"name": "Match Winner", "values": [
+                {"value": "Home", "odd": "2.0", "suspended": True},
+                {"value": "Draw", "odd": "3.3", "suspended": False},
+                {"value": "Away", "odd": "3.0", "suspended": True}]}]}]}
+        assert process_api_football_live_odds(partial) == {"home": None, "draw": 3.3, "away": None, "live": True}
+        assert process_api_football_live_odds({"response": []}) is None
+
     def test_extract_team_standing_returns_rank_and_points(self):
         data = {"response": [{"league": {"standings": [[
             {"rank": 1, "team": {"id": 42}, "points": 80},
@@ -485,6 +514,16 @@ class TestApiFootballParser:
         assert transfers[0]["direction"] == "in"      # most recent first
         assert transfers[0]["to"] == "Feyenoord"
         assert transfers[1]["direction"] == "out"
+
+    def test_transfers_deduplicates_repeated_records(self):
+        # API-Football can list the same move more than once; a composite key on
+        # player + date + from + to must collapse those into one.
+        move = {"date": "2025-07-01", "type": "€ 10M",
+                "teams": {"in": {"id": 209, "name": "Feyenoord"}, "out": {"id": 5, "name": "Ajax"}}}
+        data = {"response": [{"player": {"name": "Player A"}, "transfers": [move, dict(move)]}]}
+        transfers = process_api_football_transfers(data, 209)
+        assert len(transfers) == 1
+        assert transfers[0]["player"] == "Player A"
 
     def test_extract_team_standing_returns_none_when_absent(self):
         data = {"response": [{"league": {"standings": [[{"rank": 1, "team": {"id": 42}, "points": 80}]]}}]}
