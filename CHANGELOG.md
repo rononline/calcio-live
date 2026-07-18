@@ -1,5 +1,8 @@
 # Changelog
 
+## v3.6.91 (2026-07-18)
+- predictions: surface more of the data already returned by `/predictions` (no extra API requests). The prediction now also carries a home-vs-away strength `comparison` (form/attack/defense/overall percentages) and the predicted goal lines (`goals_home`/`goals_away`/`under_over`)
+
 ## v3.6.90 (2026-07-18)
 - club cache: version the persisted club blob and reject blobs written by an
   older code version, so a parsing fix (e.g. the coach selection) lands on the

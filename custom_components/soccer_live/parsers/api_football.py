@@ -324,7 +324,7 @@ def process_prediction_data(data):
     # not a real lean, so don't surface it.
     if not winner_name and home is not None and home == draw == away:
         return None
-    return {
+    result = {
         "percent_home": home,
         "percent_draw": draw,
         "percent_away": away,
@@ -332,6 +332,30 @@ def process_prediction_data(data):
         "winner_name": winner_name,
         "winner_comment": winner.get("comment") or "",
     }
+
+    # Strength comparison (home vs away %) — comes free in the same response.
+    comparison = _as_dict(first.get("comparison"))
+    metrics = {}
+    for key in ("form", "att", "def", "total"):
+        pair = _as_dict(comparison.get(key))
+        h = _percent_int(pair.get("home"))
+        a = _percent_int(pair.get("away"))
+        if h is not None or a is not None:
+            metrics[key] = {"home": h, "away": a}
+    if metrics:
+        result["comparison"] = metrics
+
+    # Predicted goal lines per team (bookmaker-style thresholds, e.g. "-2.5").
+    pgoals = _as_dict(predictions.get("goals"))
+    goals_home = pgoals.get("home")
+    goals_away = pgoals.get("away")
+    under_over = predictions.get("under_over")
+    if goals_home or goals_away or under_over:
+        result["goals_home"] = goals_home or ""
+        result["goals_away"] = goals_away or ""
+        result["under_over"] = under_over or ""
+
+    return result
 
 
 def process_injuries_data(data, home_team_id=None, away_team_id=None):

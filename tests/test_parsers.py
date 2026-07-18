@@ -392,6 +392,35 @@ class TestApiFootballParser:
         assert pred["percent_away"] == 20
         assert pred["advice"] == "Double chance : Feyenoord or draw"
         assert pred["winner_name"] == "Feyenoord"
+        # No comparison/goals in this payload -> those keys are omitted.
+        assert "comparison" not in pred
+        assert "goals_home" not in pred
+
+    def test_prediction_extracts_comparison_and_goal_lines(self):
+        data = {"response": [{
+            "predictions": {
+                "winner": {"name": "Away FC"},
+                "advice": "Away FC",
+                "percent": {"home": "30%", "draw": "20%", "away": "50%"},
+                "goals": {"home": "-2.5", "away": "-2.5"},
+                "under_over": "-3.5",
+            },
+            "comparison": {
+                "form": {"home": "31%", "away": "69%"},
+                "att": {"home": "46%", "away": "54%"},
+                "def": {"home": "20%", "away": "80%"},
+                "poisson_distribution": {"home": "38%", "away": "62%"},
+                "total": {"home": "28.6%", "away": "71.4%"},
+            },
+        }]}
+        pred = process_api_football_prediction(data)
+        # Only the whitelisted metrics are surfaced (poisson dropped).
+        assert set(pred["comparison"].keys()) == {"form", "att", "def", "total"}
+        assert pred["comparison"]["total"] == {"home": 28, "away": 71}
+        assert pred["comparison"]["def"] == {"home": 20, "away": 80}
+        assert pred["goals_home"] == "-2.5"
+        assert pred["goals_away"] == "-2.5"
+        assert pred["under_over"] == "-3.5"
 
     def test_injuries_split_by_team_with_suspension_flag(self):
         data = {"response": [
