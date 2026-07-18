@@ -99,6 +99,7 @@
           "recent_match_hours": "Keep finished match visible for (hours)",
           "enable_summary_enrichment": "Fetch lineup, key events and H2H (summary enrichment)",
           "enable_club_data": "Fetch club profile, coach, squad and transfers (API-Football)",
+          "enable_live_odds": "Fetch live in-play odds during a match (API-Football; polls often)",
           "include_friendlies": "Include friendlies",
           "api_football_season": "API-Football season (0 = auto)",
           "max_matches": "Max matches in attributes (0 = unlimited)",

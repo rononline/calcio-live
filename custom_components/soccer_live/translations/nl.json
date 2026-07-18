@@ -99,6 +99,7 @@
           "recent_match_hours": "Afgelopen wedstrijd zichtbaar houden voor (uren)",
           "enable_summary_enrichment": "Ophalen opstellingen, events en H2H (summary)",
           "enable_club_data": "Ophalen clubprofiel, coach, selectie en transfers (API-Football)",
+          "enable_live_odds": "Live in-play odds ophalen tijdens een wedstrijd (API-Football; polt vaak)",
           "include_friendlies": "Oefenwedstrijden meenemen",
           "api_football_season": "API-Football seizoen (0 = auto)",
           "max_matches": "Max wedstrijden in attributen (0 = onbeperkt)",

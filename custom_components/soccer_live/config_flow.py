@@ -487,8 +487,10 @@ class SoccerLiveOptionsFlow(config_entries.OptionsFlow):
         notify_service = self.config_entry.options.get("notify_service", "")
         enable_summary_enrichment = self.config_entry.options.get("enable_summary_enrichment", True)
         enable_club_data = self.config_entry.options.get("enable_club_data", True)
+        enable_live_odds = self.config_entry.options.get("enable_live_odds", False)
         provider = _normalize_provider(self.config_entry.data.get(CONF_PROVIDER, PROVIDER_ESPN))
         supports_club = provider_supports(provider, "club")
+        supports_live_odds = provider_supports(provider, "live_odds")
         max_matches = self.config_entry.options.get("max_matches", 0)
         include_friendlies = self.config_entry.options.get(
             CONF_INCLUDE_FRIENDLIES,
@@ -511,6 +513,9 @@ class SoccerLiveOptionsFlow(config_entries.OptionsFlow):
         # Club enrichment (profile/coach/squad/transfers) is API-Football only.
         if supports_club:
             schema[vol.Optional("enable_club_data", default=enable_club_data)] = bool
+        # Live in-play odds (API-Football) — off by default because it polls often.
+        if supports_live_odds:
+            schema[vol.Optional("enable_live_odds", default=enable_live_odds)] = bool
         schema.update({
             vol.Optional(CONF_INCLUDE_FRIENDLIES, default=include_friendlies): bool,
             vol.Optional(CONF_API_FOOTBALL_SEASON, default=api_football_season): vol.Coerce(int),

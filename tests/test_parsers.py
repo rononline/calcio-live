@@ -490,6 +490,27 @@ class TestApiFootballParser:
         assert process_api_football_coach({"response": [{"name": "X", "career": []}]}) == "X"
         assert process_api_football_coach({"response": []}) == ""
 
+    def test_coach_ignores_former_coach_now_elsewhere(self):
+        # An ex-coach whose current (open) job is at another club must not win;
+        # only the open spell at the queried team counts.
+        data = {"response": [
+            {"name": "Pascal Bosschaart", "career": [  # interim, ended at 209; now open elsewhere
+                {"team": {"id": 209}, "start": "2025-01", "end": "2025-05"},
+                {"team": {"id": 999}, "start": "2025-06", "end": None},
+            ]},
+            {"name": "Giovanni van Bronckhorst", "career": [
+                {"team": {"id": 209}, "start": "2025-06", "end": None},
+            ]},
+        ]}
+        assert process_api_football_coach(data, 209) == "Giovanni van Bronckhorst"
+
+    def test_coach_breaks_ties_on_most_recent_start_at_team(self):
+        data = {"response": [
+            {"name": "Assistant", "career": [{"team": {"id": 209}, "start": "2023-06", "end": None}]},
+            {"name": "Head Coach", "career": [{"team": {"id": 209}, "start": "2025-06", "end": None}]},
+        ]}
+        assert process_api_football_coach(data, 209) == "Head Coach"
+
     def test_squad_sorted_by_position_then_number(self):
         data = {"response": [{"players": [
             {"name": "Striker", "number": 9, "position": "Attacker", "age": 25},

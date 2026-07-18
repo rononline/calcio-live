@@ -1,5 +1,9 @@
 # Changelog
 
+## v3.6.89 (2026-07-18)
+- club coach: fix the current head coach being wrong (e.g. Feyenoord showing a former assistant). `/coachs?team=X` lists everyone who coached the team and each coach's whole career, so a former coach now in charge elsewhere could win. We now only weigh career spells at the queried team, prefer an open one, and break ties on the most recent start
+- live odds: made opt-in. New `enable_live_odds` option (default off, shown only for providers with the new `live_odds` capability) because `/odds/live` polls often. When off, live matches keep showing the last pre-match odds via the snapshot re-attach (no extra requests). The feature pauses itself on HTTP 403 (plan doesn't include it) for 6h and after several empty responses for 1h, independent of the 429 backoff. Diagnostics now expose `live_odds_calls`, `live_odds_last_status` and `live_odds_paused_until`
+
 ## v3.6.88 (2026-07-18)
 - live odds (API-Football): once a match is live, fetch the real in-play `/odds/live` 1X2 feed instead of the pre-match `/odds` (which API-Football drops at kick-off), so the odds shown during the game are actually live rather than a frozen pre-match snapshot. Tagged `live` on the odds, cached 45s (dedups sensors on the same fixture), suspended markets (stopped/blocked/individually suspended) return nothing so the last shown odds stay. Only runs while a match is live and rides the existing 429 backoff
 

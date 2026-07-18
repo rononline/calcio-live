@@ -99,6 +99,7 @@ def _sensor(sensor_type, code="ned.1", team_name=None, team_id="1234", provider=
     sensor._match_finished_list = []
     sensor._pending_events = []
     sensor._live_unsub = None
+    sensor._enable_live_odds = False
 
     async def _calendar_should_not_be_called():
         raise AssertionError(f"calendar should not be called for {sensor_type}")
@@ -794,3 +795,108 @@ def test_calendar_issue_logging_is_throttled(caplog):
 
     assert len(warning_records) == 1
     assert len(debug_records) == 1
+
+
+def test_api_football_assists_fetches_topassists_and_sets_attribute():
+    sensor = _sensor("top_scorers", code="88", provider="api_football")
+    sensor._api_football_season = 2025
+    captured = {}
+
+    class _Hass:
+        async def async_add_executor_job(self, func, *args):
+            return func(*args)
+
+    async def _fetch(path, params=None):
+        captured["path"] = path
+        captured["params"] = params
+        return {"response": [{
+            "player": {"name": "J. Veerman"},
+            "statistics": [{"team": {"id": 1, "name": "PSV"}, "goals": {"total": 8, "assists": 14}}],
+        }]}
+
+    sensor.hass = _Hass()
+    sensor._fetch_api_football_json = _fetch
+
+    asyncio.run(sensor._enrich_api_football_assists())
+
+    assert captured["path"] == "players/topassists"
+    assert captured["params"] == {"league": "88", "season": 2025}
+    assert sensor._attributes["assists"][0]["player"] == "J. Veerman"
+    assert sensor._attributes["assists"][0]["assists"] == 14
+
+
+def _run_prematch_and_collect_paths(match, enable_live_odds):
+    SoccerLiveSensor._live_odds_pause_until = None
+    SoccerLiveSensor._live_odds_misses = 0
+    SoccerLiveSensor._api_football_stats = {}
+    SoccerLiveSensor._prematch_cache = {}
+    SoccerLiveSensor._prematch_store = None
+    sensor = _sensor("team_match", code="88", team_id="209", provider="api_football")
+    sensor._enable_live_odds = enable_live_odds
+    paths = []
+
+    class _Hass:
+        async def async_add_executor_job(self, func, *args):
+            return func(*args)
+
+    async def _fetch(path, params=None):
+        paths.append(path)
+        if path == "odds/live":
+            return {"response": [{"status": {"stopped": False, "blocked": False}, "odds": [
+                {"name": "Match Winner", "values": [
+                    {"value": "Home", "odd": "2.0"},
+                    {"value": "Draw", "odd": "3.0"},
+                    {"value": "Away", "odd": "3.5"}]}]}]}
+        if path == "odds":
+            return {"response": [{"bookmakers": [{"name": "A", "bets": [
+                {"name": "Match Winner", "values": [
+                    {"value": "Home", "odd": "1.8"},
+                    {"value": "Draw", "odd": "3.4"},
+                    {"value": "Away", "odd": "4.2"}]}]}]}]}
+        return {"response": []}
+
+    sensor.hass = _Hass()
+    sensor._fetch_api_football_json = _fetch
+    asyncio.run(sensor._fetch_and_store_prematch(match))
+    return sensor, paths
+
+
+def test_prematch_uses_live_odds_when_live_and_enabled():
+    live = {"event_id": "500", "state": "in", "home_id": 1, "away_id": 2}
+    sensor, paths = _run_prematch_and_collect_paths(live, enable_live_odds=True)
+    assert "odds/live" in paths
+    assert "odds" not in paths
+    assert sensor._attributes.get("matches") is None  # only the match dict is updated
+    assert live["odds"]["live"] is True
+
+
+def test_prematch_uses_pre_match_odds_when_upcoming():
+    pre = {"event_id": "501", "state": "pre", "home_id": 1, "away_id": 2}
+    _sensor_obj, paths = _run_prematch_and_collect_paths(pre, enable_live_odds=True)
+    assert "odds" in paths
+    assert "odds/live" not in paths
+    assert pre["odds"].get("live") is None
+
+
+def test_prematch_skips_odds_when_live_but_live_odds_disabled():
+    live = {"event_id": "502", "state": "in", "home_id": 1, "away_id": 2}
+    _sensor_obj, paths = _run_prematch_and_collect_paths(live, enable_live_odds=False)
+    assert "odds" not in paths
+    assert "odds/live" not in paths
+
+
+def test_live_odds_pause_on_403_and_empty_streak():
+    SoccerLiveSensor._live_odds_pause_until = None
+    SoccerLiveSensor._live_odds_misses = 0
+    # 403 -> paused immediately.
+    SoccerLiveSensor._note_live_odds_result(403, has_response=False)
+    assert SoccerLiveSensor._live_odds_available() is False
+    # Reset, then a present response keeps it available and clears misses.
+    SoccerLiveSensor._live_odds_pause_until = None
+    SoccerLiveSensor._note_live_odds_result(200, has_response=True)
+    assert SoccerLiveSensor._live_odds_available() is True
+    # Five empty responses in a row -> paused.
+    for _ in range(5):
+        SoccerLiveSensor._note_live_odds_result(200, has_response=False)
+    assert SoccerLiveSensor._live_odds_available() is False
+    SoccerLiveSensor._live_odds_pause_until = None

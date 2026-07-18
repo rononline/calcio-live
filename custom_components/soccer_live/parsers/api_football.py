@@ -723,18 +723,37 @@ def process_team_profile(data):
     }
 
 
-def process_coach(data):
-    """Return the current coach's name from an API-Football /coachs response.
+def process_coach(data, team_id=None):
+    """Return the current head coach's name from an API-Football /coachs response.
 
-    The endpoint lists coaches most-recent first; prefer one whose career shows
-    this team without an end date, otherwise fall back to the first entry."""
+    /coachs?team=X lists everyone who ever coached the team, and each coach's
+    career spans all their clubs. So a former coach who is now in charge
+    elsewhere (an open spell at another club) must not win. We only weigh spells
+    at the queried team, prefer an open one (no end date), and break ties on the
+    most recent start — otherwise fall back to the first entry."""
     response = data.get("response", []) if isinstance(data, dict) else []
+    tid = str(team_id) if team_id is not None else None
+
+    best = None  # (is_current, start, name)
     for coach in response or []:
         coach = _as_dict(coach)
+        name = coach.get("name")
+        if not name:
+            continue
+        matched_team = False
         for spell in (coach.get("career") or []):
             spell = _as_dict(spell)
-            if spell.get("end") in (None, "") and coach.get("name"):
-                return coach.get("name")
+            if tid is not None and str(_as_dict(spell.get("team")).get("id")) != tid:
+                continue
+            matched_team = True
+            cand = (1 if spell.get("end") in (None, "") else 0, spell.get("start") or "", name)
+            if best is None or cand[:2] > best[:2]:
+                best = cand
+        # With a team filter, a coach with no spell at this team is irrelevant.
+        if tid is not None and not matched_team:
+            continue
+    if best:
+        return best[2]
     first = _as_dict(response[0]) if response else {}
     return first.get("name") or ""
 

@@ -61,11 +61,16 @@ async def async_get_config_entry_diagnostics(
     api_football = {}
     if SoccerLiveSensor is not None:
         pause_until = getattr(SoccerLiveSensor, "_af_enrich_pause_until", None)
+        stats = dict(getattr(SoccerLiveSensor, "_api_football_stats", {}) or {})
+        live_odds_pause = getattr(SoccerLiveSensor, "_live_odds_pause_until", None)
         api_football = {
-            "endpoint_stats": dict(getattr(SoccerLiveSensor, "_api_football_stats", {}) or {}),
+            "endpoint_stats": stats,
             "rate_limited_at": getattr(SoccerLiveSensor, "_api_football_rate_limited_at", None),
             "enrichment_paused_until": pause_until.isoformat() if pause_until else None,
             "endpoint_cache_entries": len(getattr(SoccerLiveSensor, "_api_football_endpoint_cache", {}) or {}),
+            "live_odds_calls": (stats.get("odds/live") or {}).get("calls", 0),
+            "live_odds_last_status": (stats.get("odds/live") or {}).get("last_status"),
+            "live_odds_paused_until": live_odds_pause.isoformat() if live_odds_pause else None,
         }
 
     return {

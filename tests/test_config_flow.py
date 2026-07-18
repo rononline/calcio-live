@@ -160,3 +160,31 @@ def test_api_football_invalid_key_reports_error():
     assert result["type"] == "form"
     assert result["step_id"] == "user"
     assert flow._errors.get("api_football_key") == "invalid_api_key"
+
+
+class _FakeEntry:
+    def __init__(self, provider):
+        self.data = {_config_flow_mod.CONF_PROVIDER: provider}
+        self.options = {}
+
+
+def _options_schema(provider):
+    flow = _config_flow_mod.SoccerLiveOptionsFlow()
+    flow.config_entry = _FakeEntry(provider)
+    result = asyncio.run(flow.async_step_init())
+    assert result["type"] == "form"
+    return result["data_schema"]
+
+
+def test_options_flow_shows_club_and_live_odds_for_api_football():
+    schema = _options_schema(_config_flow_mod.PROVIDER_API_FOOTBALL)
+    assert "enable_club_data" in schema
+    assert "enable_live_odds" in schema
+
+
+def test_options_flow_hides_club_and_live_odds_for_espn():
+    schema = _options_schema(_config_flow_mod.PROVIDER_ESPN)
+    assert "enable_club_data" not in schema
+    assert "enable_live_odds" not in schema
+    # The generic options stay available for every provider.
+    assert "enable_summary_enrichment" in schema

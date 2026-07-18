@@ -103,6 +103,7 @@
           "recent_match_hours": "Tieni visibile la partita finita per (ore)",
           "enable_summary_enrichment": "Recupera formazioni, eventi e H2H",
           "enable_club_data": "Recupera profilo club, allenatore, rosa e trasferimenti (API-Football)",
+          "enable_live_odds": "Recupera quote live durante la partita (API-Football; interroga spesso)",
           "include_friendlies": "Includi amichevoli",
           "api_football_season": "Stagione API-Football (0 = automatico)",
           "max_matches": "Max partite negli attributi (0 = illimitato)",

@@ -103,6 +103,7 @@
           "recent_match_hours": "Mantener partido finalizado visible (horas)",
           "enable_summary_enrichment": "Obtener alineaciones, eventos y H2H",
           "enable_club_data": "Obtener perfil del club, entrenador, plantilla y fichajes (API-Football)",
+          "enable_live_odds": "Obtener cuotas en vivo durante el partido (API-Football; consulta a menudo)",
           "include_friendlies": "Incluir amistosos",
           "api_football_season": "Temporada API-Football (0 = automático)",
           "max_matches": "Máx. partidos en atributos (0 = ilimitado)",

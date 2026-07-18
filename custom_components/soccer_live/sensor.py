@@ -89,6 +89,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
         recent_match_hours = entry.options.get("recent_match_hours", 24)
         enable_summary_enrichment = entry.options.get("enable_summary_enrichment", True)
         enable_club_data = entry.options.get("enable_club_data", True)
+        enable_live_odds = entry.options.get("enable_live_odds", False)
         max_matches = entry.options.get("max_matches", 0)
         sensors = []
 
@@ -105,6 +106,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
                     start_date=start_date, end_date=end_date, team_id=team_id, recent_match_hours=recent_match_hours,
                     enable_summary_enrichment=enable_summary_enrichment,
                     enable_club_data=enable_club_data,
+                    enable_live_odds=enable_live_odds,
                     max_matches=max_matches, provider=provider, api_football_key=api_football_key,
                     include_friendlies=include_friendlies, api_football_season=api_football_season,
                     live_scan_interval=live_scan_interval
@@ -126,6 +128,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
                         config_entry_id=entry.entry_id, start_date=start_date, end_date=end_date, team_id=team_id, recent_match_hours=recent_match_hours,
                         enable_summary_enrichment=enable_summary_enrichment,
                         enable_club_data=enable_club_data,
+                        enable_live_odds=enable_live_odds,
                         max_matches=max_matches, provider=provider, api_football_key=api_football_key,
                         include_friendlies=include_friendlies, api_football_season=api_football_season,
                         live_scan_interval=live_scan_interval
@@ -136,6 +139,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
                         config_entry_id=entry.entry_id, start_date=start_date, end_date=end_date, team_id=team_id, recent_match_hours=recent_match_hours,
                         enable_summary_enrichment=enable_summary_enrichment,
                         enable_club_data=enable_club_data,
+                        enable_live_odds=enable_live_odds,
                         max_matches=max_matches, provider=provider, api_football_key=api_football_key,
                         include_friendlies=include_friendlies, api_football_season=api_football_season,
                         live_scan_interval=live_scan_interval
@@ -148,6 +152,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
                     config_entry_id=entry.entry_id, start_date=start_date, end_date=end_date, team_id=team_id, recent_match_hours=recent_match_hours,
                     enable_summary_enrichment=enable_summary_enrichment,
                     enable_club_data=enable_club_data,
+                    enable_live_odds=enable_live_odds,
                     max_matches=max_matches, provider=provider, api_football_key=api_football_key,
                     include_friendlies=include_friendlies, api_football_season=api_football_season,
                     live_scan_interval=live_scan_interval
@@ -162,6 +167,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
                         start_date=start_date, end_date=end_date, team_id=team_id, recent_match_hours=recent_match_hours,
                         enable_summary_enrichment=enable_summary_enrichment,
                         enable_club_data=enable_club_data,
+                        enable_live_odds=enable_live_odds,
                         max_matches=max_matches, provider=provider, api_football_key=api_football_key,
                         include_friendlies=include_friendlies, api_football_season=api_football_season,
                         live_scan_interval=live_scan_interval
@@ -250,7 +256,8 @@ class SoccerLiveSensor(Entity):
                  team_name=None, config_entry_id=None, start_date=None, end_date=None, team_id=None,
                  recent_match_hours=24, enable_summary_enrichment=True, max_matches=0,
                  provider=PROVIDER_ESPN, api_football_key="", include_friendlies=True,
-                 api_football_season=None, live_scan_interval=60, enable_club_data=True):
+                 api_football_season=None, live_scan_interval=60, enable_club_data=True,
+                 enable_live_odds=False):
         self.hass = hass
         self._name = name
         self._code = code
@@ -264,6 +271,7 @@ class SoccerLiveSensor(Entity):
         self._recent_match_hours = recent_match_hours
         self._enable_summary_enrichment = enable_summary_enrichment
         self._enable_club_data = enable_club_data
+        self._enable_live_odds = enable_live_odds
         self._max_matches = max_matches  # 0 = unlimited
         try:
             self._live_scan_interval = max(15, int(live_scan_interval or 60))
@@ -1009,7 +1017,7 @@ class SoccerLiveSensor(Entity):
             if profile:
                 club["profile"] = profile
         if coach_data is not None:
-            coach = await self.hass.async_add_executor_job(process_coach, coach_data)
+            coach = await self.hass.async_add_executor_job(process_coach, coach_data, team_id)
             if coach:
                 club["coach"] = coach
         if squad_data is not None:
@@ -1095,22 +1103,34 @@ class SoccerLiveSensor(Entity):
         league_id = match.get("league_id")
         season = match.get("season_info")
         fetch_standings = bool(league_id) and season not in (None, "")
-        # Once the match is live, API-Football drops the pre-match /odds; the
-        # /odds/live in-play feed carries the real live 1X2 instead.
+        # Once the match is live, API-Football drops the pre-match /odds. The
+        # /odds/live in-play feed carries the real live 1X2, but it wants frequent
+        # polling, so it is opt-in (enable_live_odds) and paused on 403/empty.
+        # While live without live odds, the last pre-match odds stay via the
+        # snapshot re-attach, so we simply skip the odds request.
         is_live = match.get("state") == "in"
-        odds_path = "odds/live" if is_live else "odds"
+        attempt_live_odds = is_live and self._enable_live_odds and self._live_odds_available()
 
         tasks = [
             self._fetch_api_football_json("predictions", {"fixture": fixture_id}),
             self._fetch_api_football_json("injuries", {"fixture": fixture_id}),
-            self._fetch_api_football_json(odds_path, {"fixture": fixture_id}),
         ]
+        odds_idx = None
+        if attempt_live_odds:
+            odds_idx = len(tasks)
+            tasks.append(self._fetch_api_football_json("odds/live", {"fixture": fixture_id}))
+        elif not is_live:
+            odds_idx = len(tasks)
+            tasks.append(self._fetch_api_football_json("odds", {"fixture": fixture_id}))
+        standings_idx = None
         if fetch_standings:
+            standings_idx = len(tasks)
             tasks.append(self._fetch_api_football_json("standings", {"league": league_id, "season": season}))
 
         results = await asyncio.gather(*tasks)
-        pred_data, inj_data, odds_data = results[0], results[1], results[2]
-        standings_data = results[3] if fetch_standings else None
+        pred_data, inj_data = results[0], results[1]
+        odds_data = results[odds_idx] if odds_idx is not None else None
+        standings_data = results[standings_idx] if standings_idx is not None else None
 
         if pred_data is not None:
             prediction = await self.hass.async_add_executor_job(process_prediction_data, pred_data)
@@ -1125,8 +1145,15 @@ class SoccerLiveSensor(Entity):
                 match["injuries_home"] = injuries["injuries_home"]
                 match["injuries_away"] = injuries["injuries_away"]
 
+        if attempt_live_odds:
+            # Track availability: 403 (plan) or repeated empty responses pause the
+            # feature; a present response (even all-suspended) means it works.
+            status = SoccerLiveSensor._af_stat("odds/live").get("last_status")
+            has_response = isinstance(odds_data, dict) and bool(odds_data.get("response"))
+            self._note_live_odds_result(status, has_response)
+
         if odds_data is not None:
-            odds_parser = process_live_odds_data if is_live else process_odds_data
+            odds_parser = process_live_odds_data if attempt_live_odds else process_odds_data
             odds = await self.hass.async_add_executor_job(odds_parser, odds_data)
             if odds:
                 match["odds"] = odds
@@ -1298,6 +1325,34 @@ class SoccerLiveSensor(Entity):
         SoccerLiveSensor._af_backoff = min(max(60, SoccerLiveSensor._af_backoff * 2), 1800)
         SoccerLiveSensor._af_enrich_pause_until = datetime.now() + timedelta(seconds=SoccerLiveSensor._af_backoff)
         SoccerLiveSensor._api_football_rate_limited_at = datetime.now().isoformat()
+
+    # Live odds (/odds/live) can be forbidden by plan or structurally empty; pause
+    # the feature on its own (longer than the 429 backoff) so it doesn't keep
+    # burning the daily quota on requests that never return usable odds.
+    _live_odds_pause_until = None
+    _live_odds_misses = 0
+
+    @staticmethod
+    def _live_odds_available():
+        p = SoccerLiveSensor._live_odds_pause_until
+        return p is None or datetime.now() >= p
+
+    @staticmethod
+    def _note_live_odds_result(status, has_response):
+        # HTTP 403 => the plan doesn't include in-play odds: back off for hours.
+        if status == 403:
+            SoccerLiveSensor._live_odds_pause_until = datetime.now() + timedelta(hours=6)
+            SoccerLiveSensor._live_odds_misses = 0
+            return
+        # A present response (even an all-suspended market) means the feed works.
+        if has_response:
+            SoccerLiveSensor._live_odds_misses = 0
+            return
+        # Structurally empty for several live cycles => pause for an hour.
+        SoccerLiveSensor._live_odds_misses += 1
+        if SoccerLiveSensor._live_odds_misses >= 5:
+            SoccerLiveSensor._live_odds_pause_until = datetime.now() + timedelta(hours=1)
+            SoccerLiveSensor._live_odds_misses = 0
 
     @staticmethod
     def _af_note_success():
