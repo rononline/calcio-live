@@ -1,5 +1,8 @@
 # Changelog
 
+## v3.6.92 (2026-07-18)
+- predictions: round comparison percentages instead of truncating (so 28.6/71.4 becomes 29/71, not 28/71), and drop the `total` metric — it largely repeated form/attack/defense and added height. The predicted goal lines are still exposed raw (`goals_home`/`goals_away`/`under_over`); the card now formats them as thresholds rather than labelling them "expected goals"
+
 ## v3.6.91 (2026-07-18)
 - predictions: surface more of the data already returned by `/predictions` (no extra API requests). The prediction now also carries a home-vs-away strength `comparison` (form/attack/defense/overall percentages) and the predicted goal lines (`goals_home`/`goals_away`/`under_over`)
 

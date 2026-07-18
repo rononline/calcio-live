@@ -406,7 +406,7 @@ class TestApiFootballParser:
                 "under_over": "-3.5",
             },
             "comparison": {
-                "form": {"home": "31%", "away": "69%"},
+                "form": {"home": "28.6%", "away": "71.4%"},
                 "att": {"home": "46%", "away": "54%"},
                 "def": {"home": "20%", "away": "80%"},
                 "poisson_distribution": {"home": "38%", "away": "62%"},
@@ -414,10 +414,12 @@ class TestApiFootballParser:
             },
         }]}
         pred = process_api_football_prediction(data)
-        # Only the whitelisted metrics are surfaced (poisson dropped).
-        assert set(pred["comparison"].keys()) == {"form", "att", "def", "total"}
-        assert pred["comparison"]["total"] == {"home": 28, "away": 71}
+        # Only form/att/def are surfaced (poisson and total dropped).
+        assert set(pred["comparison"].keys()) == {"form", "att", "def"}
+        # Percentages are rounded, not truncated: 28.6 -> 29, 71.4 -> 71.
+        assert pred["comparison"]["form"] == {"home": 29, "away": 71}
         assert pred["comparison"]["def"] == {"home": 20, "away": 80}
+        # Raw goal-line thresholds are kept as-is (formatted in the card).
         assert pred["goals_home"] == "-2.5"
         assert pred["goals_away"] == "-2.5"
         assert pred["under_over"] == "-3.5"

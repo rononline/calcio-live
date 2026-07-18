@@ -201,10 +201,13 @@ def _clean_percent(value):
 
 
 def _percent_int(value):
-    """Parse an API-Football percentage ("45%") to an int, or None."""
+    """Parse an API-Football percentage ("45%", "28.6%") to a rounded int, or None.
+
+    Rounds rather than truncates so a pair like 28.6/71.4 becomes 29/71 (adds up
+    to 100) instead of 28/71 (visibly 99)."""
     cleaned = _clean_percent(value)
     try:
-        return int(float(cleaned))
+        return round(float(cleaned))
     except (TypeError, ValueError):
         return None
 
@@ -334,9 +337,11 @@ def process_prediction_data(data):
     }
 
     # Strength comparison (home vs away %) — comes free in the same response.
+    # `total` is left out: it largely repeats the other three, and the card is
+    # already tall enough with form/attack/defense.
     comparison = _as_dict(first.get("comparison"))
     metrics = {}
-    for key in ("form", "att", "def", "total"):
+    for key in ("form", "att", "def"):
         pair = _as_dict(comparison.get(key))
         h = _percent_int(pair.get("home"))
         a = _percent_int(pair.get("away"))
