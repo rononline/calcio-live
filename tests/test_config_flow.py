@@ -188,3 +188,12 @@ def test_options_flow_hides_club_and_live_odds_for_espn():
     assert "enable_live_odds" not in schema
     # The generic options stay available for every provider.
     assert "enable_summary_enrichment" in schema
+
+
+def test_options_flow_exposes_shared_card_defaults():
+    schema = _options_schema(_config_flow_mod.PROVIDER_API_FOOTBALL)
+    for key in ("card_appearance", "card_palette", "card_compact", "card_language"):
+        assert key in schema, key
+    # Also present for ESPN (card defaults are provider-independent).
+    espn = _options_schema(_config_flow_mod.PROVIDER_ESPN)
+    assert "card_palette" in espn

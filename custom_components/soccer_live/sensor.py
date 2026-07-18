@@ -231,7 +231,7 @@ class SoccerLiveSensor(Entity):
         "matches", "previous_matches", "upcoming_matches", "next_match",
         "schedule_live_matches", "schedule_upcoming_matches", "schedule_recent_matches",
         "standings_groups", "scorers", "assists", "articles", "rounds",
-        "head_to_head", "league_info", "club",
+        "head_to_head", "league_info", "club", "card_defaults",
         "last_event", "last_goal_event", "last_card_event",
         "last_match_started_event", "last_match_finished_event",
     })
@@ -397,10 +397,33 @@ class SoccerLiveSensor(Entity):
     def state(self):
         return self._state
 
+    def _card_defaults(self):
+        """Shared card presentation preferences (appearance/palette/compact/
+        language) so multiple cards on one sensor can inherit a single setting
+        instead of being configured individually. Empty keys are omitted."""
+        if not self._config_entry_id:
+            return {}
+        entry = self.hass.config_entries.async_get_entry(self._config_entry_id)
+        if not entry:
+            return {}
+        opts = entry.options
+        out = {}
+        if opts.get("card_appearance"):
+            out["appearance"] = opts["card_appearance"]
+        if opts.get("card_palette"):
+            out["palette"] = opts["card_palette"]
+        if opts.get("card_compact"):
+            out["compact"] = True
+        if opts.get("card_language"):
+            out["language"] = opts["card_language"]
+        return out
+
     @property
     def extra_state_attributes(self):
+        card_defaults = self._card_defaults()
         return {
             **self._attributes,
+            **({"card_defaults": card_defaults} if card_defaults else {}),
             "request_count": self._request_count,
             "last_request_time": self._last_request_time,
             "last_successful_update": self._last_successful_update,

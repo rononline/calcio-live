@@ -522,6 +522,20 @@ class SoccerLiveOptionsFlow(config_entries.OptionsFlow):
             vol.Optional("max_matches", default=max_matches): vol.In([0, 5, 10, 15, 20, 30]),
         })
 
+        # Shared card presentation defaults, published to the sensor so multiple
+        # cards on this sensor can inherit one look instead of being set per card.
+        opts = self.config_entry.options
+        schema.update({
+            vol.Optional("card_appearance", default=opts.get("card_appearance", "")):
+                vol.In(["", "dark", "light", "ha"]),
+            vol.Optional("card_palette", default=opts.get("card_palette", "")):
+                vol.In(["", "purple", "red-white", "red-gold", "blue-red", "white-gold",
+                        "blue", "orange", "black-white", "classic", "neon", "gold", "team"]),
+            vol.Optional("card_compact", default=opts.get("card_compact", False)): bool,
+            vol.Optional("card_language", default=opts.get("card_language", "")):
+                vol.In(["", "en", "nl", "de", "fr", "es", "it", "pt"]),
+        })
+
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(schema),

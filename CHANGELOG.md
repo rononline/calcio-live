@@ -1,5 +1,8 @@
 # Changelog
 
+## v3.6.93 (2026-07-18)
+- shared card defaults: new options (shared card appearance, palette, compact mode and language) are published on every sensor as a `card_defaults` attribute, so multiple Soccer Live cards on the same sensor can inherit one look/preference instead of being configured individually. A card's own setting always overrides the shared default; the attribute is unrecorded
+
 ## v3.6.92 (2026-07-18)
 - predictions: round comparison percentages instead of truncating (so 28.6/71.4 becomes 29/71, not 28/71), and drop the `total` metric — it largely repeated form/attack/defense and added height. The predicted goal lines are still exposed raw (`goals_home`/`goals_away`/`under_over`); the card now formats them as thresholds rather than labelling them "expected goals"
 
