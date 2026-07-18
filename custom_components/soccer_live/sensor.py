@@ -219,7 +219,7 @@ class SoccerLiveSensor(Entity):
         "matches", "previous_matches", "upcoming_matches", "next_match",
         "schedule_live_matches", "schedule_upcoming_matches", "schedule_recent_matches",
         "standings_groups", "scorers", "articles", "rounds",
-        "head_to_head", "league_info",
+        "head_to_head", "league_info", "club",
         "last_event", "last_goal_event", "last_card_event",
         "last_match_started_event", "last_match_finished_event",
     })
@@ -586,6 +586,7 @@ class SoccerLiveSensor(Entity):
         self._pending_events = result.get("events", [])
         self._save_store_needed = any(e[0] == "soccer_live_match_finished" for e in self._pending_events)
         await self._enrich_with_summary()
+        await self._enrich_club_data()
         await self._flush_pending_events()
         self._publish_matches(self._attributes.get("matches") or [])
 
@@ -941,6 +942,51 @@ class SoccerLiveSensor(Entity):
             await self._fetch_and_store_prematch(match)
         self._reattach_prematch(matches)
 
+    async def _enrich_club_data(self):
+        """Attach the club profile, coach, squad and recent transfers for the
+        tracked team (API-Football, team sensors). All four are cached 24h, so
+        this is roughly four requests per day per team sensor."""
+        if self._provider != PROVIDER_API_FOOTBALL or not self._enable_summary_enrichment:
+            return
+        if self._sensor_type not in {"team_match", "team_matches", "team_matches_mixed"}:
+            return
+        team_id = self._team_id
+        if not team_id:
+            return
+        from .parsers.api_football import (
+            process_team_profile,
+            process_coach,
+            process_squad,
+            process_transfers,
+        )
+
+        profile_data, coach_data, squad_data, transfers_data = await asyncio.gather(
+            self._fetch_api_football_json("teams", {"id": team_id}),
+            self._fetch_api_football_json("coachs", {"team": team_id}),
+            self._fetch_api_football_json("players/squads", {"team": team_id}),
+            self._fetch_api_football_json("transfers", {"team": team_id}),
+        )
+
+        club = {}
+        if profile_data is not None:
+            profile = await self.hass.async_add_executor_job(process_team_profile, profile_data)
+            if profile:
+                club["profile"] = profile
+        if coach_data is not None:
+            coach = await self.hass.async_add_executor_job(process_coach, coach_data)
+            if coach:
+                club["coach"] = coach
+        if squad_data is not None:
+            squad = await self.hass.async_add_executor_job(process_squad, squad_data)
+            if squad:
+                club["squad"] = squad
+        if transfers_data is not None:
+            transfers = await self.hass.async_add_executor_job(process_transfers, transfers_data, team_id)
+            if transfers:
+                club["transfers"] = transfers
+        if club:
+            self._attributes["club"] = club
+
     def _prematch_target_match(self, matches):
         """Which match to fetch pre-match data for: the live match when there is
         one (API-Football keeps returning the prediction during the game),
@@ -1281,6 +1327,8 @@ class SoccerLiveSensor(Entity):
             return 3600  # bookmaker odds update a few times a day; cache 1 hour
         if path == "standings":
             return 21600  # league table changes at most daily; cache for 6 hours
+        if path in {"teams", "coachs", "players/squads", "transfers"}:
+            return 86400  # club profile / squad / transfers change rarely; cache 24h
         return 300
 
     def _prune_api_football_endpoint_cache(self, now):

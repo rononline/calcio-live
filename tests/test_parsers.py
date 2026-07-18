@@ -34,6 +34,10 @@ process_api_football_prediction = _api_football.process_prediction_data
 process_api_football_injuries = _api_football.process_injuries_data
 process_api_football_odds = _api_football.process_odds_data
 api_football_extract_team_standing = _api_football.extract_team_standing
+process_api_football_team_profile = _api_football.process_team_profile
+process_api_football_coach = _api_football.process_coach
+process_api_football_squad = _api_football.process_squad
+process_api_football_transfers = _api_football.process_transfers
 api_football_extract_error = _api_football.extract_error
 process_bracket_data = _load_parser("bracket").process_bracket_data
 
@@ -434,6 +438,53 @@ class TestApiFootballParser:
         ]]}}]}
         assert api_football_extract_team_standing(data, 209) == {"rank": 3, "points": 45}
         assert api_football_extract_team_standing(data, 42) == {"rank": 1, "points": 80}
+
+    def test_team_profile_maps_venue_and_founded(self):
+        data = {"response": [{
+            "team": {"id": 209, "name": "Feyenoord", "logo": "l.png", "founded": 1908, "country": "Netherlands"},
+            "venue": {"name": "Stadion Feijenoord", "city": "Rotterdam", "capacity": 47500},
+        }]}
+        p = process_api_football_team_profile(data)
+        assert p["name"] == "Feyenoord"
+        assert p["founded"] == 1908
+        assert p["venue"] == "Stadion Feijenoord"
+        assert p["venue_city"] == "Rotterdam"
+        assert process_api_football_team_profile({"response": []}) is None
+
+    def test_coach_prefers_current_spell(self):
+        data = {"response": [
+            {"name": "Old Coach", "career": [{"team": {"id": 209}, "start": "2020", "end": "2023"}]},
+            {"name": "Brian Priske", "career": [{"team": {"id": 209}, "start": "2024", "end": None}]},
+        ]}
+        assert process_api_football_coach(data) == "Brian Priske"
+        # No current spell -> first entry.
+        assert process_api_football_coach({"response": [{"name": "X", "career": []}]}) == "X"
+        assert process_api_football_coach({"response": []}) == ""
+
+    def test_squad_sorted_by_position_then_number(self):
+        data = {"response": [{"players": [
+            {"name": "Striker", "number": 9, "position": "Attacker", "age": 25},
+            {"name": "Keeper", "number": 1, "position": "Goalkeeper", "age": 30},
+            {"name": "Defender", "number": 4, "position": "Defender", "age": 27},
+            {"name": "", "number": 99, "position": "Attacker"},  # no name -> skipped
+        ]}]}
+        squad = process_api_football_squad(data)
+        assert [p["name"] for p in squad] == ["Keeper", "Defender", "Striker"]
+
+    def test_transfers_flattened_and_tagged_by_direction(self):
+        data = {"response": [{
+            "player": {"name": "Player A"},
+            "transfers": [
+                {"date": "2025-07-01", "type": "€ 10M", "teams": {"in": {"id": 209, "name": "Feyenoord"}, "out": {"id": 5, "name": "Ajax"}}},
+                {"date": "2024-01-01", "type": "Loan", "teams": {"in": {"id": 5, "name": "Ajax"}, "out": {"id": 209, "name": "Feyenoord"}}},
+                {"date": "2020-01-01", "type": "Free", "teams": {"in": {"id": 8, "name": "X"}, "out": {"id": 9, "name": "Y"}}},  # unrelated -> skipped
+            ],
+        }]}
+        transfers = process_api_football_transfers(data, 209)
+        assert len(transfers) == 2
+        assert transfers[0]["direction"] == "in"      # most recent first
+        assert transfers[0]["to"] == "Feyenoord"
+        assert transfers[1]["direction"] == "out"
 
     def test_extract_team_standing_returns_none_when_absent(self):
         data = {"response": [{"league": {"standings": [[{"rank": 1, "team": {"id": 42}, "points": 80}]]}}]}

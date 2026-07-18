@@ -664,3 +664,97 @@ def process_fixture_enrichment(events_data=None, statistics_data=None, lineups_d
             out["formation_away"] = formation
 
     return out
+
+
+def process_team_profile(data):
+    """Normalize an API-Football /teams response to a compact club profile."""
+    response = data.get("response", []) if isinstance(data, dict) else []
+    first = _as_dict(response[0]) if response else {}
+    team = _as_dict(first.get("team"))
+    if not team:
+        return None
+    venue = _as_dict(first.get("venue"))
+    return {
+        "name": team.get("name", ""),
+        "logo": team.get("logo", ""),
+        "founded": team.get("founded"),
+        "country": team.get("country", ""),
+        "venue": venue.get("name", ""),
+        "venue_city": venue.get("city", ""),
+        "venue_capacity": venue.get("capacity"),
+    }
+
+
+def process_coach(data):
+    """Return the current coach's name from an API-Football /coachs response.
+
+    The endpoint lists coaches most-recent first; prefer one whose career shows
+    this team without an end date, otherwise fall back to the first entry."""
+    response = data.get("response", []) if isinstance(data, dict) else []
+    for coach in response or []:
+        coach = _as_dict(coach)
+        for spell in (coach.get("career") or []):
+            spell = _as_dict(spell)
+            if spell.get("end") in (None, "") and coach.get("name"):
+                return coach.get("name")
+    first = _as_dict(response[0]) if response else {}
+    return first.get("name") or ""
+
+
+_POSITION_ORDER = {"Goalkeeper": 0, "Defender": 1, "Midfielder": 2, "Attacker": 3}
+
+
+def process_squad(data):
+    """Normalize an API-Football /players/squads response to a player list,
+    sorted by position (GK, DEF, MID, ATT) then shirt number."""
+    response = data.get("response", []) if isinstance(data, dict) else []
+    first = _as_dict(response[0]) if response else {}
+    players = []
+    for player in (first.get("players") or []):
+        player = _as_dict(player)
+        name = player.get("name")
+        if not name:
+            continue
+        players.append({
+            "name": name,
+            "number": player.get("number"),
+            "position": player.get("position", ""),
+            "age": player.get("age"),
+            "photo": player.get("photo", ""),
+        })
+    players.sort(key=lambda p: (
+        _POSITION_ORDER.get(p["position"], 9),
+        p["number"] if isinstance(p["number"], int) else 999,
+    ))
+    return players
+
+
+def process_transfers(data, team_id, limit=15):
+    """Flatten an API-Football /transfers response to recent transfers for the
+    given team (most recent first), each tagged in/out relative to the team."""
+    response = data.get("response", []) if isinstance(data, dict) else []
+    items = []
+    for entry in response or []:
+        entry = _as_dict(entry)
+        player = _as_dict(entry.get("player")).get("name", "")
+        for transfer in (entry.get("transfers") or []):
+            transfer = _as_dict(transfer)
+            teams = _as_dict(transfer.get("teams"))
+            team_in = _as_dict(teams.get("in"))
+            team_out = _as_dict(teams.get("out"))
+            if str(team_in.get("id")) == str(team_id):
+                direction = "in"
+            elif str(team_out.get("id")) == str(team_id):
+                direction = "out"
+            else:
+                continue
+            items.append({
+                "player": player,
+                "date": transfer.get("date") or "",
+                "type": transfer.get("type") or "",
+                "from": team_out.get("name", ""),
+                "to": team_in.get("name", ""),
+                "direction": direction,
+            })
+    items.sort(key=lambda x: x["date"], reverse=True)
+    return items[:limit]

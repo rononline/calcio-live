@@ -1,5 +1,8 @@
 # Changelog
 
+## v3.6.86 (2026-07-18)
+- club data (API-Football, team sensors): attach a club attribute with the team profile (venue, founded, country), current coach, full squad (sorted by position then shirt number) and recent transfers (in/out, player, fee, date). Fetched from /teams, /coachs, /players/squads and /transfers, cached 24h (~4 requests/day), and marked unrecorded. Feeds the upcoming Club card
+
 ## v3.6.85 (2026-07-17)
 - providers: add a declarative `PROVIDER_CAPABILITIES` map and a `provider_supports()` helper, and expose the selected provider's capabilities as the `provider_capabilities` sensor attribute, so cards and automations can adapt to what the provider actually supports (ESPN: news/brackets; API-Football: predictions/odds/injuries/top_assists/xg)
 
