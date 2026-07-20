@@ -6,6 +6,26 @@ Real-time football data in Home Assistant via ESPN, with optional API-Football s
 
 ---
 
+## 🚀 Quick start
+
+New here? This gets you a live team card in a few minutes:
+
+1. **Install the integration** via HACS (see [Installation](#-installation-via-hacs) below) and restart Home Assistant.
+2. **Add the integration**: *Settings → Devices & Services → Add Integration → Soccer Live*. For the data source, pick **ESPN** — it's free and needs no API key.
+3. **Choose what to follow**: pick **Team** (the default).
+4. **Find your team**: select the league, then the team (for example *Eredivisie → Feyenoord*).
+5. **Install the [Soccer Live Card](https://github.com/rononline/soccerlive-card)** via HACS.
+6. **Add a card** to your dashboard: *Add card → Soccer Live Card*, and select your team's entity.
+7. **Pick the suggested sensor**: the Team, Countdown and Match Center cards use the **`next_*`** sensor (`soccer_live_next_{competition}_{team}`). See **Which sensor do I need?** below.
+
+> Want predictions, odds and injuries? Choose **API-Football** as the data source in step 2 instead and paste your API key when prompted — everything else works the same.
+
+<!-- TODO screenshots for the new 3-step wizard (ESPN default -> Team -> search):
+     quickstart-1-source.png, quickstart-2-follow.png, quickstart-3-team.png, quickstart-4-card.png.
+     The existing setup1-4.png show the old single-step flow (and old name) and should be replaced. -->
+
+---
+
 ## 📦 Installation via HACS
 
 > **HACS default store**: submission pending — once approved, search for **Soccer Live** directly in HACS.
