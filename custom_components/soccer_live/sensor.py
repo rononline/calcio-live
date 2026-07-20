@@ -1353,6 +1353,20 @@ class SoccerLiveSensor(Entity):
         return pause is not None and datetime.now() < pause
 
     @staticmethod
+    def _af_is_rate_limit_message(msg):
+        """Whether an API-Football 200-body error message is a rate/quota limit
+        (per-minute or per-day), so it can be handled like an HTTP 429."""
+        m = (msg or "").lower()
+        return (
+            "too many requests" in m
+            or "requests per minute" in m
+            or "requests per day" in m
+            or "request limit" in m
+            or "rate limit" in m
+            or "ratelimit" in m
+        )
+
+    @staticmethod
     def _af_note_rate_limited():
         SoccerLiveSensor._af_backoff = min(max(60, SoccerLiveSensor._af_backoff * 2), 1800)
         SoccerLiveSensor._af_enrich_pause_until = datetime.now() + timedelta(seconds=SoccerLiveSensor._af_backoff)
@@ -1446,7 +1460,18 @@ class SoccerLiveSensor(Entity):
                     data = await self.hass.async_add_executor_job(json.loads, raw)
                     af_error = self._api_football_error(data)
                     if af_error:
-                        _LOGGER.warning("API-Football %s returned an error: %s", path, af_error)
+                        # API-Football signals rate/quota limits as an HTTP 200 body
+                        # error (not a 429). Treat those like a 429 so the shared
+                        # enrichment backoff kicks in and stops the burst (e.g. all
+                        # sensors enriching at once right after a restart).
+                        if self._af_is_rate_limit_message(af_error):
+                            self._af_note_rate_limited()
+                            _LOGGER.warning(
+                                "API-Football rate limit hit while fetching %s (%s) — pausing enrichment for %s s",
+                                path, af_error, SoccerLiveSensor._af_backoff,
+                            )
+                        else:
+                            _LOGGER.warning("API-Football %s returned an error: %s", path, af_error)
                         return None
                     SoccerLiveSensor._af_stat(path)["last_success"] = datetime.now().isoformat()
                     self._af_note_success()

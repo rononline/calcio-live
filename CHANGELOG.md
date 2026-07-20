@@ -1,5 +1,8 @@
 # Changelog
 
+## v3.6.94 (2026-07-20)
+- rate limiting: API-Football reports per-minute/per-day limits as an HTTP 200 body error ("Too many requests…"), not an HTTP 429, so these previously only logged a warning and the burst continued. They now trigger the same shared enrichment backoff as a 429, so once any sensor hits the limit all sensors pause enrichment — fixing the flood of errors right after a Home Assistant restart when every sensor enriches at once
+
 ## v3.6.93 (2026-07-18)
 - shared card defaults: new options (shared card appearance, palette, compact mode and language) are published on every sensor as a `card_defaults` attribute, so multiple Soccer Live cards on the same sensor can inherit one look/preference instead of being configured individually. A card's own setting always overrides the shared default; the attribute is unrecorded
 

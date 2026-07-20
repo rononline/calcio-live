@@ -920,3 +920,50 @@ def test_club_cache_rejects_old_version_and_expired():
     SoccerLiveSensor._club_cache["209"] = {"club": {"coach": "X"}, "ts": old, "v": v}
     assert sensor._get_cached_club("209") is None
     SoccerLiveSensor._club_cache = {}
+
+
+def test_af_rate_limit_message_detection():
+    yes = SoccerLiveSensor._af_is_rate_limit_message
+    assert yes("Too many requests. You have exceeded the limit of requests per minute of your subscription.")
+    assert yes("You have reached the request limit for the day")
+    assert yes("rateLimit exceeded")
+    assert not yes("Invalid API key")
+    assert not yes("")
+    assert not yes(None)
+
+
+def test_af_rate_limit_body_triggers_backoff(monkeypatch):
+    import asyncio
+    SoccerLiveSensor._af_backoff = 0
+    SoccerLiveSensor._af_enrich_pause_until = None
+    SoccerLiveSensor._api_football_stats = {}
+    sensor = _sensor("team_match", provider="api_football")
+
+    class _Response:
+        status = 200
+        async def read(self):
+            return b'{"errors": {"requests": "Too many requests. You have exceeded the limit of requests per minute of your subscription."}}'
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, *args):
+            return None
+
+    class _Session:
+        def get(self, *args, **kwargs):
+            return _Response()
+
+    class _Hass:
+        async def async_add_executor_job(self, func, *args):
+            return func(*args)
+
+    sensor.hass = _Hass()
+    monkeypatch.setattr(_sensor_mod, "async_get_clientsession", lambda hass: _Session())
+
+    # A 200-body "too many requests" must trigger the shared enrichment backoff.
+    result = asyncio.run(sensor._fetch_api_football_json_uncached("predictions", {"fixture": 1}))
+    assert result is None
+    assert SoccerLiveSensor._af_enrichment_paused() is True
+    assert SoccerLiveSensor._af_backoff == 60
+
+    SoccerLiveSensor._af_enrich_pause_until = None
+    SoccerLiveSensor._af_backoff = 0
