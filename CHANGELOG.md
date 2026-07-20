@@ -1,5 +1,8 @@
 # Changelog
 
+## v3.6.95 (2026-07-20)
+- rate limiting: an API-Football rate limit is now logged at INFO instead of WARNING (so Home Assistant no longer surfaces it as a custom-integration error) — it's an expected, self-healing condition where the last cached data keeps being served. Only the first hit (when not already paused) logs and starts the backoff; concurrent stragglers from the same burst (e.g. right after a restart) are dropped to DEBUG and no longer balloon the backoff. The pause is still visible in diagnostics
+
 ## v3.6.94 (2026-07-20)
 - rate limiting: API-Football reports per-minute/per-day limits as an HTTP 200 body error ("Too many requests…"), not an HTTP 429, so these previously only logged a warning and the burst continued. They now trigger the same shared enrichment backoff as a 429, so once any sensor hits the limit all sensors pause enrichment — fixing the flood of errors right after a Home Assistant restart when every sensor enriches at once
 

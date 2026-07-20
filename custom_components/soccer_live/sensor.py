@@ -1366,6 +1366,23 @@ class SoccerLiveSensor(Entity):
             or "ratelimit" in m
         )
 
+    def _af_handle_rate_limit(self, path, reason):
+        """Pause enrichment on a rate/quota limit. Only the first hit (while not
+        already paused) starts/extends the backoff and logs — at INFO, since it's
+        an expected, self-healing condition (e.g. the burst after a restart) and
+        the last cached data keeps being served. Concurrent stragglers from the
+        same burst are dropped to DEBUG so they don't spam the log or balloon the
+        backoff. Diagnostics still expose the pause (rate_limited_at)."""
+        if self._af_enrichment_paused():
+            _LOGGER.debug("API-Football still rate-limited while fetching %s (%s)", path, reason)
+            return
+        self._af_note_rate_limited()
+        _LOGGER.info(
+            "API-Football rate limit hit while fetching %s (%s) — pausing enrichment for %s s; "
+            "serving cached data meanwhile",
+            path, reason, SoccerLiveSensor._af_backoff,
+        )
+
     @staticmethod
     def _af_note_rate_limited():
         SoccerLiveSensor._af_backoff = min(max(60, SoccerLiveSensor._af_backoff * 2), 1800)
@@ -1465,11 +1482,7 @@ class SoccerLiveSensor(Entity):
                         # enrichment backoff kicks in and stops the burst (e.g. all
                         # sensors enriching at once right after a restart).
                         if self._af_is_rate_limit_message(af_error):
-                            self._af_note_rate_limited()
-                            _LOGGER.warning(
-                                "API-Football rate limit hit while fetching %s (%s) — pausing enrichment for %s s",
-                                path, af_error, SoccerLiveSensor._af_backoff,
-                            )
+                            self._af_handle_rate_limit(path, af_error)
                         else:
                             _LOGGER.warning("API-Football %s returned an error: %s", path, af_error)
                         return None
@@ -1477,11 +1490,7 @@ class SoccerLiveSensor(Entity):
                     self._af_note_success()
                     return data
                 if response.status == 429:
-                    self._af_note_rate_limited()
-                    _LOGGER.warning(
-                        "API-Football rate limit reached while fetching %s (HTTP 429) — pausing enrichment for %s s",
-                        path, SoccerLiveSensor._af_backoff,
-                    )
+                    self._af_handle_rate_limit(path, "HTTP 429")
                 else:
                     _LOGGER.debug("API-Football enrichment %s returned HTTP %s", path, response.status)
         except Exception as e:

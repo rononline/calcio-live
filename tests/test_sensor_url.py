@@ -967,3 +967,18 @@ def test_af_rate_limit_body_triggers_backoff(monkeypatch):
 
     SoccerLiveSensor._af_enrich_pause_until = None
     SoccerLiveSensor._af_backoff = 0
+
+
+def test_af_rate_limit_stragglers_do_not_double_backoff():
+    SoccerLiveSensor._af_backoff = 0
+    SoccerLiveSensor._af_enrich_pause_until = None
+    sensor = _sensor("team_match", provider="api_football")
+    # First hit pauses and sets the backoff.
+    sensor._af_handle_rate_limit("predictions", "too many requests")
+    assert SoccerLiveSensor._af_backoff == 60
+    assert SoccerLiveSensor._af_enrichment_paused() is True
+    # A concurrent straggler from the same burst must not double the backoff.
+    sensor._af_handle_rate_limit("odds", "too many requests")
+    assert SoccerLiveSensor._af_backoff == 60
+    SoccerLiveSensor._af_enrich_pause_until = None
+    SoccerLiveSensor._af_backoff = 0
