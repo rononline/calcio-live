@@ -1,5 +1,8 @@
 # Changelog
 
+## v3.6.98 (2026-07-20)
+- rate limiting: when a per-day quota pause is set, the per-minute backoff is now cleared, so a stale minute backoff isn't carried into the next day. Added tests (with an injected clock) that the daily pause actually ends at the next UTC midnight
+
 ## v3.6.97 (2026-07-20)
 - rate limiting: distinguish a per-day quota exhaustion from a per-minute burst — a daily limit now pauses enrichment until the next quota reset (~UTC midnight) instead of retrying every 30 minutes all day; per-minute limits keep the doubling backoff. Added a parser test for ESPN `timeValid: false` (time_tbd) and a daily-limit test
 

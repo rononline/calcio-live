@@ -1412,6 +1412,9 @@ class SoccerLiveSensor(Entity):
         now_utc = datetime.now(timezone.utc)
         next_reset = (now_utc + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
         secs = max(1800, (next_reset - now_utc).total_seconds())
+        # Clear the per-minute backoff so an old minute-limit doesn't carry into
+        # the next day once this daily pause elapses.
+        SoccerLiveSensor._af_backoff = 0
         SoccerLiveSensor._af_enrich_pause_until = datetime.now() + timedelta(seconds=secs)
         SoccerLiveSensor._api_football_rate_limited_at = datetime.now().isoformat()
 

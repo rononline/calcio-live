@@ -998,3 +998,41 @@ def test_af_daily_limit_pauses_until_reset():
     assert SoccerLiveSensor._af_is_daily_limit_message("exceeded the limit of requests per day") is True
     assert SoccerLiveSensor._af_is_daily_limit_message("requests per minute") is False
     SoccerLiveSensor._af_enrich_pause_until = None
+
+
+def test_af_daily_limit_ends_at_utc_midnight(monkeypatch):
+    import datetime as _dt
+
+    class _Fake(_dt.datetime):
+        _now = _dt.datetime(2026, 7, 20, 22, 0, tzinfo=_dt.timezone.utc)
+        @classmethod
+        def now(cls, tz=None):
+            return cls._now.astimezone(tz) if tz else cls._now.replace(tzinfo=None)
+
+    monkeypatch.setattr(_sensor_mod, "datetime", _Fake)
+    SoccerLiveSensor._af_backoff = 120                 # a stale minute backoff
+    SoccerLiveSensor._af_enrich_pause_until = None
+    sensor = _sensor("team_match", provider="api_football")
+    sensor._af_note_daily_limit()
+    # Pause ends exactly at the next UTC midnight, and the minute backoff is cleared.
+    assert SoccerLiveSensor._af_enrich_pause_until == _dt.datetime(2026, 7, 21, 0, 0)
+    assert SoccerLiveSensor._af_backoff == 0
+    SoccerLiveSensor._af_enrich_pause_until = None
+
+
+def test_af_daily_limit_clamped_to_min_30_min(monkeypatch):
+    import datetime as _dt
+
+    class _Fake(_dt.datetime):
+        _now = _dt.datetime(2026, 7, 20, 23, 50, tzinfo=_dt.timezone.utc)  # 10 min to midnight
+        @classmethod
+        def now(cls, tz=None):
+            return cls._now.astimezone(tz) if tz else cls._now.replace(tzinfo=None)
+
+    monkeypatch.setattr(_sensor_mod, "datetime", _Fake)
+    SoccerLiveSensor._af_enrich_pause_until = None
+    sensor = _sensor("team_match", provider="api_football")
+    sensor._af_note_daily_limit()
+    # Only 10 min to midnight -> clamped to a 30 min pause (00:20).
+    assert SoccerLiveSensor._af_enrich_pause_until == _dt.datetime(2026, 7, 21, 0, 20)
+    SoccerLiveSensor._af_enrich_pause_until = None
