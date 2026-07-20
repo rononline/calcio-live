@@ -1366,27 +1366,53 @@ class SoccerLiveSensor(Entity):
             or "ratelimit" in m
         )
 
+    @staticmethod
+    def _af_is_daily_limit_message(msg):
+        """A per-day quota exhaustion (vs a transient per-minute burst). Retrying
+        every 30 min all day is pointless, so these pause until the next reset."""
+        m = (msg or "").lower()
+        return "per day" in m or "for the day" in m or "daily" in m
+
     def _af_handle_rate_limit(self, path, reason):
         """Pause enrichment on a rate/quota limit. Only the first hit (while not
-        already paused) starts/extends the backoff and logs — at INFO, since it's
-        an expected, self-healing condition (e.g. the burst after a restart) and
-        the last cached data keeps being served. Concurrent stragglers from the
-        same burst are dropped to DEBUG so they don't spam the log or balloon the
-        backoff. Diagnostics still expose the pause (rate_limited_at)."""
+        already paused) starts the pause and logs — at INFO, since it's an
+        expected, self-healing condition (e.g. the burst after a restart) and the
+        last cached data keeps being served. Concurrent stragglers from the same
+        burst are dropped to DEBUG so they don't spam the log or balloon the
+        backoff. A per-day quota pauses until the next reset; a per-minute limit
+        uses the doubling backoff. Diagnostics expose the pause (rate_limited_at)."""
         if self._af_enrichment_paused():
             _LOGGER.debug("API-Football still rate-limited while fetching %s (%s)", path, reason)
             return
-        self._af_note_rate_limited()
-        _LOGGER.info(
-            "API-Football rate limit hit while fetching %s (%s) — pausing enrichment for %s s; "
-            "serving cached data meanwhile",
-            path, reason, SoccerLiveSensor._af_backoff,
-        )
+        if self._af_is_daily_limit_message(reason):
+            self._af_note_daily_limit()
+            _LOGGER.info(
+                "API-Football daily quota reached while fetching %s (%s) — pausing enrichment "
+                "until the next quota reset (~%s); serving cached data meanwhile",
+                path, reason, SoccerLiveSensor._af_enrich_pause_until,
+            )
+        else:
+            self._af_note_rate_limited()
+            _LOGGER.info(
+                "API-Football rate limit hit while fetching %s (%s) — pausing enrichment for %s s; "
+                "serving cached data meanwhile",
+                path, reason, SoccerLiveSensor._af_backoff,
+            )
 
     @staticmethod
     def _af_note_rate_limited():
         SoccerLiveSensor._af_backoff = min(max(60, SoccerLiveSensor._af_backoff * 2), 1800)
         SoccerLiveSensor._af_enrich_pause_until = datetime.now() + timedelta(seconds=SoccerLiveSensor._af_backoff)
+        SoccerLiveSensor._api_football_rate_limited_at = datetime.now().isoformat()
+
+    @staticmethod
+    def _af_note_daily_limit():
+        # Pause until the next UTC midnight (API-Football's daily counter reset),
+        # at least 30 min out. Uses a naive-local pause to match _af_enrichment_paused.
+        now_utc = datetime.now(timezone.utc)
+        next_reset = (now_utc + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        secs = max(1800, (next_reset - now_utc).total_seconds())
+        SoccerLiveSensor._af_enrich_pause_until = datetime.now() + timedelta(seconds=secs)
         SoccerLiveSensor._api_football_rate_limited_at = datetime.now().isoformat()
 
     # Live odds (/odds/live) can be forbidden by plan or structurally empty; pause

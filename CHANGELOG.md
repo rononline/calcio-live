@@ -1,5 +1,8 @@
 # Changelog
 
+## v3.6.97 (2026-07-20)
+- rate limiting: distinguish a per-day quota exhaustion from a per-minute burst — a daily limit now pauses enrichment until the next quota reset (~UTC midnight) instead of retrying every 30 minutes all day; per-minute limits keep the doubling backoff. Added a parser test for ESPN `timeValid: false` (time_tbd) and a daily-limit test
+
 ## v3.6.96 (2026-07-20)
 - matches: expose a `time_tbd` flag on each match (from ESPN's `timeValid`), so cards can show "unknown" for fixtures whose kick-off time isn't confirmed yet instead of a placeholder time
 

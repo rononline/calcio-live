@@ -80,6 +80,14 @@ class TestScoreboardParser:
         assert match["home_team"] == "Ajax"
         assert match["away_team"] == "PSV"
 
+    def test_time_tbd_reflects_espn_timevalid(self):
+        data = self._load()
+        # No timeValid on the event -> a confirmed time, not TBD.
+        assert self._parse(data)["matches"][0]["time_tbd"] is False
+        # ESPN marks unconfirmed kick-off times with timeValid: false.
+        data["events"][0]["timeValid"] = False
+        assert self._parse(data)["matches"][0]["time_tbd"] is True
+
     def test_match_exposes_raw_iso_date(self):
         # date_iso carries the raw ESPN kickoff timestamp (used for kickoff-time
         # weather forecasts); date stays the localized display string.

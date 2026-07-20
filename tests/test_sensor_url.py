@@ -982,3 +982,19 @@ def test_af_rate_limit_stragglers_do_not_double_backoff():
     assert SoccerLiveSensor._af_backoff == 60
     SoccerLiveSensor._af_enrich_pause_until = None
     SoccerLiveSensor._af_backoff = 0
+
+
+def test_af_daily_limit_pauses_until_reset():
+    import datetime as _dt
+    SoccerLiveSensor._af_backoff = 0
+    SoccerLiveSensor._af_enrich_pause_until = None
+    sensor = _sensor("team_match", provider="api_football")
+    sensor._af_handle_rate_limit("predictions", "You have reached the request limit for the day")
+    assert SoccerLiveSensor._af_enrichment_paused() is True
+    # A daily limit pauses long (>= ~30 min) and does NOT use the per-minute backoff.
+    remaining = (SoccerLiveSensor._af_enrich_pause_until - _dt.datetime.now()).total_seconds()
+    assert remaining >= 1800 - 5
+    assert SoccerLiveSensor._af_backoff == 0
+    assert SoccerLiveSensor._af_is_daily_limit_message("exceeded the limit of requests per day") is True
+    assert SoccerLiveSensor._af_is_daily_limit_message("requests per minute") is False
+    SoccerLiveSensor._af_enrich_pause_until = None
