@@ -1,5 +1,8 @@
 # Changelog
 
+## v3.6.96 (2026-07-20)
+- matches: expose a `time_tbd` flag on each match (from ESPN's `timeValid`), so cards can show "unknown" for fixtures whose kick-off time isn't confirmed yet instead of a placeholder time
+
 ## v3.6.95 (2026-07-20)
 - rate limiting: an API-Football rate limit is now logged at INFO instead of WARNING (so Home Assistant no longer surfaces it as a custom-integration error) — it's an expected, self-healing condition where the last cached data keeps being served. Only the first hit (when not already paused) logs and starts the backoff; concurrent stragglers from the same burst (e.g. right after a restart) are dropped to DEBUG and no longer balloon the backoff. The pause is still visible in diagnostics
 
