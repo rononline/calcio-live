@@ -3,13 +3,25 @@
     "step": {
       "user": {
         "title": "Soccer Live Konfiguration",
-        "description": "Willkommen zum Konfigurationsassistenten von Soccer Live.\n\nWählen Sie aus, was Sie verfolgen möchten:\n\n- **Liga**: alle Spiele einer bestimmten Liga (für Pokalwettbewerbe wird automatisch ein K.O.-Bracket-Sensor erstellt).\n- **Team**: Spiele eines bestimmten Teams.\n- **Alle Spiele heute**: alle heute weltweit gespielten Spiele.\n- **News**: News-Feed eines Wettbewerbs.\n- **Manuelle Eingabe**: Team-ID manuell eingeben.",
+        "description": "Willkommen zum Konfigurationsassistenten von Soccer Live.\n\nWählen Sie zunächst Ihre Datenquelle:\n\n- **ESPN** — kostenlos, kein API-Schlüssel. Für die meisten Nutzer empfohlen. Liefert Spiele, Ergebnisse, Tabellen, Torschützen und News.\n- **API-Football** — erfordert einen kostenlosen oder kostenpflichtigen API-Schlüssel. Ergänzt Prognosen, Quoten, Verletzungen, Expected Goals und Clubdaten.\n\nWas Sie verfolgen möchten (Team, Liga, …), wählen Sie im nächsten Schritt.",
         "data": {
-          "provider": "Datenanbieter",
-          "selection": "Was möchten Sie verfolgen?",
+          "provider": "Datenquelle"
+        }
+      },
+      "api_football_credentials": {
+        "title": "API-Football Zugangsdaten",
+        "description": "Geben Sie Ihren API-Football-Schlüssel ein. Einen kostenlosen Schlüssel erhalten Sie auf api-football.com (Dashboard → Konto).\n\nDer Schlüssel wird vor dem Fortfahren geprüft.",
+        "data": {
           "api_football_key": "API-Football API-Schlüssel",
-          "api_football_season": "API-Football Saison (0 = automatisch)",
+          "api_football_season": "Saison (0 = aktuelles Jahr)",
           "include_friendlies": "Freundschaftsspiele einbeziehen"
+        }
+      },
+      "follow": {
+        "title": "Was möchten Sie verfolgen?",
+        "description": "Wählen Sie, was dieser Eintrag verfolgen soll:\n\n- **Team** — Spiele eines bestimmten Teams (empfohlen).\n- **Liga** — alle Spiele einer bestimmten Liga (für Pokalwettbewerbe wird automatisch ein K.O.-Bracket-Sensor erstellt).\n- **Alle Spiele heute** — alle heute weltweit gespielten Spiele.\n- **News** — News-Feed eines Wettbewerbs (nur ESPN).\n- **Manuelle Eingabe** — Team-ID manuell eingeben.",
+        "data": {
+          "selection": "Was möchten Sie verfolgen?"
         }
       },
       "news_competition": {

@@ -3,13 +3,25 @@
     "step": {
       "user": {
         "title": "Configuration de Soccer Live",
-        "description": "Bienvenue dans l'assistant de configuration de Soccer Live.\n\nChoisissez ce que vous souhaitez suivre :\n\n- **Championnat** : tous les matchs d'un championnat spécifique (un capteur tableau est créé automatiquement pour les coupes).\n- **Équipe** : matchs d'une équipe spécifique.\n- **Tous les matchs du jour** : tous les matchs joués aujourd'hui dans le monde.\n- **Actualités** : flux d'actualités d'une compétition.\n- **Saisie manuelle** : saisir l'ID de l'équipe manuellement.",
+        "description": "Bienvenue dans l'assistant de configuration de Soccer Live.\n\nChoisissez d'abord votre source de données :\n\n- **ESPN** — gratuit, sans clé API. Recommandé pour la plupart des utilisateurs. Fournit matchs, scores, classements, buteurs et actualités.\n- **API-Football** — nécessite une clé API gratuite ou payante. Ajoute pronostics, cotes, blessures, buts attendus et données de club.\n\nVous choisirez quoi suivre (équipe, championnat, …) à l'étape suivante.",
         "data": {
-          "provider": "Fournisseur de données",
-          "selection": "Que souhaitez-vous suivre ?",
+          "provider": "Source de données"
+        }
+      },
+      "api_football_credentials": {
+        "title": "Identifiants API-Football",
+        "description": "Saisissez votre clé API-Football. Vous pouvez en obtenir une gratuitement sur api-football.com (tableau de bord → compte).\n\nLa clé est validée avant de continuer.",
+        "data": {
           "api_football_key": "Clé API API-Football",
-          "api_football_season": "Saison API-Football (0 = automatique)",
+          "api_football_season": "Saison (0 = année en cours)",
           "include_friendlies": "Inclure les matchs amicaux"
+        }
+      },
+      "follow": {
+        "title": "Que souhaitez-vous suivre ?",
+        "description": "Choisissez ce que cette entrée doit suivre :\n\n- **Équipe** — matchs d'une équipe spécifique (recommandé).\n- **Championnat** — tous les matchs d'un championnat spécifique (un capteur tableau est créé automatiquement pour les coupes).\n- **Tous les matchs du jour** — tous les matchs joués aujourd'hui dans le monde.\n- **Actualités** — flux d'actualités d'une compétition (ESPN uniquement).\n- **Saisie manuelle** — saisir l'ID de l'équipe manuellement.",
+        "data": {
+          "selection": "Que souhaitez-vous suivre ?"
         }
       },
       "news_competition": {

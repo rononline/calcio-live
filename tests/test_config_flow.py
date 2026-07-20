@@ -109,57 +109,170 @@ async def _always_invalid(_key):
     return False
 
 
-def test_api_football_team_starts_team_search_step():
+async def _fake_competitions():
+    return {"1": "Eredivisie"}
+
+
+OPT_TEAM = _config_flow_mod.OPTION_SELECT_TEAM
+OPT_LEAGUE = _config_flow_mod.OPTION_SELECT_LEAGUE
+OPT_NEWS = _config_flow_mod.OPTION_NEWS
+OPT_ALL_TODAY = _config_flow_mod.OPTION_ALL_TODAY
+OPT_MANUAL = _config_flow_mod.OPTION_MANUAL_TEAM
+
+
+# --- Step 1: data source only ------------------------------------------------
+
+def test_user_step_asks_only_for_provider():
     flow = SoccerLiveConfigFlow()
-    flow._validate_api_football_key = _always_valid
-
-    result = asyncio.run(flow.async_step_user({
-        "provider": "api_football",
-        "selection": "Team",
-        "api_football_key": "test-key",
-        "api_football_season": 0,
-        "include_friendlies": True,
-    }))
-
+    result = asyncio.run(flow.async_step_user())
     assert result["type"] == "form"
-    assert result["step_id"] == "api_football_team_search"
+    assert result["step_id"] == "user"
+    schema = result["data_schema"]
+    assert "provider" in schema
+    # Provider-specific fields moved out of step 1.
+    assert "selection" not in schema
+    assert "api_football_key" not in schema
+
+
+def test_espn_skips_credentials_and_goes_to_follow():
+    flow = SoccerLiveConfigFlow()
+    result = asyncio.run(flow.async_step_user({"provider": "espn"}))
+    assert result["type"] == "form"
+    assert result["step_id"] == "follow"
+    assert flow._data["provider"] == "espn"
+    # ESPN keeps the friendlies default without prompting.
+    assert flow._data["include_friendlies"] is True
+
+
+def test_api_football_asks_credentials_first():
+    flow = SoccerLiveConfigFlow()
+    result = asyncio.run(flow.async_step_user({"provider": "API-Football"}))
+    assert result["type"] == "form"
+    assert result["step_id"] == "api_football_credentials"
+    # Label value is normalised to the canonical provider id.
     assert flow._data["provider"] == "api_football"
 
 
-def test_api_football_label_value_is_normalized():
+# --- Step 1b: API-Football credentials --------------------------------------
+
+def test_api_football_valid_key_advances_to_follow():
     flow = SoccerLiveConfigFlow()
+    flow._data["provider"] = "api_football"
     flow._validate_api_football_key = _always_valid
-
-    result = asyncio.run(flow.async_step_user({
-        "provider": "API-Football",
-        "selection": "Team",
-        "api_football_key": "test-key",
-        "api_football_season": 0,
-        "include_friendlies": True,
+    result = asyncio.run(flow.async_step_api_football_credentials({
+        "api_football_key": "good-key",
+        "api_football_season": 2025,
+        "include_friendlies": False,
     }))
-
     assert result["type"] == "form"
-    assert result["step_id"] == "api_football_team_search"
-    assert flow._data["provider"] == "api_football"
+    assert result["step_id"] == "follow"
+    assert flow._data["api_football_key"] == "good-key"
+    assert flow._data["api_football_season"] == 2025
+    assert flow._data["include_friendlies"] is False
 
 
 def test_api_football_invalid_key_reports_error():
     flow = SoccerLiveConfigFlow()
+    flow._data["provider"] = "api_football"
     flow._validate_api_football_key = _always_invalid
-
-    result = asyncio.run(flow.async_step_user({
-        "provider": "api_football",
-        "selection": "Team",
+    result = asyncio.run(flow.async_step_api_football_credentials({
         "api_football_key": "bad-key",
         "api_football_season": 0,
         "include_friendlies": True,
     }))
-
-    # Rejected keys re-show the user form with the invalid_api_key error and
-    # do not advance to the team search step.
+    # Rejected keys re-show the credentials form and do not advance.
     assert result["type"] == "form"
-    assert result["step_id"] == "user"
+    assert result["step_id"] == "api_football_credentials"
     assert flow._errors.get("api_football_key") == "invalid_api_key"
+
+
+def test_api_football_missing_key_reports_error():
+    flow = SoccerLiveConfigFlow()
+    flow._data["provider"] = "api_football"
+    flow._validate_api_football_key = _always_valid
+    result = asyncio.run(flow.async_step_api_football_credentials({
+        "api_football_key": "  ",
+        "api_football_season": 0,
+        "include_friendlies": True,
+    }))
+    assert result["step_id"] == "api_football_credentials"
+    assert flow._errors.get("api_football_key") == "api_key_required"
+
+
+# --- Step 2: what to follow, filtered per provider --------------------------
+
+def test_follow_offers_news_for_espn_and_defaults_to_team():
+    flow = SoccerLiveConfigFlow()
+    flow._data["provider"] = "espn"
+    result = asyncio.run(flow.async_step_follow())
+    assert result["step_id"] == "follow"
+    selections = result["data_schema"]["selection"]
+    assert OPT_NEWS in selections
+    # Team is offered first so it is the default choice.
+    assert selections[0] == OPT_TEAM
+
+
+def test_follow_hides_news_for_api_football():
+    flow = SoccerLiveConfigFlow()
+    flow._data["provider"] = "api_football"
+    result = asyncio.run(flow.async_step_follow())
+    selections = result["data_schema"]["selection"]
+    assert OPT_NEWS not in selections
+    assert OPT_TEAM in selections
+
+
+def test_follow_api_football_news_is_guarded_on_submit():
+    flow = SoccerLiveConfigFlow()
+    flow._data["provider"] = "api_football"
+    result = asyncio.run(flow.async_step_follow({"selection": OPT_NEWS}))
+    assert result["step_id"] == "follow"
+    assert flow._errors.get("selection") == "unsupported_provider_selection"
+
+
+def test_follow_api_football_team_goes_to_search():
+    flow = SoccerLiveConfigFlow()
+    flow._data["provider"] = "api_football"
+    result = asyncio.run(flow.async_step_follow({"selection": OPT_TEAM}))
+    assert result["step_id"] == "api_football_team_search"
+
+
+def test_follow_espn_team_goes_to_competition_select():
+    flow = SoccerLiveConfigFlow()
+    flow._data["provider"] = "espn"
+    flow._get_competitions = _fake_competitions
+    result = asyncio.run(flow.async_step_follow({"selection": OPT_TEAM}))
+    assert result["step_id"] == "select_competition_for_team"
+
+
+def test_follow_all_today_creates_entry():
+    flow = SoccerLiveConfigFlow()
+    flow._data["provider"] = "espn"
+    result = asyncio.run(flow.async_step_follow({"selection": OPT_ALL_TODAY}))
+    assert result["type"] == "create_entry"
+    assert flow._data["competition_code"] == "99999"
+
+
+# --- Item 7: NL/EN labels for the new steps exist ---------------------------
+
+def _load_translation(lang):
+    import json
+    path = ROOT / "custom_components" / "soccer_live" / "translations" / f"{lang}.json"
+    with open(path, encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+def test_new_steps_have_english_and_dutch_labels():
+    for lang in ("en", "nl"):
+        steps = _load_translation(lang)["config"]["step"]
+        for step in ("user", "api_football_credentials", "follow"):
+            assert step in steps, f"{lang}: missing {step}"
+            assert steps[step].get("title"), f"{lang}: {step} has no title"
+        # Step 1 is now provider-only in the labels too.
+        assert set(steps["user"]["data"]) == {"provider"}
+        # Credentials step exposes exactly the API-Football fields.
+        assert set(steps["api_football_credentials"]["data"]) == {
+            "api_football_key", "api_football_season", "include_friendlies"
+        }
 
 
 class _FakeEntry:

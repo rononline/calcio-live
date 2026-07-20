@@ -3,13 +3,25 @@
     "step": {
       "user": {
         "title": "Configurazione Soccer Live",
-        "description": "Benvenuto nella configurazione di Soccer Live.\n\nScegli cosa vuoi monitorare:\n\n- **Campionato**: tutte le partite di un campionato (per le coppe viene creato anche il sensore tabellone KO).\n- **Squadra**: partite di una squadra specifica.\n- **Tutte le partite del giorno**: tutte le partite nel mondo giocate oggi.\n- **Notizie**: feed news di una competizione.\n- **Inserimento Manuale**: inserisci l'ID della squadra manualmente.",
+        "description": "Benvenuto nella configurazione di Soccer Live.\n\nInnanzitutto, scegli la fonte dati:\n\n- **ESPN** — gratis, senza chiave API. Consigliato per la maggior parte degli utenti. Fornisce partite, risultati, classifiche, marcatori e notizie.\n- **API-Football** — richiede una chiave API gratuita o a pagamento. Aggiunge pronostici, quote, infortuni, expected goals e dati del club.\n\nSceglierai cosa seguire (squadra, campionato, …) nel passaggio successivo.",
         "data": {
-          "provider": "Provider dati",
-          "selection": "Cosa vuoi monitorare?",
+          "provider": "Fonte dati"
+        }
+      },
+      "api_football_credentials": {
+        "title": "Credenziali API-Football",
+        "description": "Inserisci la tua chiave API-Football. Puoi ottenerne una gratis su api-football.com (dashboard → account).\n\nLa chiave viene verificata prima di continuare.",
+        "data": {
           "api_football_key": "Chiave API API-Football",
-          "api_football_season": "Stagione API-Football (0 = automatico)",
+          "api_football_season": "Stagione (0 = anno corrente)",
           "include_friendlies": "Includi amichevoli"
+        }
+      },
+      "follow": {
+        "title": "Cosa vuoi seguire?",
+        "description": "Scegli cosa deve monitorare questa voce:\n\n- **Squadra** — partite di una squadra specifica (consigliato).\n- **Campionato** — tutte le partite di un campionato (per le coppe viene creato anche il sensore tabellone KO).\n- **Tutte le partite del giorno** — tutte le partite nel mondo giocate oggi.\n- **Notizie** — feed news di una competizione (solo ESPN).\n- **Inserimento manuale** — inserisci l'ID della squadra manualmente.",
+        "data": {
+          "selection": "Cosa vuoi monitorare?"
         }
       },
       "news_competition": {

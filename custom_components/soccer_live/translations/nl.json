@@ -3,13 +3,25 @@
     "step": {
       "user": {
         "title": "Soccer Live instellen",
-        "description": "Welkom bij de Soccer Live configuratiewizard.\n\nKies wat je wilt volgen:\n\n- **Competitie**: alle wedstrijden van een specifieke competitie (voor bekertoernooien wordt automatisch een bracket-sensor aangemaakt).\n- **Team**: wedstrijden van een specifiek team.\n- **Alle wedstrijden vandaag**: alle wedstrijden ter wereld die vandaag gespeeld worden.\n- **Nieuws**: nieuwsfeed van een competitie.\n- **Handmatige invoer**: voer het team-ID handmatig in.",
+        "description": "Welkom bij de Soccer Live configuratiewizard.\n\nKies eerst je databron:\n\n- **ESPN** — gratis, geen API-key. Aanbevolen voor de meeste gebruikers. Levert wedstrijden, uitslagen, standen, topscorers en nieuws.\n- **API-Football** — vereist een gratis of betaalde API-key. Voegt voorspellingen, odds, blessures, expected goals en clubgegevens toe.\n\nIn de volgende stap kies je wat je wilt volgen (team, competitie, …).",
         "data": {
-          "provider": "Databron",
-          "selection": "Wat wil je volgen?",
+          "provider": "Databron"
+        }
+      },
+      "api_football_credentials": {
+        "title": "API-Football gegevens",
+        "description": "Voer je API-Football-key in. Een gratis key haal je op via api-football.com (dashboard → account).\n\nDe key wordt gecontroleerd voordat je verder gaat.",
+        "data": {
           "api_football_key": "API-Football API-key",
-          "api_football_season": "API-Football seizoen (0 = auto)",
+          "api_football_season": "Seizoen (0 = huidig jaar)",
           "include_friendlies": "Oefenwedstrijden meenemen"
+        }
+      },
+      "follow": {
+        "title": "Wat wil je volgen?",
+        "description": "Kies wat deze configuratie moet volgen:\n\n- **Team** — wedstrijden van een specifiek team (aanbevolen).\n- **Competitie** — alle wedstrijden van een specifieke competitie (voor bekertoernooien wordt automatisch een bracket-sensor aangemaakt).\n- **Alle wedstrijden vandaag** — alle wedstrijden ter wereld die vandaag gespeeld worden.\n- **Nieuws** — nieuwsfeed van een competitie (alleen ESPN).\n- **Handmatige invoer** — voer het team-ID handmatig in.",
+        "data": {
+          "selection": "Wat wil je volgen?"
         }
       },
       "news_competition": {

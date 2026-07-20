@@ -3,13 +3,25 @@
     "step": {
       "user": {
         "title": "Soccer Live setup",
-        "description": "Welcome to the Soccer Live configuration wizard.\n\nChoose what you want to monitor:\n\n- **League**: every match of a specific league (a knockout bracket sensor is created automatically for cup competitions).\n- **Team**: matches of a specific team.\n- **All matches today**: every match in the world played today.\n- **News**: news feed for a specific competition.\n- **Manual entry**: enter the team ID manually.",
+        "description": "Welcome to the Soccer Live configuration wizard.\n\nFirst, choose your data source:\n\n- **ESPN** — free, no API key. Recommended for most users. Provides fixtures, scores, standings, top scorers and news.\n- **API-Football** — requires a free or paid API key. Adds predictions, odds, injuries, expected goals and club data.\n\nYou'll pick what to follow (team, league, …) in the next step.",
         "data": {
-          "provider": "Data provider",
-          "selection": "What do you want to monitor?",
+          "provider": "Data source"
+        }
+      },
+      "api_football_credentials": {
+        "title": "API-Football credentials",
+        "description": "Enter your API-Football key. You can get one for free at api-football.com (dashboard → account).\n\nThe key is validated before continuing.",
+        "data": {
           "api_football_key": "API-Football API key",
-          "api_football_season": "API-Football season (0 = auto)",
+          "api_football_season": "Season (0 = current year)",
           "include_friendlies": "Include friendlies"
+        }
+      },
+      "follow": {
+        "title": "What do you want to follow?",
+        "description": "Choose what this entry should track:\n\n- **Team** — matches of a specific team (recommended).\n- **League** — every match of a specific league (a knockout bracket sensor is created automatically for cup competitions).\n- **All matches today** — every match in the world played today.\n- **News** — news feed for a specific competition (ESPN only).\n- **Manual entry** — enter the team ID manually.",
+        "data": {
+          "selection": "What do you want to monitor?"
         }
       },
       "news_competition": {

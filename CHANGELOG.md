@@ -1,5 +1,11 @@
 # Changelog
 
+## v3.6.99 (2026-07-20)
+- config flow: split the single first step into a simpler wizard. Step 1 now only asks for the data source (ESPN — free, no API key — is the recommended default). API-Football key, season and friendlies are asked in a dedicated follow-up step, so ESPN users no longer see API-Football options that don't apply to them
+- config flow: "what to follow" is now its own step with **Team** as the default, and it only offers options the chosen provider supports — e.g. "News" is no longer selectable for API-Football (it was ESPN-only and previously failed only after submitting)
+- config flow: translations updated for the new `user` / `api_football_credentials` / `follow` steps in English and Dutch (other languages fall back to English for the new steps)
+- tests: rewrote the config-flow tests for the split flow and added first-install coverage (ESPN team → competition select, API-Football team → search, invalid/missing key, News filtered out for API-Football, and that the new steps have English and Dutch labels)
+
 ## v3.6.98 (2026-07-20)
 - rate limiting: when a per-day quota pause is set, the per-minute backoff is now cleared, so a stale minute backoff isn't carried into the next day. Added tests (with an injected clock) that the daily pause actually ends at the next UTC midnight
 

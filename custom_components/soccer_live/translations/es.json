@@ -3,13 +3,25 @@
     "step": {
       "user": {
         "title": "Configuración de Soccer Live",
-        "description": "Bienvenido al asistente de configuración de Soccer Live.\n\nElige qué quieres seguir:\n\n- **Liga**: todos los partidos de una liga específica (para las copas se crea automáticamente un sensor de cuadro eliminatorio).\n- **Equipo**: partidos de un equipo específico.\n- **Todos los partidos de hoy**: todos los partidos del mundo jugados hoy.\n- **Noticias**: feed de noticias de una competición.\n- **Ingreso manual**: introduce el ID del equipo manualmente.",
+        "description": "Bienvenido al asistente de configuración de Soccer Live.\n\nPrimero, elige tu fuente de datos:\n\n- **ESPN** — gratis, sin clave API. Recomendado para la mayoría. Ofrece partidos, resultados, clasificaciones, goleadores y noticias.\n- **API-Football** — requiere una clave API gratuita o de pago. Añade pronósticos, cuotas, lesiones, goles esperados y datos de club.\n\nElegirás qué seguir (equipo, liga, …) en el siguiente paso.",
         "data": {
-          "provider": "Proveedor de datos",
-          "selection": "¿Qué quieres seguir?",
+          "provider": "Fuente de datos"
+        }
+      },
+      "api_football_credentials": {
+        "title": "Credenciales de API-Football",
+        "description": "Introduce tu clave de API-Football. Puedes obtener una gratis en api-football.com (panel → cuenta).\n\nLa clave se valida antes de continuar.",
+        "data": {
           "api_football_key": "Clave API de API-Football",
-          "api_football_season": "Temporada API-Football (0 = automático)",
+          "api_football_season": "Temporada (0 = año actual)",
           "include_friendlies": "Incluir amistosos"
+        }
+      },
+      "follow": {
+        "title": "¿Qué quieres seguir?",
+        "description": "Elige qué debe seguir esta entrada:\n\n- **Equipo** — partidos de un equipo específico (recomendado).\n- **Liga** — todos los partidos de una liga específica (para las copas se crea automáticamente un sensor de cuadro eliminatorio).\n- **Todos los partidos de hoy** — todos los partidos del mundo jugados hoy.\n- **Noticias** — feed de noticias de una competición (solo ESPN).\n- **Ingreso manual** — introduce el ID del equipo manualmente.",
+        "data": {
+          "selection": "¿Qué quieres seguir?"
         }
       },
       "news_competition": {

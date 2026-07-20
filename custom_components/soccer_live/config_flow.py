@@ -48,64 +48,105 @@ class SoccerLiveConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._teams = []
 
     async def async_step_user(self, user_input=None):
+        """Step 1 — choose the data source only.
+
+        Provider-specific fields (API-Football key/season/friendlies) are asked
+        in a dedicated follow-up step, so ESPN users never see options that
+        don't apply to them.
+        """
         self._errors = {}
 
         if user_input is not None:
-            selection = user_input.get("selection")
             provider = _normalize_provider(user_input.get(CONF_PROVIDER, PROVIDER_ESPN))
-            user_input[CONF_PROVIDER] = provider
-            api_football_key = (user_input.get(CONF_API_FOOTBALL_KEY) or "").strip()
-            if provider == PROVIDER_API_FOOTBALL and not api_football_key:
-                self._errors[CONF_API_FOOTBALL_KEY] = "api_key_required"
-            elif provider == PROVIDER_API_FOOTBALL and selection == OPTION_NEWS:
-                self._errors["selection"] = "unsupported_provider_selection"
-            elif provider == PROVIDER_API_FOOTBALL and not await self._validate_api_football_key(api_football_key):
-                self._errors[CONF_API_FOOTBALL_KEY] = "invalid_api_key"
-            else:
-                user_input[CONF_API_FOOTBALL_KEY] = api_football_key
-                user_input[CONF_INCLUDE_FRIENDLIES] = user_input.get(CONF_INCLUDE_FRIENDLIES, True)
-                if provider == PROVIDER_API_FOOTBALL:
-                    user_input[CONF_API_FOOTBALL_SEASON] = user_input.get(CONF_API_FOOTBALL_SEASON) or 0
-
-            if self._errors:
-                pass
-            elif selection == OPTION_SELECT_LEAGUE:
-                self._data.update(user_input)
-                return await self.async_step_league()
-
-            elif selection == OPTION_SELECT_TEAM:
-                self._data.update(user_input)
-                if provider == PROVIDER_API_FOOTBALL:
-                    return await self.async_step_api_football_team_search()
-                return await self.async_step_select_competition_for_team()
-            
-            elif selection == OPTION_ALL_TODAY:
-                self._data.update(user_input)
-                self._data["competition_code"] = "99999"  # Dummy code for the "all matches today" sensor
-                return self.async_create_entry(
-                    title="All matches today",
-                    data=self._data,
-                )
-
-            elif selection == OPTION_NEWS:
-                self._data.update(user_input)
-                return await self.async_step_news_competition()
-
-            elif selection == OPTION_MANUAL_TEAM:
-                self._data.update(user_input)
-                return await self.async_step_manual_team()
+            self._data[CONF_PROVIDER] = provider
+            if provider == PROVIDER_API_FOOTBALL:
+                return await self.async_step_api_football_credentials()
+            # ESPN is key-less; keep the friendlies default without prompting.
+            self._data.setdefault(CONF_INCLUDE_FRIENDLIES, True)
+            return await self.async_step_follow()
 
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema({
                 vol.Required(CONF_PROVIDER, default=PROVIDER_ESPN): vol.In({
-                    PROVIDER_ESPN: "ESPN",
-                    PROVIDER_API_FOOTBALL: "API-Football",
+                    PROVIDER_ESPN: "ESPN — free, no API key (recommended)",
+                    PROVIDER_API_FOOTBALL: "API-Football — API key required (predictions, odds, injuries)",
                 }),
-                vol.Required("selection", default=OPTION_SELECT_LEAGUE): vol.In([OPTION_SELECT_LEAGUE, OPTION_SELECT_TEAM, OPTION_ALL_TODAY, OPTION_NEWS, OPTION_MANUAL_TEAM]),
-                vol.Optional(CONF_API_FOOTBALL_KEY, default=""): str,
-                vol.Optional(CONF_API_FOOTBALL_SEASON, default=0): vol.Coerce(int),
-                vol.Optional(CONF_INCLUDE_FRIENDLIES, default=True): bool,
+            }),
+            errors=self._errors,
+        )
+
+    async def async_step_api_football_credentials(self, user_input=None):
+        """Step 1b (API-Football only) — API key, season and friendlies.
+
+        Asked before the selection/search steps because searching teams and
+        competitions on API-Football needs the key.
+        """
+        self._errors = {}
+
+        if user_input is not None:
+            api_key = (user_input.get(CONF_API_FOOTBALL_KEY) or "").strip()
+            if not api_key:
+                self._errors[CONF_API_FOOTBALL_KEY] = "api_key_required"
+            elif not await self._validate_api_football_key(api_key):
+                self._errors[CONF_API_FOOTBALL_KEY] = "invalid_api_key"
+            if not self._errors:
+                self._data[CONF_API_FOOTBALL_KEY] = api_key
+                self._data[CONF_API_FOOTBALL_SEASON] = user_input.get(CONF_API_FOOTBALL_SEASON) or 0
+                self._data[CONF_INCLUDE_FRIENDLIES] = user_input.get(CONF_INCLUDE_FRIENDLIES, True)
+                return await self.async_step_follow()
+
+        return self.async_show_form(
+            step_id="api_football_credentials",
+            data_schema=vol.Schema({
+                vol.Required(CONF_API_FOOTBALL_KEY, default=self._data.get(CONF_API_FOOTBALL_KEY, "")): str,
+                vol.Optional(CONF_API_FOOTBALL_SEASON, default=self._data.get(CONF_API_FOOTBALL_SEASON, 0)): vol.Coerce(int),
+                vol.Optional(CONF_INCLUDE_FRIENDLIES, default=self._data.get(CONF_INCLUDE_FRIENDLIES, True)): bool,
+            }),
+            errors=self._errors,
+        )
+
+    async def async_step_follow(self, user_input=None):
+        """Step 2 — choose what to follow, with only the options the selected
+        provider supports (e.g. News is ESPN-only, so it isn't offered for
+        API-Football instead of failing after submit). Team is the default."""
+        self._errors = {}
+        provider = _normalize_provider(self._data.get(CONF_PROVIDER))
+
+        if user_input is not None:
+            selection = user_input.get("selection")
+            # Defensive guard in case a client submits a filtered-out combo.
+            if provider == PROVIDER_API_FOOTBALL and selection == OPTION_NEWS:
+                self._errors["selection"] = "unsupported_provider_selection"
+            else:
+                self._data["selection"] = selection
+                if selection == OPTION_SELECT_LEAGUE:
+                    return await self.async_step_league()
+                if selection == OPTION_SELECT_TEAM:
+                    if provider == PROVIDER_API_FOOTBALL:
+                        return await self.async_step_api_football_team_search()
+                    return await self.async_step_select_competition_for_team()
+                if selection == OPTION_ALL_TODAY:
+                    self._data["competition_code"] = "99999"  # Dummy code for the "all matches today" sensor
+                    return self.async_create_entry(
+                        title="All matches today",
+                        data=self._data,
+                    )
+                if selection == OPTION_NEWS:
+                    return await self.async_step_news_competition()
+                if selection == OPTION_MANUAL_TEAM:
+                    return await self.async_step_manual_team()
+
+        # Team first so it is the default; News only for providers that supply it.
+        selections = [OPTION_SELECT_TEAM, OPTION_SELECT_LEAGUE, OPTION_ALL_TODAY]
+        if provider_supports(provider, "news"):
+            selections.append(OPTION_NEWS)
+        selections.append(OPTION_MANUAL_TEAM)
+
+        return self.async_show_form(
+            step_id="follow",
+            data_schema=vol.Schema({
+                vol.Required("selection", default=OPTION_SELECT_TEAM): vol.In(selections),
             }),
             errors=self._errors,
         )
