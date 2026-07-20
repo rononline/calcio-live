@@ -56,6 +56,24 @@ Sensors are created automatically depending on your selection:
 | `all_matches_today` | `soccer_live_all_today` | All matches worldwide today |
 | `news` | `soccer_live_news_{competition}` | News feed for a competition |
 
+> **Friendly names & devices.** Every entry is grouped as a device (e.g. *Soccer Live · Feyenoord*), and each entity has a short, readable name — **Next match**, **All matches**, **All competitions**, **Match calendar** — while the technical `entity_id` stays verbose and stable (so existing dashboards keep working).
+
+---
+
+## 🎯 Which sensor do I need?
+
+A **Team** entry creates several sensors (plus a calendar). Which one you point a card at depends on the card:
+
+| You want… | Use the sensor | Entity |
+|---|---|---|
+| A single team's **live / next match** — Team card, Countdown, Match Center | **`next_*`** (`team_match`) | `soccer_live_next_{competition}_{team}` |
+| A team's **full schedule across all competitions** — Team Competitions, extended schedule/fixtures list | **`all_mixed_*`** (`team_matches_mixed`) | `soccer_live_all_mixed_{team}` |
+| A team's matches **in one specific competition** | **`all_*`** (`team_matches`) | `soccer_live_all_{competition}_{team}` |
+| A **whole competition** overview — Standings, Matches, Top scorers, Bracket | the competition sensors | `soccer_live_all_{competition}`, `soccer_live_standings_{competition}`, … |
+| Fixtures in the **Home Assistant calendar** / time-based automations | the calendar | `calendar.soccer_live_{team}` |
+
+> Rule of thumb: **Team / Countdown / Match Center → `next_*`**, **Team Competitions & extended schedules → `all_mixed_*`**, **competition-wide views → `all_*`**. The card's entity picker suggests the matching sensor.
+
 ---
 
 ## ⚙️ Integration options

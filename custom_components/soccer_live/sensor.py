@@ -24,6 +24,7 @@ from .const import (
     PROVIDER_API_FOOTBALL,
     PROVIDER_CAPABILITIES,
     PROVIDER_ESPN,
+    friendly_sensor_name,
 )
 
 _LIVE_POLL_TYPES = {"team_match", "team_matches", "team_matches_mixed", "match_day", "all_matches_today"}
@@ -260,6 +261,12 @@ class SoccerLiveSensor(Entity):
                  enable_live_odds=False):
         self.hass = hass
         self._name = name
+        # Friendly display name comes from the sensor type (see the `name`
+        # property); the device supplies the team/competition context. Pin the
+        # verbose entity_id to the slug so it stays stable (and doesn't collapse
+        # to e.g. sensor.next_match) now that the display name is human-readable.
+        self._attr_has_entity_name = True
+        self.entity_id = f"sensor.{name}"
         self._code = code
         self._team_id = team_id
         self._sensor_type = sensor_type
@@ -391,7 +398,10 @@ class SoccerLiveSensor(Entity):
 
     @property
     def name(self):
-        return self._name
+        # Human-readable entity name (e.g. "Next match", "All competitions").
+        # With has_entity_name the device (team/competition) adds the context,
+        # so this stays short. The verbose slug lives in entity_id / unique_id.
+        return friendly_sensor_name(self._sensor_type)
 
     @property
     def state(self):
@@ -462,7 +472,9 @@ class SoccerLiveSensor(Entity):
 
     @property
     def device_info(self):
-        display = self._code if self._code and self._code not in ("N/A", "") else (self._team_name or self._name)
+        # Prefer the team name so a team's device reads "Soccer Live · Feyenoord"
+        # rather than a raw competition code; fall back to the code, then the slug.
+        display = self._team_name or (self._code if self._code and self._code not in ("N/A", "") else self._name)
         return {
             "identifiers": {(DOMAIN, self._config_entry_id)},
             "name": f"Soccer Live · {display}",

@@ -10,6 +10,7 @@ from custom_components.soccer_live.const import (  # noqa: E402
     PROVIDER_API_FOOTBALL,
     PROVIDER_CAPABILITIES,
     PROVIDER_ESPN,
+    friendly_sensor_name,
     provider_supports,
 )
 
@@ -45,3 +46,20 @@ def test_both_providers_share_the_core_capabilities():
 
 def test_unknown_provider_supports_nothing():
     assert provider_supports("nope", "fixtures") is False
+
+
+def test_friendly_sensor_names():
+    # The user-facing names for the three sensors a team config creates.
+    assert friendly_sensor_name("team_match") == "Next match"
+    assert friendly_sensor_name("team_matches") == "All matches"
+    assert friendly_sensor_name("team_matches_mixed") == "All competitions"
+    # Competition-scoped sensors.
+    assert friendly_sensor_name("match_day") == "All matches"
+    assert friendly_sensor_name("standings") == "Standings"
+    assert friendly_sensor_name("all_matches_today") == "All matches today"
+
+
+def test_friendly_sensor_name_falls_back_to_title_case():
+    # Unknown types get a readable fallback rather than a raw slug.
+    assert friendly_sensor_name("some_new_type") == "Some New Type"
+    assert friendly_sensor_name(None) == "Soccer Live"

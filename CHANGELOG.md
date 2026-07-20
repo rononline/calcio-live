@@ -1,5 +1,12 @@
 # Changelog
 
+## v3.6.100 (2026-07-20)
+- entities: sensors now have short, human-readable names (**Next match**, **All matches**, **All competitions**, **Standings**, …) via `has_entity_name`, so the device (e.g. *Soccer Live · Feyenoord*) supplies the context. The verbose `entity_id` is pinned and unchanged, so existing dashboards and automations keep working
+- entities: the fixtures calendar is now named **Match calendar** and grouped under the same device as the entry's sensors (previously a standalone "Soccer Live <team>" entity); its `entity_id` is preserved
+- devices: a team entry's device now reads *Soccer Live · <team>* instead of the raw competition code
+- docs: added a "Which sensor do I need?" section (Team/Countdown/Match Center → `next_*`; Team Competitions & extended schedules → `all_mixed_*`; competition views → `all_*`) and a Quick start block
+- tests: added coverage for the friendly sensor-name mapping and its title-cased fallback
+
 ## v3.6.99 (2026-07-20)
 - config flow: split the single first step into a simpler wizard. Step 1 now only asks for the data source (ESPN — free, no API key — is the recommended default). API-Football key, season and friendlies are asked in a dedicated follow-up step, so ESPN users no longer see API-Football options that don't apply to them
 - config flow: "what to follow" is now its own step with **Team** as the default, and it only offers options the chosen provider supports — e.g. "News" is no longer selectable for API-Football (it was ESPN-only and previously failed only after submitting)

@@ -60,14 +60,24 @@ async def async_setup_entry(
 class SoccerLiveCalendar(CalendarEntity):
     """A calendar of the fixtures already known to this config entry's sensors."""
 
-    _attr_has_entity_name = False
+    _attr_has_entity_name = True
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         self.hass = hass
         self._entry = entry
         label = entry.data.get("team_name") or entry.data.get("competition_code") or "matches"
-        self._attr_name = f"Soccer Live {label}"
+        # Short entity name; the device (team/competition) supplies the context.
+        self._attr_name = "Match calendar"
         self._attr_unique_id = f"{entry.entry_id}_calendar"
+        # Keep the verbose entity_id stable now that the display name is short.
+        slug = str(label).lower().replace(" ", "_").replace(".", "_")
+        self.entity_id = f"calendar.soccer_live_{slug}"
+        # Group under the same device as this entry's sensors.
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, entry.entry_id)},
+            "name": f"Soccer Live · {label}",
+            "entry_type": "service",
+        }
 
     def _source_matches(self):
         """Return the richest match list published by this entry's sensors.
