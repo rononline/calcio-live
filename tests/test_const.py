@@ -29,11 +29,27 @@ REQUIRED_SENSOR_NAME_KEYS = {
 # Languages the integration officially offers (kept in step with the cards).
 SUPPORTED_LANGUAGES = ("en", "nl", "de", "fr", "es", "it", "pt")
 
+# Leaf keys allowed to be missing from a given non-English language (none for
+# now — every string is expected to be translated in every language).
+ALLOWED_MISSING = {}
+
+_COMPONENT = ROOT / "custom_components" / "soccer_live"
+
 
 def _load_translation(lang):
-    path = ROOT / "custom_components" / "soccer_live" / "translations" / f"{lang}.json"
-    with open(path, encoding="utf-8") as handle:
+    with open(_COMPONENT / "translations" / f"{lang}.json", encoding="utf-8") as handle:
         return json.load(handle)
+
+
+def _leaf_keys(data, prefix=""):
+    """Set of dotted paths to every string value (the translatable leaves)."""
+    keys = set()
+    if isinstance(data, dict):
+        for key, value in data.items():
+            keys |= _leaf_keys(value, f"{prefix}.{key}" if prefix else key)
+    else:
+        keys.add(prefix)
+    return keys
 
 
 def test_espn_capabilities():
@@ -136,3 +152,23 @@ def test_entity_name_keys_are_consistent_across_languages():
     assert REQUIRED_SENSOR_NAME_KEYS <= english
     for lang in SUPPORTED_LANGUAGES:
         assert set(_load_translation(lang)["entity"]["sensor"]) == english, lang
+
+
+def test_strings_json_matches_english_translation():
+    # Home Assistant treats strings.json as the canonical English source; keep it
+    # in lockstep with translations/en.json so the two can't drift.
+    with open(_COMPONENT / "strings.json", encoding="utf-8") as handle:
+        strings = json.load(handle)
+    assert strings == _load_translation("en")
+
+
+def test_all_languages_have_full_key_parity():
+    # No language may silently lag behind English on any string (config-flow
+    # steps, errors, aborts, options and entity names all included).
+    english = _leaf_keys(_load_translation("en"))
+    for lang in SUPPORTED_LANGUAGES:
+        keys = _leaf_keys(_load_translation(lang))
+        missing = english - keys - set(ALLOWED_MISSING.get(lang, ()))
+        extra = keys - english
+        assert not missing, f"{lang} missing keys: {sorted(missing)}"
+        assert not extra, f"{lang} has unexpected keys: {sorted(extra)}"

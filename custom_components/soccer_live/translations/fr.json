@@ -24,6 +24,13 @@
           "selection": "Que souhaitez-vous suivre ?"
         }
       },
+      "reauth_confirm": {
+        "title": "Ressaisir la clé API-Football",
+        "description": "La clé API-Football pour **{name}** n'est plus valide (elle a peut-être expiré ou été révoquée). Saisissez une nouvelle clé pour restaurer les données — votre sélection d'équipe/championnat est conservée.",
+        "data": {
+          "api_football_key": "Clé API API-Football"
+        }
+      },
       "news_competition": {
         "title": "Actualités · choix de la compétition",
         "description": "Sélectionnez la compétition dont vous souhaitez recevoir les actualités.",
@@ -98,6 +105,7 @@
       "invalid_api_key": "Clé API-Football invalide. Veuillez vérifier votre clé et réessayer."
     },
     "abort": {
+      "reauth_successful": "La clé API-Football a été mise à jour.",
       "no_competitions": "Impossible de charger la liste des compétitions. Vérifiez votre connexion internet et réessayez.",
       "no_teams": "Impossible de charger la liste des équipes pour cette compétition. Vérifiez votre connexion internet et réessayez."
     }
@@ -122,6 +130,7 @@
           "enable_live_odds": "Récupérer les cotes en direct pendant le match (API-Football; interroge souvent)",
           "include_friendlies": "Inclure les matchs amicaux",
           "api_football_season": "Saison API-Football (0 = automatique)",
+          "change_api_football_key": "Modifier la clé API-Football (laisser vide pour conserver l'actuelle)",
           "max_matches": "Max matchs dans les attributs (0 = illimité)",
           "notify_service": "Service de notification (ex. notify.mobile_app)"
         }

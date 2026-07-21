@@ -105,7 +105,9 @@
       "invalid_api_key": "Chave da API-Football inválida. Verifique a chave e tente novamente."
     },
     "abort": {
-      "reauth_successful": "A chave da API-Football foi atualizada."
+      "reauth_successful": "A chave da API-Football foi atualizada.",
+      "no_competitions": "Não foi possível carregar a lista de competições. Verifique a sua ligação à Internet e tente novamente.",
+      "no_teams": "Não foi possível carregar a lista de equipas para esta competição. Verifique a sua ligação à Internet e tente novamente."
     }
   },
   "options": {
@@ -142,10 +144,6 @@
       "search_too_short": "Introduza pelo menos três carateres.",
       "no_search_results": "Nenhuma equipa encontrada para esta pesquisa.",
       "invalid_api_key": "Chave da API-Football inválida. Verifique a chave e tente novamente."
-    },
-    "abort": {
-      "no_competitions": "Não foi possível carregar a lista de competições. Verifique a sua ligação à Internet e tente novamente.",
-      "no_teams": "Não foi possível carregar a lista de equipas para esta competição. Verifique a sua ligação à Internet e tente novamente."
     }
   },
   "entity": {

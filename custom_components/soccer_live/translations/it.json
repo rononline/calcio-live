@@ -24,6 +24,13 @@
           "selection": "Cosa vuoi monitorare?"
         }
       },
+      "reauth_confirm": {
+        "title": "Reinserire la chiave API-Football",
+        "description": "La chiave API-Football per **{name}** non è più valida (potrebbe essere scaduta o revocata). Inserisci una nuova chiave per ripristinare i dati — la tua selezione di squadra/campionato viene mantenuta.",
+        "data": {
+          "api_football_key": "Chiave API API-Football"
+        }
+      },
       "news_competition": {
         "title": "Notizie · scelta competizione",
         "description": "Seleziona la competizione da cui ricevere le notizie.",
@@ -98,6 +105,7 @@
       "invalid_api_key": "Chiave API-Football non valida. Controlla la chiave e riprova."
     },
     "abort": {
+      "reauth_successful": "La chiave API-Football è stata aggiornata.",
       "no_competitions": "Impossibile caricare l'elenco delle competizioni. Controllare la connessione Internet e riprovare.",
       "no_teams": "Impossibile caricare l'elenco delle squadre per questa competizione. Controllare la connessione Internet e riprovare."
     }
@@ -122,6 +130,7 @@
           "enable_live_odds": "Recupera quote live durante la partita (API-Football; interroga spesso)",
           "include_friendlies": "Includi amichevoli",
           "api_football_season": "Stagione API-Football (0 = automatico)",
+          "change_api_football_key": "Cambia la chiave API-Football (lascia vuoto per mantenere quella attuale)",
           "max_matches": "Max partite negli attributi (0 = illimitato)",
           "notify_service": "Servizio notifiche (es. notify.mobile_app)"
         }

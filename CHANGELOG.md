@@ -1,5 +1,10 @@
 # Changelog
 
+## v3.6.107 (2026-07-21)
+- config flow: fixed the "could not load competitions/teams" abort messages being placed under `options.abort` (where Home Assistant never looks them up) in English, Dutch and Portuguese — they are raised in the config flow, so they now live under `config.abort` in every language. German/French/Spanish/Italian already had them there but were missing the reauth step, the reauth-success message and the "change API key" option label; all are now filled in
+- translations: added `strings.json` (the canonical English source Home Assistant expects) mirroring `translations/en.json`
+- tests: added a `strings.json` == `en.json` check and a full language-parity test that compares every leaf key of English against nl/de/fr/es/it/pt, so no language can silently lag behind on any string (with an explicit allow-list for intentional exceptions, currently empty)
+
 ## v3.6.106 (2026-07-21)
 - entity names: added the localised sensor/calendar names for German, French, Spanish and Italian (previously only English and Dutch had them, so those languages fell back to English)
 - translations: added a full Portuguese (`pt`) translation, so the integration now offers the same languages as the cards (en, nl, de, fr, es, it, pt)
