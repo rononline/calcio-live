@@ -1,0 +1,10 @@
+# Optional: dependencies for the real Home Assistant integration test
+# (tests/test_ha_config_flow.py), which uses the official HA test helpers.
+#
+# This pulls in Home Assistant itself and is therefore much heavier/slower than
+# the lightweight stub-based suite, so it lives in its own file and CI job.
+#   pip install -r requirements-test.txt -r requirements-ha-test.txt
+#   pytest tests/test_ha_config_flow.py
+#
+# Pin the plugin version to one matching the Home Assistant version you target.
+pytest-homeassistant-custom-component>=0.13

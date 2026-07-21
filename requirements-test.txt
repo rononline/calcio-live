@@ -1,0 +1,10 @@
+# Test / development dependencies for the Soccer Live integration.
+# Reproducible local + CI test runs:  pip install -r requirements-test.txt
+#
+# Keep this lightweight — the unit/parser/config-flow tests use small Home
+# Assistant stubs (no real HA needed), so they stay fast. The optional real
+# Home Assistant integration test has its own heavier file:
+#   pip install -r requirements-ha-test.txt
+pytest>=8.0
+python-dateutil>=2.8.2   # runtime dependency, also imported directly by tests
+PyYAML>=6.0              # scripts/validate_blueprints.py
