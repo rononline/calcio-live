@@ -1,5 +1,8 @@
 # Changelog
 
+## v3.6.104 (2026-07-21)
+- calendar: fixed slow state updates ("Updating state for calendar.… took N seconds") that could block the event loop. The parsed/sorted events are now cached between refreshes and only rebuilt when the underlying match list actually changes (both `event` and `async_get_events` reuse the cache), and kickoff times are parsed with the fast stdlib ISO path instead of the slower dateutil fallback
+
 ## v3.6.103 (2026-07-21)
 - card contract: sensors now publish `integration_version`, `data_schema_version` and `recommended_card_types` (the card `card_type` slugs that suit each sensor type), so the card can recommend the right card for a selected entity and warn when the integration is outdated. Read from the manifest at import (no hardcoded version). Pure `recommended_card_types` helper with tests
 

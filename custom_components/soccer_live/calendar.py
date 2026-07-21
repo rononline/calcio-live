@@ -19,13 +19,25 @@ from .const import DOMAIN
 MATCH_DURATION = timedelta(hours=2)
 
 
+def _parse_start(raw):
+    """Parse an ISO kickoff string. Uses the fast stdlib ``fromisoformat`` path
+    (handling a trailing ``Z``) and only falls back to the slower
+    ``dt_util.parse_datetime`` for unusual formats — parsing hundreds of matches
+    on every calendar refresh was blocking the event loop."""
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw[:-1] + "+00:00" if raw.endswith("Z") else raw)
+    except (ValueError, TypeError):
+        return dt_util.parse_datetime(raw)
+
+
 def match_to_event(match):
     """Build a CalendarEvent from a Soccer Live match dict, or None if it has no
     parseable kickoff time."""
     if not isinstance(match, dict):
         return None
-    raw = match.get("date_iso")
-    start = dt_util.parse_datetime(raw) if raw else None
+    start = _parse_start(match.get("date_iso"))
     if start is None:
         return None
     if start.tzinfo is None:
@@ -78,6 +90,11 @@ class SoccerLiveCalendar(CalendarEntity):
             "name": f"Soccer Live · {label}",
             "entry_type": "service",
         }
+        # Cache the parsed/sorted events between refreshes; the calendar is
+        # polled and both `event` and `async_get_events` read them, so without
+        # this the whole match list is re-parsed on every access.
+        self._events_cache = None
+        self._events_sig = None
 
     def _source_matches(self):
         """Return the richest match list published by this entry's sensors.
@@ -108,9 +125,25 @@ class SoccerLiveCalendar(CalendarEntity):
                 best = matches
         return best
 
+    @staticmethod
+    def _signature(matches):
+        """Cheap fingerprint of the source list so events are only re-parsed
+        when the matches actually change (length or first/last kickoff)."""
+        if not matches:
+            return "0"
+        first = matches[0].get("date_iso") if isinstance(matches[0], dict) else None
+        last = matches[-1].get("date_iso") if isinstance(matches[-1], dict) else None
+        return f"{len(matches)}|{first}|{last}"
+
     def _events(self):
-        events = [e for e in (match_to_event(m) for m in self._source_matches()) if e is not None]
+        matches = self._source_matches()
+        sig = self._signature(matches)
+        if sig == self._events_sig and self._events_cache is not None:
+            return self._events_cache
+        events = [e for e in (match_to_event(m) for m in matches) if e is not None]
         events.sort(key=lambda e: e.start)
+        self._events_cache = events
+        self._events_sig = sig
         return events
 
     @property

@@ -150,3 +150,26 @@ def test_calendar_get_events_filters_by_range():
 def test_calendar_empty_store_returns_no_matches():
     cal = _calendar({})
     assert cal._source_matches() == []
+
+
+def test_match_to_event_parses_zulu_suffix():
+    # The fast ISO path must handle a trailing "Z" (UTC) without the slow fallback.
+    ev = match_to_event({
+        "date_iso": "2026-07-17T11:30:00Z",
+        "home_team": "A", "away_team": "B", "state": "pre",
+    })
+    assert ev.start == _dt.datetime(2026, 7, 17, 11, 30, tzinfo=_dt.timezone.utc)
+
+
+def test_calendar_caches_events_until_source_changes():
+    matches = [{"date_iso": "2027-07-17T11:30:00+00:00", "home_team": "A", "away_team": "B", "state": "pre"}]
+    store = {"s1": matches}
+    cal = _calendar(store)
+    first = cal._events()
+    # Unchanged source -> cached list returned as-is (no re-parse on every poll).
+    assert cal._events() is first
+    # A changed source (longer list) invalidates the cache and re-parses.
+    store["s1"] = matches + [{"date_iso": "2027-07-20T11:30:00+00:00", "home_team": "C", "away_team": "D", "state": "pre"}]
+    second = cal._events()
+    assert second is not first
+    assert len(second) == 2
