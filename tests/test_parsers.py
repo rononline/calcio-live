@@ -657,6 +657,17 @@ class TestApiFootballParser:
         listed = api_football_extract_error({"errors": ["Bad request"], "response": []})
         assert listed == "Bad request"
 
+    def test_is_auth_error_detects_token_errors_only(self):
+        is_auth_error = _api_football.is_auth_error
+        # A token error means the key is missing/invalid -> reauth.
+        assert is_auth_error({"errors": {"token": "Invalid application key."}}) is True
+        # Quota / parameter errors are not auth failures.
+        assert is_auth_error({"errors": {"requests": "limit reached"}}) is False
+        assert is_auth_error({"errors": {}}) is False
+        assert is_auth_error({"errors": ["Bad request"]}) is False
+        assert is_auth_error({"response": []}) is False
+        assert is_auth_error(None) is False
+
     def test_scored_penalty_keeps_goal_token_and_missed_does_not(self):
         events = {"response": [
             {

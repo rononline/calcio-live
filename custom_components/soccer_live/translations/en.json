@@ -24,6 +24,13 @@
           "selection": "What do you want to monitor?"
         }
       },
+      "reauth_confirm": {
+        "title": "Re-enter API-Football key",
+        "description": "The API-Football key for **{name}** is no longer valid (it may have expired or been revoked). Enter a new key to restore the data — your team/league selection is kept.",
+        "data": {
+          "api_football_key": "API-Football API key"
+        }
+      },
       "news_competition": {
         "title": "News competition",
         "description": "Select the competition you want to receive news for.",
@@ -96,6 +103,9 @@
       "search_too_short": "Enter at least three characters.",
       "no_search_results": "No teams found for this search.",
       "invalid_api_key": "Invalid API-Football key. Please check your key and try again."
+    },
+    "abort": {
+      "reauth_successful": "The API-Football key was updated."
     }
   },
   "options": {
@@ -118,6 +128,7 @@
           "enable_live_odds": "Fetch live in-play odds during a match (API-Football; polls often)",
           "include_friendlies": "Include friendlies",
           "api_football_season": "API-Football season (0 = auto)",
+          "change_api_football_key": "Change API-Football key (leave blank to keep current)",
           "max_matches": "Max matches in attributes (0 = unlimited)",
           "notify_service": "Notification service (e.g. notify.mobile_app)"
         }

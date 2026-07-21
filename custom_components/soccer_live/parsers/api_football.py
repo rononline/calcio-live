@@ -78,6 +78,20 @@ def extract_error(data):
     return str(errors)
 
 
+def is_auth_error(data):
+    """Whether an API-Football 200 body signals an authentication problem.
+
+    A missing/invalid/revoked key is reported as a ``token`` entry in the
+    top-level ``errors`` dict (HTTP stays 200). This lets callers tell an auth
+    failure (needs a new key → reauth) apart from a quota or parameter error."""
+    if not isinstance(data, dict):
+        return False
+    errors = data.get("errors")
+    if isinstance(errors, dict):
+        return bool(errors.get("token"))
+    return False
+
+
 def _status_state(status_short):
     short = (status_short or "").upper()
     if short in {"NS", "TBD", "PST", "CANC", "ABD", "AWD", "WO"}:

@@ -1,5 +1,11 @@
 # Changelog
 
+## v3.6.101 (2026-07-21)
+- API-Football key recovery: when the key is rejected (HTTP 401/403 or an `errors.token` body), the integration now starts a **reauth flow** so you can enter a new key without deleting the config. Home Assistant shows its standard reauth prompt (a repair/notification), and the key/team selection is preserved
+- API-Football key recovery: added a **"Change API-Football key"** field in the integration options (validated on save) to replace an expired/revoked key at any time
+- status: sensors now report a specific `api_status: authentication_failed` and a clear `last_error` ("API-Football API key is invalid") on an auth failure, instead of just returning empty data. The reauth flow is started once per entry (not on every poll) and cleared on the next successful update
+- tests: added coverage for reauth (valid/invalid key), the options key change (valid/invalid, hidden for ESPN), and an `is_auth_error` parser helper that distinguishes a token error from a quota/parameter error
+
 ## v3.6.100 (2026-07-20)
 - entities: sensors now have short, human-readable names (**Next match**, **All matches**, **All competitions**, **Standings**, …) via `has_entity_name`, so the device (e.g. *Soccer Live · Feyenoord*) supplies the context. The verbose `entity_id` is pinned and unchanged, so existing dashboards and automations keep working
 - entities: the fixtures calendar is now named **Match calendar** and grouped under the same device as the entry's sensors (previously a standalone "Soccer Live <team>" entity); its `entity_id` is preserved

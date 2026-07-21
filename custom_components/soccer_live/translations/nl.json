@@ -24,6 +24,13 @@
           "selection": "Wat wil je volgen?"
         }
       },
+      "reauth_confirm": {
+        "title": "API-Football-key opnieuw invoeren",
+        "description": "De API-Football-key voor **{name}** is niet meer geldig (verlopen of ingetrokken). Voer een nieuwe key in om de gegevens te herstellen — je team-/competitiekeuze blijft behouden.",
+        "data": {
+          "api_football_key": "API-Football API-key"
+        }
+      },
       "news_competition": {
         "title": "Nieuws · kies competitie",
         "description": "Selecteer de competitie waarvan je het nieuws wilt ontvangen.",
@@ -96,6 +103,9 @@
       "search_too_short": "Voer minimaal drie tekens in.",
       "no_search_results": "Geen teams gevonden voor deze zoekopdracht.",
       "invalid_api_key": "Ongeldige API-Football-key. Controleer je key en probeer opnieuw."
+    },
+    "abort": {
+      "reauth_successful": "De API-Football-key is bijgewerkt."
     }
   },
   "options": {
@@ -118,6 +128,7 @@
           "enable_live_odds": "Live in-play odds ophalen tijdens een wedstrijd (API-Football; polt vaak)",
           "include_friendlies": "Oefenwedstrijden meenemen",
           "api_football_season": "API-Football seizoen (0 = auto)",
+          "change_api_football_key": "API-Football-key wijzigen (leeg laten = huidige behouden)",
           "max_matches": "Max wedstrijden in attributen (0 = onbeperkt)",
           "notify_service": "Meldingsservice (bijv. notify.mobile_app)"
         }

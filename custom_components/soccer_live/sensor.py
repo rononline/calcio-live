@@ -252,6 +252,9 @@ class SoccerLiveSensor(Entity):
     # this time, doubling the wait on each consecutive 429 (reset on success).
     _af_enrich_pause_until = None
     _af_backoff = 0
+    # Config entries for which an API-Football reauth flow has been started, so
+    # a persistent bad key doesn't spawn a new flow on every poll.
+    _af_reauth_entries = set()
 
     def __init__(self, hass, name, code, sensor_type=None, scan_interval=timedelta(minutes=5),
                  team_name=None, config_entry_id=None, start_date=None, end_date=None, team_id=None,
@@ -325,6 +328,9 @@ class SoccerLiveSensor(Entity):
         self._store = None
         self._summary_cache = {}
         self._scorers_unavailable = False
+        # Set when API-Football rejects the key (HTTP 401/403 or an errors.token
+        # body); surfaces a clear status and triggers a reauth flow.
+        self._auth_failed = False
 
         # Events collected during executor-thread processing, fired on event loop
         self._pending_events: list = []
@@ -438,7 +444,7 @@ class SoccerLiveSensor(Entity):
             "last_request_time": self._last_request_time,
             "last_successful_update": self._last_successful_update,
             "last_error": self._last_error,
-            "api_status": "error" if self._last_error else "ok",
+            "api_status": "authentication_failed" if self._auth_failed else ("error" if self._last_error else "ok"),
             "provider": self._provider,
             "provider_capabilities": list(PROVIDER_CAPABILITIES.get(self._provider, ())),
             "api_football_season": self._api_football_season,
@@ -567,6 +573,9 @@ class SoccerLiveSensor(Entity):
                                 _LOGGER.error(f"Invalid JSON for {self._name}: {json_err}")
                                 break
                             _LOGGER.debug(f"Data received for {self._name}")
+                            if self._api_football_body_is_auth_error(data):
+                                self._handle_auth_failure()
+                                break
                             af_error = self._api_football_error(data)
                             if af_error:
                                 self._last_error = f"API-Football: {af_error}"
@@ -585,6 +594,7 @@ class SoccerLiveSensor(Entity):
                                 await self._refresh_api_football_status()
                                 self._last_successful_update = datetime.now().isoformat()
                                 self._last_error = None
+                                self._clear_auth_failure()
                             self._schedule_live_refresh()
                             self._request_count += 1
                             self._last_request_time = datetime.now().isoformat()
@@ -593,7 +603,10 @@ class SoccerLiveSensor(Entity):
                         elif response.status < 500:
                             # 4xx: endpoint does not exist or access denied — do not retry
                             _LOGGER.debug(f"HTTP {response.status} for {self._name} — no retry")
-                            if self._sensor_type == "top_scorers" and response.status == 404:
+                            if self._provider == PROVIDER_API_FOOTBALL and response.status in (401, 403):
+                                # Rejected credentials — surface a clear status and reauth.
+                                self._handle_auth_failure()
+                            elif self._sensor_type == "top_scorers" and response.status == 404:
                                 self._state = "Not available"
                                 self._scorers_unavailable = True
                                 _LOGGER.info(f"Top scorers not available for {self._code} ({self._provider_label} endpoint returned 404 — not supported for all competitions)")
@@ -1545,6 +1558,38 @@ class SoccerLiveSensor(Entity):
             return None
         from .parsers.api_football import extract_error
         return extract_error(data)
+
+    def _api_football_body_is_auth_error(self, data):
+        if self._provider != PROVIDER_API_FOOTBALL:
+            return False
+        from .parsers.api_football import is_auth_error
+        return is_auth_error(data)
+
+    def _handle_auth_failure(self):
+        """Flag an API-Football authentication failure: set a clear status and
+        start a reauth flow (once per entry) so the user can supply a new key
+        without deleting the config."""
+        self._auth_failed = True
+        self._last_error = "API-Football API key is invalid"
+        self._state = "Authentication failed"
+        entry_id = self._config_entry_id
+        if not entry_id or entry_id in SoccerLiveSensor._af_reauth_entries:
+            return
+        entry = self.hass.config_entries.async_get_entry(entry_id)
+        if not entry:
+            return
+        SoccerLiveSensor._af_reauth_entries.add(entry_id)
+        _LOGGER.warning(
+            "API-Football rejected the API key for %s — starting reauth", self._name
+        )
+        entry.async_start_reauth(self.hass)
+
+    def _clear_auth_failure(self):
+        """Reset the auth-failure marker after a successful request, so a later
+        key change is picked up cleanly."""
+        if self._auth_failed:
+            self._auth_failed = False
+        SoccerLiveSensor._af_reauth_entries.discard(self._config_entry_id)
 
     async def _refresh_api_football_status(self):
         if self._provider != PROVIDER_API_FOOTBALL or not self._api_football_key:

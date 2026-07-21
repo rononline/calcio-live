@@ -87,7 +87,10 @@ Configure via **Settings → Devices & Services → Soccer Live → Configure**:
 | `enable_summary_enrichment` | `true` | Fetch extra match details. ESPN uses the summary endpoint; API-Football uses fixture events, statistics and lineups. Disable to reduce API calls. |
 | `include_friendlies` | `true` | Include friendlies when using API-Football fixture data. |
 | `api_football_season` | `0` (auto) | API-Football season to query. For standings/top scorers, auto mode uses the previous season before August. |
+| `change_api_football_key` | — | *(API-Football only)* Paste a new key here to replace an expired/revoked one; leave blank to keep the current key. The value is validated on save. |
 | `max_matches` | `0` (unlimited) | Limit the number of matches stored per sensor (5 / 10 / 15 / 20 / 30). Useful to reduce state size on large sensors. |
+
+> **API key expired or revoked?** When API-Football rejects the key, the sensors report `api_status: authentication_failed` and Home Assistant automatically prompts you to re-enter it (a repair/notification appears — no need to delete the integration). You can also change it any time via the option above.
 
 ---
 

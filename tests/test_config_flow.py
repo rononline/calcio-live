@@ -58,6 +58,11 @@ def _load_config_flow_module():
         def async_create_entry(self, **kwargs):
             return {"type": "create_entry", **kwargs}
 
+        def async_update_reload_and_abort(self, entry, data=None, **kwargs):
+            if data is not None:
+                entry.data = data
+            return {"type": "abort", "reason": "reauth_successful", "data": data}
+
     class _OptionsFlow:
         def async_show_form(self, **kwargs):
             return {"type": "form", **kwargs}
@@ -310,3 +315,111 @@ def test_options_flow_exposes_shared_card_defaults():
     # Also present for ESPN (card defaults are provider-independent).
     espn = _options_schema(_config_flow_mod.PROVIDER_ESPN)
     assert "card_palette" in espn
+
+
+# --- Item 4: reauth + change API key ----------------------------------------
+
+async def _mod_valid(_hass, _key):
+    return True
+
+
+async def _mod_invalid(_hass, _key):
+    return False
+
+
+class _MutableEntry:
+    def __init__(self, data):
+        self.data = dict(data)
+        self.options = {}
+        self.title = "Soccer Live · Test"
+
+
+class _FakeConfigEntries:
+    def async_update_entry(self, entry, data=None, **kwargs):
+        if data is not None:
+            entry.data = data
+
+
+class _FakeHass:
+    def __init__(self):
+        self.config_entries = _FakeConfigEntries()
+
+
+def _patch_validator(func):
+    """Swap the module-level validator (used by reauth/options), returning the
+    original so the caller can restore it."""
+    original = _config_flow_mod.async_validate_api_football_key
+    _config_flow_mod.async_validate_api_football_key = func
+    return original
+
+
+def test_reauth_valid_key_updates_entry_and_aborts():
+    flow = SoccerLiveConfigFlow()
+    flow.hass = _FakeHass()
+    entry = _MutableEntry({"provider": "api_football", "api_football_key": "old"})
+    flow._reauth_entry = entry
+    original = _patch_validator(_mod_valid)
+    try:
+        result = asyncio.run(flow.async_step_reauth_confirm({"api_football_key": "new-key"}))
+    finally:
+        _patch_validator(original)
+    assert result["type"] == "abort"
+    assert result["reason"] == "reauth_successful"
+    assert entry.data["api_football_key"] == "new-key"
+    # The rest of the config (provider, selection) is preserved.
+    assert entry.data["provider"] == "api_football"
+
+
+def test_reauth_invalid_key_stays_on_form():
+    flow = SoccerLiveConfigFlow()
+    flow.hass = _FakeHass()
+    entry = _MutableEntry({"provider": "api_football", "api_football_key": "old"})
+    flow._reauth_entry = entry
+    original = _patch_validator(_mod_invalid)
+    try:
+        result = asyncio.run(flow.async_step_reauth_confirm({"api_football_key": "still-bad"}))
+    finally:
+        _patch_validator(original)
+    assert result["type"] == "form"
+    assert result["step_id"] == "reauth_confirm"
+    assert flow._errors.get("api_football_key") == "invalid_api_key"
+    # Unchanged until a valid key is entered.
+    assert entry.data["api_football_key"] == "old"
+
+
+def test_options_change_api_key_updates_entry_data():
+    flow = _config_flow_mod.SoccerLiveOptionsFlow()
+    flow.config_entry = _MutableEntry({"provider": "api_football", "api_football_key": "old"})
+    flow.hass = _FakeHass()
+    original = _patch_validator(_mod_valid)
+    try:
+        result = asyncio.run(flow.async_step_init({
+            "change_api_football_key": "fresh-key", "start_date": "", "end_date": "",
+        }))
+    finally:
+        _patch_validator(original)
+    assert result["type"] == "create_entry"
+    assert flow.config_entry.data["api_football_key"] == "fresh-key"
+    # The key is not leaked into the options blob.
+    assert "change_api_football_key" not in result["data"]
+
+
+def test_options_change_api_key_rejects_invalid():
+    flow = _config_flow_mod.SoccerLiveOptionsFlow()
+    flow.config_entry = _MutableEntry({"provider": "api_football", "api_football_key": "old"})
+    flow.hass = _FakeHass()
+    original = _patch_validator(_mod_invalid)
+    try:
+        result = asyncio.run(flow.async_step_init({
+            "change_api_football_key": "bad", "start_date": "", "end_date": "",
+        }))
+    finally:
+        _patch_validator(original)
+    # Stays on the form with an error; the stored key is untouched.
+    assert result["type"] == "form"
+    assert flow.config_entry.data["api_football_key"] == "old"
+
+
+def test_options_change_api_key_field_hidden_for_espn():
+    assert "change_api_football_key" not in _options_schema(_config_flow_mod.PROVIDER_ESPN)
+    assert "change_api_football_key" in _options_schema(_config_flow_mod.PROVIDER_API_FOOTBALL)

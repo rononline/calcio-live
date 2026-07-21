@@ -38,6 +38,35 @@ def _normalize_provider(provider):
     return PROVIDER_ESPN
 
 
+async def async_validate_api_football_key(hass, api_key):
+    """Return True if API-Football accepts the key.
+
+    Rejects only on a clear invalid-credentials signal (HTTP 401/403 or an
+    ``errors.token`` in the body). On transient problems (timeout, 5xx, network
+    error) it returns True so a temporary outage cannot block setup or a key
+    change. Shared by initial setup, reauth and the options "change key" field.
+    """
+    try:
+        session = async_get_clientsession(hass)
+        async with session.get(
+            "https://v3.football.api-sports.io/status",
+            headers={"x-apisports-key": api_key},
+            timeout=aiohttp.ClientTimeout(total=10),
+        ) as response:
+            if response.status in (401, 403):
+                return False
+            if response.status != 200:
+                return True
+            data = await response.json()
+    except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+        _LOGGER.warning("Could not validate API-Football key (network issue): %s", repr(e))
+        return True
+    errors = data.get("errors") if isinstance(data, dict) else None
+    if isinstance(errors, dict) and errors.get("token"):
+        return False
+    return True
+
+
 @config_entries.HANDLERS.register(DOMAIN)
 class SoccerLiveConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
@@ -46,6 +75,7 @@ class SoccerLiveConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._errors = {}
         self._data = {}
         self._teams = []
+        self._reauth_entry = None
 
     async def async_step_user(self, user_input=None):
         """Step 1 — choose the data source only.
@@ -73,6 +103,40 @@ class SoccerLiveConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     PROVIDER_API_FOOTBALL: "API-Football — API key required (predictions, odds, injuries)",
                 }),
             }),
+            errors=self._errors,
+        )
+
+    async def async_step_reauth(self, entry_data):
+        """Start reauth (triggered when API-Football rejects the stored key)."""
+        self._reauth_entry = self.hass.config_entries.async_get_entry(
+            self.context["entry_id"]
+        )
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(self, user_input=None):
+        """Ask for a replacement API-Football key and update the entry in place,
+        so a expired/revoked key can be fixed without deleting the config."""
+        self._errors = {}
+        entry = self._reauth_entry
+
+        if user_input is not None:
+            api_key = (user_input.get(CONF_API_FOOTBALL_KEY) or "").strip()
+            if not api_key:
+                self._errors[CONF_API_FOOTBALL_KEY] = "api_key_required"
+            elif not await async_validate_api_football_key(self.hass, api_key):
+                self._errors[CONF_API_FOOTBALL_KEY] = "invalid_api_key"
+            if not self._errors:
+                return self.async_update_reload_and_abort(
+                    entry,
+                    data={**entry.data, CONF_API_FOOTBALL_KEY: api_key},
+                )
+
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=vol.Schema({
+                vol.Required(CONF_API_FOOTBALL_KEY): str,
+            }),
+            description_placeholders={"name": entry.title if entry else "Soccer Live"},
             errors=self._errors,
         )
 
@@ -368,31 +432,8 @@ class SoccerLiveConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self._teams = []
 
     async def _validate_api_football_key(self, api_key):
-        """Return True if API-Football accepts the key.
-
-        Rejects only on a clear invalid-credentials signal (HTTP 401/403 or an
-        ``errors.token`` in the body). On transient problems (timeout, 5xx,
-        network error) it returns True so a temporary outage cannot block setup.
-        """
-        try:
-            session = async_get_clientsession(self.hass)
-            async with session.get(
-                "https://v3.football.api-sports.io/status",
-                headers={"x-apisports-key": api_key},
-                timeout=aiohttp.ClientTimeout(total=10),
-            ) as response:
-                if response.status in (401, 403):
-                    return False
-                if response.status != 200:
-                    return True
-                data = await response.json()
-        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
-            _LOGGER.warning("Could not validate API-Football key (network issue): %s", repr(e))
-            return True
-        errors = data.get("errors") if isinstance(data, dict) else None
-        if isinstance(errors, dict) and errors.get("token"):
-            return False
-        return True
+        """Return True if API-Football accepts the key (see the module helper)."""
+        return await async_validate_api_football_key(self.hass, api_key)
 
     async def _get_api_football_json(self, path, params=None):
         api_key = self._data.get(CONF_API_FOOTBALL_KEY, "")
@@ -491,7 +532,22 @@ class SoccerLiveOptionsFlow(config_entries.OptionsFlow):
 
     async def async_step_init(self, user_input=None):
         errors = {}
+        is_api_football = _normalize_provider(
+            self.config_entry.data.get(CONF_PROVIDER, PROVIDER_ESPN)
+        ) == PROVIDER_API_FOOTBALL
         if user_input is not None:
+            # "Change API key": a non-empty value replaces the stored key (after
+            # validation); left blank it keeps the current one. Stored in the
+            # entry data — same place reauth writes — not in the options.
+            new_key = (user_input.pop("change_api_football_key", "") or "").strip()
+            if is_api_football and new_key:
+                if not await async_validate_api_football_key(self.hass, new_key):
+                    errors["change_api_football_key"] = "invalid_api_key"
+                elif new_key != self.config_entry.data.get(CONF_API_FOOTBALL_KEY):
+                    self.hass.config_entries.async_update_entry(
+                        self.config_entry,
+                        data={**self.config_entry.data, CONF_API_FOOTBALL_KEY: new_key},
+                    )
             start = (user_input.get("start_date") or "").strip()
             end = (user_input.get("end_date") or "").strip()
             start_dt = end_dt = None
@@ -562,6 +618,10 @@ class SoccerLiveOptionsFlow(config_entries.OptionsFlow):
             vol.Optional(CONF_API_FOOTBALL_SEASON, default=api_football_season): vol.Coerce(int),
             vol.Optional("max_matches", default=max_matches): vol.In([0, 5, 10, 15, 20, 30]),
         })
+        # Replace an expired/revoked API-Football key without deleting the entry.
+        # Blank = keep the current key; the entered value is validated on save.
+        if is_api_football:
+            schema[vol.Optional("change_api_football_key", default="")] = str
 
         # Shared card presentation defaults, published to the sensor so multiple
         # cards on this sensor can inherit one look instead of being set per card.
