@@ -53,31 +53,11 @@ def provider_supports(provider, capability):
     """Whether the given provider supports a capability."""
     return capability in PROVIDER_CAPABILITIES.get(provider, ())
 
-
-# Short, human-readable entity names per sensor type. Used with
-# `has_entity_name`, so the device (team or competition) supplies the context
-# and these can stay concise. The verbose entity_id (e.g.
-# `sensor.soccerlive_next_eredivisie_feyenoord`) is preserved separately.
-SENSOR_TYPE_NAMES = {
-    "team_match": "Next match",
-    "team_matches": "All matches",
-    "team_matches_mixed": "All competitions",
-    "match_day": "All matches",
-    "standings": "Standings",
-    "top_scorers": "Top scorers",
-    "bracket": "Knockout bracket",
-    "all_matches_today": "All matches today",
-    "news": "News",
-    "commentary": "Live commentary",
-}
-
-
-def friendly_sensor_name(sensor_type):
-    """Human-readable entity name for a sensor type, falling back to a
-    title-cased version of the raw type for anything not in the table."""
-    if sensor_type in SENSOR_TYPE_NAMES:
-        return SENSOR_TYPE_NAMES[sensor_type]
-    return (sensor_type or "Soccer Live").replace("_", " ").title()
+# Entity display names live in the translation files (translations/<lang>.json
+# under entity.sensor.<sensor_type>.name), applied via each sensor's
+# translation_key. That keeps the English translation the single source of
+# truth — see tests/test_const.py, which asserts every sensor type has a name in
+# every supported language.
 
 
 # Card types (matching the Soccer Live Card `card_type` slugs) that work best

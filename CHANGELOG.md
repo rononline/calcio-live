@@ -1,5 +1,10 @@
 # Changelog
 
+## v3.6.106 (2026-07-21)
+- entity names: added the localised sensor/calendar names for German, French, Spanish and Italian (previously only English and Dutch had them, so those languages fell back to English)
+- translations: added a full Portuguese (`pt`) translation, so the integration now offers the same languages as the cards (en, nl, de, fr, es, it, pt)
+- cleanup: removed the now-unused `SENSOR_TYPE_NAMES` / `friendly_sensor_name()` from `const.py`. The translation files are the single source of truth for entity names; the tests now assert every supported language provides a name for every sensor type and the calendar (and that the key sets match)
+
 ## v3.6.105 (2026-07-21)
 - calendar: the events cache now fingerprints each match's kickoff, live state and score (not just the list length and first/last time), so a match going pre → in → post or a score update refreshes the calendar entry instead of showing a stale "Team - Team" without the score
 - options: changing the API-Football key is now atomic — the key is only written once every field validates, so an invalid date (or other error) in the same submit no longer leaves the key already changed while the form reports failure

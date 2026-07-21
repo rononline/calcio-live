@@ -136,5 +136,44 @@
       "no_search_results": "Nessuna squadra trovata per questa ricerca.",
       "invalid_api_key": "Chiave API-Football non valida. Controlla la chiave e riprova."
     }
+  },
+  "entity": {
+    "sensor": {
+      "team_match": {
+        "name": "Prossima partita"
+      },
+      "team_matches": {
+        "name": "Tutte le partite"
+      },
+      "team_matches_mixed": {
+        "name": "Tutte le competizioni"
+      },
+      "match_day": {
+        "name": "Tutte le partite"
+      },
+      "standings": {
+        "name": "Classifica"
+      },
+      "top_scorers": {
+        "name": "Marcatori"
+      },
+      "bracket": {
+        "name": "Tabellone"
+      },
+      "all_matches_today": {
+        "name": "Tutte le partite di oggi"
+      },
+      "news": {
+        "name": "Notizie"
+      },
+      "commentary": {
+        "name": "Commento in diretta"
+      }
+    },
+    "calendar": {
+      "match_calendar": {
+        "name": "Calendario partite"
+      }
+    }
   }
 }

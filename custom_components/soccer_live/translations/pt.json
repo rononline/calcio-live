@@ -1,0 +1,190 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configuração do Soccer Live",
+        "description": "Bem-vindo ao assistente de configuração do Soccer Live.\n\nPrimeiro, escolha a sua fonte de dados:\n\n- **ESPN** — grátis, sem chave de API. Recomendado para a maioria dos utilizadores. Fornece jogos, resultados, classificações, marcadores e notícias.\n- **API-Football** — requer uma chave de API gratuita ou paga. Adiciona previsões, odds, lesões, expected goals e dados do clube.\n\nNo passo seguinte, escolhe o que pretende seguir (equipa, liga, …).",
+        "data": {
+          "provider": "Fonte de dados"
+        }
+      },
+      "api_football_credentials": {
+        "title": "Credenciais da API-Football",
+        "description": "Introduza a sua chave da API-Football. Pode obter uma gratuitamente em api-football.com (painel → conta).\n\nA chave é validada antes de continuar.",
+        "data": {
+          "api_football_key": "Chave de API da API-Football",
+          "api_football_season": "Época (0 = ano atual)",
+          "include_friendlies": "Incluir jogos amigáveis"
+        }
+      },
+      "follow": {
+        "title": "O que pretende seguir?",
+        "description": "Escolha o que esta configuração deve seguir:\n\n- **Equipa** — jogos de uma equipa específica (recomendado).\n- **Liga** — todos os jogos de uma liga específica (para competições a eliminar é criado automaticamente um sensor de quadro).\n- **Todos os jogos de hoje** — todos os jogos do mundo disputados hoje.\n- **Notícias** — feed de notícias de uma competição (apenas ESPN).\n- **Introdução manual** — introduza o ID da equipa manualmente.",
+        "data": {
+          "selection": "O que pretende monitorizar?"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Reintroduzir a chave da API-Football",
+        "description": "A chave da API-Football para **{name}** já não é válida (pode ter expirado ou sido revogada). Introduza uma nova chave para restaurar os dados — a sua seleção de equipa/liga é mantida.",
+        "data": {
+          "api_football_key": "Chave de API da API-Football"
+        }
+      },
+      "news_competition": {
+        "title": "Notícias — escolher competição",
+        "description": "Selecione a competição da qual pretende receber notícias.",
+        "data": {
+          "competition_code": "Competição"
+        }
+      },
+      "league": {
+        "title": "Selecionar a liga",
+        "description": "Escolha a liga que pretende seguir.\n\nSerão apresentados os jogos de todas as equipas da liga selecionada. Para competições a eliminar (Liga dos Campeões, Liga Europa, Taça de Portugal, etc.) o sensor de quadro é criado automaticamente.",
+        "data": {
+          "competition_code": "Competição"
+        }
+      },
+      "select_competition_for_team": {
+        "title": "Equipa — selecionar liga",
+        "description": "Selecione a liga em que joga a equipa que pretende seguir.\n\nNo passo seguinte escolhe a equipa a partir da lista.",
+        "data": {
+          "competition_code": "Competição"
+        }
+      },
+      "api_football_team_method": {
+        "title": "Seleção de equipa da API-Football",
+        "description": "Escolha como encontrar a equipa. A pesquisa por nome é normalmente mais rápida e mostra diretamente os IDs da API-Football.",
+        "data": {
+          "team_method": "Método de seleção de equipa"
+        }
+      },
+      "api_football_team_search": {
+        "title": "Pesquisar equipa da API-Football",
+        "description": "Introduza pelo menos três carateres do nome da equipa.",
+        "data": {
+          "team_search": "Pesquisar equipa"
+        }
+      },
+      "team": {
+        "title": "Selecionar a equipa",
+        "description": "Escolha a equipa que pretende seguir.\n\nApenas os jogos da equipa selecionada serão mostrados.",
+        "data": {
+          "team_name": "Equipa"
+        }
+      },
+      "manual_team": {
+        "title": "Introdução manual de equipa",
+        "description": "Introduza o ID da equipa manualmente.\n\n**Como encontrar o ID da equipa:** abra a página da equipa em espn.com — o ID é o número no URL: espn.com/soccer/team/_/id/**9723**/portland-timbers.\n\nTambém pode indicar um nome personalizado para a identificar facilmente.",
+        "data": {
+          "manual_team_id": "ID da equipa",
+          "name": "Nome personalizado (opcional)"
+        }
+      },
+      "dates": {
+        "title": "Período de monitorização",
+        "description": "Especifique o intervalo de datas a monitorizar.\n\n- **Data de início**: quando a monitorização começa.\n- **Data de fim**: quando a monitorização termina.\n\nFormato: **AAAA-MM-DD**.",
+        "data": {
+          "start_date": "Data de início (AAAA-MM-DD)",
+          "end_date": "Data de fim (AAAA-MM-DD)"
+        }
+      },
+      "commentary": {
+        "title": "Comentário ao vivo — selecionar competição",
+        "description": "Selecione a competição da qual pretende receber comentário ao vivo.",
+        "data": {
+          "competition_code": "Competição"
+        }
+      }
+    },
+    "error": {
+      "api_key_required": "A API-Football requer uma chave de API.",
+      "unsupported_provider_selection": "As notícias da API-Football ainda não são suportadas.",
+      "search_too_short": "Introduza pelo menos três carateres.",
+      "no_search_results": "Nenhuma equipa encontrada para esta pesquisa.",
+      "invalid_api_key": "Chave da API-Football inválida. Verifique a chave e tente novamente."
+    },
+    "abort": {
+      "reauth_successful": "A chave da API-Football foi atualizada."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opções do Soccer Live",
+        "description": "Ajuste o comportamento de atualização e durante quanto tempo o último jogo terminado permanece visível no cartão da equipa antes de mudar para o próximo jogo.",
+        "data": {
+          "scan_interval": "Intervalo de atualização (minutos)",
+          "live_scan_interval": "Intervalo de atualização ao vivo (segundos)",
+          "start_date": "Data de início (AAAA-MM-DD)",
+          "end_date": "Data de fim (AAAA-MM-DD)",
+          "recent_match_hours": "Manter o jogo terminado visível durante (horas)",
+          "enable_summary_enrichment": "Obter alinhamento, eventos-chave e H2H (enriquecimento)",
+          "card_appearance": "Aparência partilhada do cartão (escuro/claro/HA)",
+          "card_palette": "Paleta partilhada do cartão",
+          "card_compact": "Modo compacto partilhado para os cartões",
+          "card_language": "Idioma partilhado do cartão",
+          "enable_club_data": "Obter perfil do clube, treinador, plantel e transferências (API-Football)",
+          "enable_live_odds": "Obter odds ao vivo durante um jogo (API-Football; consulta frequentemente)",
+          "include_friendlies": "Incluir jogos amigáveis",
+          "api_football_season": "Época da API-Football (0 = automático)",
+          "change_api_football_key": "Alterar a chave da API-Football (deixe em branco para manter a atual)",
+          "max_matches": "Máximo de jogos nos atributos (0 = ilimitado)",
+          "notify_service": "Serviço de notificação (ex.: notify.mobile_app)"
+        }
+      }
+    },
+    "error": {
+      "invalid_date": "A data deve estar no formato AAAA-MM-DD (ex.: 2026-06-20).",
+      "end_before_start": "A data de fim deve ser igual ou posterior à data de início.",
+      "api_key_required": "A API-Football requer uma chave de API.",
+      "unsupported_provider_selection": "As notícias da API-Football ainda não são suportadas.",
+      "search_too_short": "Introduza pelo menos três carateres.",
+      "no_search_results": "Nenhuma equipa encontrada para esta pesquisa.",
+      "invalid_api_key": "Chave da API-Football inválida. Verifique a chave e tente novamente."
+    },
+    "abort": {
+      "no_competitions": "Não foi possível carregar a lista de competições. Verifique a sua ligação à Internet e tente novamente.",
+      "no_teams": "Não foi possível carregar a lista de equipas para esta competição. Verifique a sua ligação à Internet e tente novamente."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "team_match": {
+        "name": "Próximo jogo"
+      },
+      "team_matches": {
+        "name": "Todos os jogos"
+      },
+      "team_matches_mixed": {
+        "name": "Todas as competições"
+      },
+      "match_day": {
+        "name": "Todos os jogos"
+      },
+      "standings": {
+        "name": "Classificação"
+      },
+      "top_scorers": {
+        "name": "Melhores marcadores"
+      },
+      "bracket": {
+        "name": "Quadro eliminatório"
+      },
+      "all_matches_today": {
+        "name": "Todos os jogos de hoje"
+      },
+      "news": {
+        "name": "Notícias"
+      },
+      "commentary": {
+        "name": "Comentário ao vivo"
+      }
+    },
+    "calendar": {
+      "match_calendar": {
+        "name": "Calendário de jogos"
+      }
+    }
+  }
+}

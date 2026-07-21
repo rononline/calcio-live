@@ -136,5 +136,44 @@
       "no_search_results": "Keine Teams für diese Suche gefunden.",
       "invalid_api_key": "Ungültiger API-Football-Schlüssel. Bitte überprüfe deinen Schlüssel und versuche es erneut."
     }
+  },
+  "entity": {
+    "sensor": {
+      "team_match": {
+        "name": "Nächstes Spiel"
+      },
+      "team_matches": {
+        "name": "Alle Spiele"
+      },
+      "team_matches_mixed": {
+        "name": "Alle Wettbewerbe"
+      },
+      "match_day": {
+        "name": "Alle Spiele"
+      },
+      "standings": {
+        "name": "Tabelle"
+      },
+      "top_scorers": {
+        "name": "Torschützen"
+      },
+      "bracket": {
+        "name": "K.-o.-Runde"
+      },
+      "all_matches_today": {
+        "name": "Alle Spiele heute"
+      },
+      "news": {
+        "name": "News"
+      },
+      "commentary": {
+        "name": "Live-Kommentar"
+      }
+    },
+    "calendar": {
+      "match_calendar": {
+        "name": "Spielkalender"
+      }
+    }
   }
 }

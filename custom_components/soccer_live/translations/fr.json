@@ -136,5 +136,44 @@
       "no_search_results": "Aucune équipe trouvée pour cette recherche.",
       "invalid_api_key": "Clé API-Football invalide. Veuillez vérifier votre clé et réessayer."
     }
+  },
+  "entity": {
+    "sensor": {
+      "team_match": {
+        "name": "Prochain match"
+      },
+      "team_matches": {
+        "name": "Tous les matchs"
+      },
+      "team_matches_mixed": {
+        "name": "Toutes les compétitions"
+      },
+      "match_day": {
+        "name": "Tous les matchs"
+      },
+      "standings": {
+        "name": "Classement"
+      },
+      "top_scorers": {
+        "name": "Meilleurs buteurs"
+      },
+      "bracket": {
+        "name": "Tableau final"
+      },
+      "all_matches_today": {
+        "name": "Tous les matchs du jour"
+      },
+      "news": {
+        "name": "Actualités"
+      },
+      "commentary": {
+        "name": "Commentaire en direct"
+      }
+    },
+    "calendar": {
+      "match_calendar": {
+        "name": "Calendrier des matchs"
+      }
+    }
   }
 }

@@ -14,12 +14,20 @@ from custom_components.soccer_live.const import (  # noqa: E402
     PROVIDER_API_FOOTBALL,
     PROVIDER_CAPABILITIES,
     PROVIDER_ESPN,
-    SENSOR_TYPE_NAMES,
     compute_sync_status,
-    friendly_sensor_name,
     provider_supports,
     recommended_card_types,
 )
+
+# Every sensor type that gets a localised display name (via translation_key).
+# The translation files are the single source of truth for the names.
+REQUIRED_SENSOR_NAME_KEYS = {
+    "team_match", "team_matches", "team_matches_mixed", "match_day",
+    "standings", "top_scorers", "bracket", "all_matches_today", "news",
+    "commentary",
+}
+# Languages the integration officially offers (kept in step with the cards).
+SUPPORTED_LANGUAGES = ("en", "nl", "de", "fr", "es", "it", "pt")
 
 
 def _load_translation(lang):
@@ -59,23 +67,6 @@ def test_both_providers_share_the_core_capabilities():
 
 def test_unknown_provider_supports_nothing():
     assert provider_supports("nope", "fixtures") is False
-
-
-def test_friendly_sensor_names():
-    # The user-facing names for the three sensors a team config creates.
-    assert friendly_sensor_name("team_match") == "Next match"
-    assert friendly_sensor_name("team_matches") == "All matches"
-    assert friendly_sensor_name("team_matches_mixed") == "All competitions"
-    # Competition-scoped sensors.
-    assert friendly_sensor_name("match_day") == "All matches"
-    assert friendly_sensor_name("standings") == "Standings"
-    assert friendly_sensor_name("all_matches_today") == "All matches today"
-
-
-def test_friendly_sensor_name_falls_back_to_title_case():
-    # Unknown types get a readable fallback rather than a raw slug.
-    assert friendly_sensor_name("some_new_type") == "Some New Type"
-    assert friendly_sensor_name(None) == "Soccer Live"
 
 
 def test_compute_sync_status_first_load():
@@ -126,15 +117,22 @@ def test_integration_version_matches_manifest():
     assert isinstance(DATA_SCHEMA_VERSION, int) and DATA_SCHEMA_VERSION >= 1
 
 
-def test_entity_name_translations_present_and_consistent():
-    # Every sensor type has a localised name via translation_key; English must
-    # match the canonical friendly_sensor_name, and Dutch must cover the same
-    # keys so NL users see "Volgende wedstrijd" etc. (not the English fallback).
-    en = _load_translation("en")["entity"]["sensor"]
-    nl = _load_translation("nl")["entity"]["sensor"]
-    for sensor_type, english in SENSOR_TYPE_NAMES.items():
-        assert en[sensor_type]["name"] == english == friendly_sensor_name(sensor_type)
-        assert nl[sensor_type]["name"], f"nl missing name for {sensor_type}"
-    # The calendar entity is localised too.
-    assert _load_translation("en")["entity"]["calendar"]["match_calendar"]["name"] == "Match calendar"
-    assert _load_translation("nl")["entity"]["calendar"]["match_calendar"]["name"] == "Wedstrijdkalender"
+def test_entity_names_localised_in_every_supported_language():
+    # The translation files are the single source of truth for entity names.
+    # Each supported language must provide a non-empty name for every sensor
+    # type and the calendar, so no language silently falls back to English.
+    for lang in SUPPORTED_LANGUAGES:
+        entity = _load_translation(lang).get("entity", {})
+        sensors = entity.get("sensor", {})
+        for key in REQUIRED_SENSOR_NAME_KEYS:
+            assert sensors.get(key, {}).get("name"), f"{lang}: missing sensor name for {key}"
+        assert entity.get("calendar", {}).get("match_calendar", {}).get("name"), \
+            f"{lang}: missing calendar name"
+
+
+def test_entity_name_keys_are_consistent_across_languages():
+    # Every language exposes exactly the same set of sensor-name keys.
+    english = set(_load_translation("en")["entity"]["sensor"])
+    assert REQUIRED_SENSOR_NAME_KEYS <= english
+    for lang in SUPPORTED_LANGUAGES:
+        assert set(_load_translation(lang)["entity"]["sensor"]) == english, lang
