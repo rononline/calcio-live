@@ -6,5 +6,6 @@
 # Home Assistant integration test has its own heavier file:
 #   pip install -r requirements-ha-test.txt
 pytest>=8.0
+pytest-asyncio>=0.23     # for the pytest.ini asyncio_mode=auto config
 python-dateutil>=2.8.2   # runtime dependency, also imported directly by tests
 PyYAML>=6.0              # scripts/validate_blueprints.py
