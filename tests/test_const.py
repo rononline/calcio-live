@@ -10,6 +10,7 @@ from custom_components.soccer_live.const import (  # noqa: E402
     PROVIDER_API_FOOTBALL,
     PROVIDER_CAPABILITIES,
     PROVIDER_ESPN,
+    compute_sync_status,
     friendly_sensor_name,
     provider_supports,
 )
@@ -63,3 +64,31 @@ def test_friendly_sensor_name_falls_back_to_title_case():
     # Unknown types get a readable fallback rather than a raw slug.
     assert friendly_sensor_name("some_new_type") == "Some New Type"
     assert friendly_sensor_name(None) == "Soccer Live"
+
+
+def test_compute_sync_status_first_load():
+    # No data yet: idle vs actively fetching.
+    assert compute_sync_status(auth_failed=False, rate_limited=False,
+                               has_data=False, has_error=False) == "initializing"
+    assert compute_sync_status(auth_failed=False, rate_limited=False,
+                               has_data=False, has_error=False, fetching=True) == "fetching"
+    # Never fetched and erroring -> the provider is unreachable.
+    assert compute_sync_status(auth_failed=False, rate_limited=False,
+                               has_data=False, has_error=True) == "provider_unavailable"
+
+
+def test_compute_sync_status_ready_and_priorities():
+    # Data present -> ready.
+    assert compute_sync_status(auth_failed=False, rate_limited=False,
+                               has_data=True, has_error=False) == "ready"
+    # A transient error with existing data still reads ready (card shows cached data).
+    assert compute_sync_status(auth_failed=False, rate_limited=False,
+                               has_data=True, has_error=True) == "ready"
+    # Auth failure and rate limiting take precedence over everything else.
+    assert compute_sync_status(auth_failed=True, rate_limited=True,
+                               has_data=True, has_error=False) == "authentication_failed"
+    assert compute_sync_status(auth_failed=False, rate_limited=True,
+                               has_data=True, has_error=False) == "rate_limited"
+    # Rate limit is reported even before any data arrives.
+    assert compute_sync_status(auth_failed=False, rate_limited=True,
+                               has_data=False, has_error=True) == "rate_limited"

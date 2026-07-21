@@ -24,6 +24,7 @@ from .const import (
     PROVIDER_API_FOOTBALL,
     PROVIDER_CAPABILITIES,
     PROVIDER_ESPN,
+    compute_sync_status,
     friendly_sensor_name,
 )
 
@@ -331,6 +332,8 @@ class SoccerLiveSensor(Entity):
         # Set when API-Football rejects the key (HTTP 401/403 or an errors.token
         # body); surfaces a clear status and triggers a reauth flow.
         self._auth_failed = False
+        # True while a fetch is running (drives the "fetching" sync status).
+        self._sync_fetching = False
 
         # Events collected during executor-thread processing, fired on event loop
         self._pending_events: list = []
@@ -445,6 +448,7 @@ class SoccerLiveSensor(Entity):
             "last_successful_update": self._last_successful_update,
             "last_error": self._last_error,
             "api_status": "authentication_failed" if self._auth_failed else ("error" if self._last_error else "ok"),
+            "sync_status": self._sync_status(),
             "provider": self._provider,
             "provider_capabilities": list(PROVIDER_CAPABILITIES.get(self._provider, ())),
             "api_football_season": self._api_football_season,
@@ -493,6 +497,15 @@ class SoccerLiveSensor(Entity):
         return self._config_entry_id
 
     async def async_update(self):
+        # Mark an in-progress fetch so the `sync_status` attribute can report
+        # "fetching" during the first load; always cleared afterwards.
+        self._sync_fetching = True
+        try:
+            await self._async_update_impl()
+        finally:
+            self._sync_fetching = False
+
+    async def _async_update_impl(self):
         _LOGGER.info(f"Starting update for {self._name}")
 
         self._pending_events = []
@@ -1590,6 +1603,25 @@ class SoccerLiveSensor(Entity):
         if self._auth_failed:
             self._auth_failed = False
         SoccerLiveSensor._af_reauth_entries.discard(self._config_entry_id)
+
+    def _is_rate_limited(self):
+        """Whether the provider is currently rate/quota limiting us — an active
+        API-Football backoff pause, or a rate-limit message in the last error."""
+        if self._provider != PROVIDER_API_FOOTBALL:
+            return False
+        if self._af_enrichment_paused():
+            return True
+        return self._af_is_rate_limit_message(self._last_error or "")
+
+    def _sync_status(self):
+        """Lifecycle status for the card (see const.compute_sync_status)."""
+        return compute_sync_status(
+            auth_failed=self._auth_failed,
+            rate_limited=self._is_rate_limited(),
+            has_data=self._last_successful_update is not None,
+            has_error=bool(self._last_error),
+            fetching=self._sync_fetching,
+        )
 
     async def _refresh_api_football_status(self):
         if self._provider != PROVIDER_API_FOOTBALL or not self._api_football_key:

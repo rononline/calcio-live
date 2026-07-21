@@ -57,3 +57,35 @@ def friendly_sensor_name(sensor_type):
     if sensor_type in SENSOR_TYPE_NAMES:
         return SENSOR_TYPE_NAMES[sensor_type]
     return (sensor_type or "Soccer Live").replace("_", " ").title()
+
+
+# Lifecycle status published as the `sync_status` sensor attribute, so a card
+# can show concrete text (e.g. "fetching matches for the first time") instead of
+# an empty card that looks like a misconfiguration.
+SYNC_STATUSES = (
+    "initializing",          # entity created, no fetch has run yet
+    "fetching",              # a fetch is in progress and there is no data yet
+    "ready",                 # data has been fetched successfully
+    "rate_limited",          # provider is rate/quota limiting requests
+    "authentication_failed",  # provider rejected the API key (needs reauth)
+    "provider_unavailable",  # provider unreachable and no data was ever fetched
+)
+
+
+def compute_sync_status(*, auth_failed, rate_limited, has_data, has_error, fetching=False):
+    """Derive the lifecycle status from the sensor's flags.
+
+    Precedence: an auth failure and a rate limit are surfaced first (they need
+    user attention / explain missing data); otherwise, before the first
+    successful fetch we distinguish a fetch in progress ("fetching") and the
+    idle pre-fetch window ("initializing") from a provider that is unreachable
+    ("provider_unavailable"). Once data exists the status is "ready"."""
+    if auth_failed:
+        return "authentication_failed"
+    if rate_limited:
+        return "rate_limited"
+    if not has_data:
+        if has_error:
+            return "provider_unavailable"
+        return "fetching" if fetching else "initializing"
+    return "ready"

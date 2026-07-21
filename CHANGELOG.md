@@ -1,5 +1,9 @@
 # Changelog
 
+## v3.6.102 (2026-07-21)
+- status: each sensor now publishes a `sync_status` attribute with the lifecycle state — `initializing`, `fetching`, `ready`, `rate_limited`, `authentication_failed` or `provider_unavailable`. This lets a card show concrete text (e.g. "fetching matches for the first time") during the first update instead of an empty card that looks like a misconfiguration
+- status: the value is derived with clear precedence (auth failure and rate limiting first; then no-data states distinguishing a fetch in progress, an idle first-load window and an unreachable provider; otherwise `ready`). Pure `compute_sync_status` helper with unit tests
+
 ## v3.6.101 (2026-07-21)
 - API-Football key recovery: when the key is rejected (HTTP 401/403 or an `errors.token` body), the integration now starts a **reauth flow** so you can enter a new key without deleting the config. Home Assistant shows its standard reauth prompt (a repair/notification), and the key/team selection is preserved
 - API-Football key recovery: added a **"Change API-Football key"** field in the integration options (validated on save) to replace an expired/revoked key at any time

@@ -92,6 +92,8 @@ Configure via **Settings → Devices & Services → Soccer Live → Configure**:
 
 > **API key expired or revoked?** When API-Football rejects the key, the sensors report `api_status: authentication_failed` and Home Assistant automatically prompts you to re-enter it (a repair/notification appears — no need to delete the integration). You can also change it any time via the option above.
 
+> **Sync status.** Each sensor also publishes a `sync_status` attribute — `initializing`, `fetching`, `ready`, `rate_limited`, `authentication_failed` or `provider_unavailable` — so a card can show concrete text (e.g. "fetching matches for the first time") during the first update instead of an empty card that looks like a misconfiguration.
+
 ---
 
 ## 🌐 Data providers
