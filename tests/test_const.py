@@ -6,13 +6,18 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+import json  # noqa: E402
+
 from custom_components.soccer_live.const import (  # noqa: E402
+    DATA_SCHEMA_VERSION,
+    INTEGRATION_VERSION,
     PROVIDER_API_FOOTBALL,
     PROVIDER_CAPABILITIES,
     PROVIDER_ESPN,
     compute_sync_status,
     friendly_sensor_name,
     provider_supports,
+    recommended_card_types,
 )
 
 
@@ -92,3 +97,23 @@ def test_compute_sync_status_ready_and_priorities():
     # Rate limit is reported even before any data arrives.
     assert compute_sync_status(auth_failed=False, rate_limited=True,
                                has_data=False, has_error=True) == "rate_limited"
+
+
+def test_recommended_card_types():
+    assert recommended_card_types("team_match")[:3] == ["team", "countdown", "match-center"]
+    assert recommended_card_types("standings") == ["standings", "mini-standings"]
+    assert recommended_card_types("news") == ["news"]
+    # Unknown / calendar-like types have no recommendation.
+    assert recommended_card_types("unknown") == []
+    # Returns a fresh list each call (callers can mutate without side effects).
+    a = recommended_card_types("team_match")
+    a.append("x")
+    assert "x" not in recommended_card_types("team_match")
+
+
+def test_integration_version_matches_manifest():
+    path = ROOT / "custom_components" / "soccer_live" / "manifest.json"
+    with open(path, encoding="utf-8") as handle:
+        manifest_version = json.load(handle)["version"]
+    assert INTEGRATION_VERSION == manifest_version
+    assert isinstance(DATA_SCHEMA_VERSION, int) and DATA_SCHEMA_VERSION >= 1

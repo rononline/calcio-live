@@ -1,7 +1,28 @@
+import json
 import logging
+import os
+
 _LOGGER = logging.getLogger(__name__)
 
 DOMAIN = "soccer_live"
+
+
+def _read_manifest_version():
+    """Read the integration version from manifest.json once at import, so the
+    sensors can publish it as `integration_version` without hardcoding it."""
+    try:
+        path = os.path.join(os.path.dirname(__file__), "manifest.json")
+        with open(path, encoding="utf-8") as handle:
+            return json.load(handle).get("version", "unknown")
+    except Exception:  # pragma: no cover - defensive, never break setup
+        return "unknown"
+
+
+# Published to cards so they can recommend card types, warn on an old
+# integration, and detect breaking attribute-shape changes.
+INTEGRATION_VERSION = _read_manifest_version()
+# Bump when the published attribute shape changes in a way a card must handle.
+DATA_SCHEMA_VERSION = 1
 CONF_COMPETITION_CODE = "competition_code"
 CONF_PROVIDER = "provider"
 CONF_API_FOOTBALL_KEY = "api_football_key"
@@ -57,6 +78,27 @@ def friendly_sensor_name(sensor_type):
     if sensor_type in SENSOR_TYPE_NAMES:
         return SENSOR_TYPE_NAMES[sensor_type]
     return (sensor_type or "Soccer Live").replace("_", " ").title()
+
+
+# Card types (matching the Soccer Live Card `card_type` slugs) that work best
+# with each sensor type. Published as `recommended_card_types` so the card's
+# editor can suggest the right card for the selected entity.
+RECOMMENDED_CARD_TYPES = {
+    "team_match": ["team", "countdown", "match-center", "lineup", "timeline", "team-form"],
+    "team_matches": ["matches", "ticker", "team-form"],
+    "team_matches_mixed": ["team-competitions", "matches", "ticker", "team-form"],
+    "match_day": ["matches", "ticker"],
+    "all_matches_today": ["matches", "ticker"],
+    "standings": ["standings", "mini-standings"],
+    "top_scorers": ["scorers"],
+    "bracket": ["bracket"],
+    "news": ["news"],
+}
+
+
+def recommended_card_types(sensor_type):
+    """Card `card_type` slugs that suit the given sensor type (may be empty)."""
+    return list(RECOMMENDED_CARD_TYPES.get(sensor_type, ()))
 
 
 # Lifecycle status published as the `sync_status` sensor attribute, so a card

@@ -1,5 +1,8 @@
 # Changelog
 
+## v3.6.103 (2026-07-21)
+- card contract: sensors now publish `integration_version`, `data_schema_version` and `recommended_card_types` (the card `card_type` slugs that suit each sensor type), so the card can recommend the right card for a selected entity and warn when the integration is outdated. Read from the manifest at import (no hardcoded version). Pure `recommended_card_types` helper with tests
+
 ## v3.6.102 (2026-07-21)
 - status: each sensor now publishes a `sync_status` attribute with the lifecycle state — `initializing`, `fetching`, `ready`, `rate_limited`, `authentication_failed` or `provider_unavailable`. This lets a card show concrete text (e.g. "fetching matches for the first time") during the first update instead of an empty card that looks like a misconfiguration
 - status: the value is derived with clear precedence (auth failure and rate limiting first; then no-data states distinguishing a fetch in progress, an idle first-load window and an unreachable provider; otherwise `ready`). Pure `compute_sync_status` helper with unit tests

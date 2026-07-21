@@ -21,11 +21,14 @@ from .const import (
     CONF_LIVE_SCAN_INTERVAL,
     CONF_PROVIDER,
     DOMAIN,
+    DATA_SCHEMA_VERSION,
+    INTEGRATION_VERSION,
     PROVIDER_API_FOOTBALL,
     PROVIDER_CAPABILITIES,
     PROVIDER_ESPN,
     compute_sync_status,
     friendly_sensor_name,
+    recommended_card_types,
 )
 
 _LIVE_POLL_TYPES = {"team_match", "team_matches", "team_matches_mixed", "match_day", "all_matches_today"}
@@ -451,6 +454,9 @@ class SoccerLiveSensor(Entity):
             "sync_status": self._sync_status(),
             "provider": self._provider,
             "provider_capabilities": list(PROVIDER_CAPABILITIES.get(self._provider, ())),
+            "integration_version": INTEGRATION_VERSION,
+            "data_schema_version": DATA_SCHEMA_VERSION,
+            "recommended_card_types": recommended_card_types(self._sensor_type),
             "api_football_season": self._api_football_season,
             "api_football_quota": self._api_football_quota,
             "live_scan_interval": self._live_scan_interval,
