@@ -296,6 +296,24 @@ class TestApiFootballParser:
         match = result["matches"][0]
         assert match["league_name"] == "Oefenwedstrijd"
         assert match["competition_name"] == "Oefenwedstrijd"
+        # Stable flag from the raw English name, so cards don't have to guess
+        # from the localised display name.
+        assert match["is_friendly"] is True
+
+    def test_is_friendly_false_for_a_real_competition(self):
+        data = {
+            "response": [{
+                "fixture": {"id": 9, "date": "2026-08-02T18:00:00+00:00", "status": {"short": "NS"}},
+                "league": {"id": 88, "name": "Eredivisie"},
+                "teams": {
+                    "home": {"id": 1, "name": "Feyenoord"},
+                    "away": {"id": 2, "name": "Ajax"},
+                },
+                "goals": {"home": None, "away": None},
+            }]
+        }
+        result = process_api_football_fixture_data(data, _MockHass())
+        assert result["matches"][0]["is_friendly"] is False
 
     def test_normalize_competition_name_passes_through_unknown(self):
         assert _api_football.normalize_competition_name("UEFA Champions League", "nl") == "UEFA Champions League"

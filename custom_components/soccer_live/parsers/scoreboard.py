@@ -258,6 +258,9 @@ def process_match_data(data, hass, team_name=None, team_id=None, next_match_only
                     "week_number": week_number,
                     "league_name": league_name,
                     "league_logo": league_logo,
+                    # Stable friendly flag so cards don't have to guess from the
+                    # (possibly localised) display name.
+                    "is_friendly": "friendl" in (league_name or "").lower(),
                     "home_team": home_team,
                     "home_abbrev": home_abbrev,
                     "home_color": home_color,

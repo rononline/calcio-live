@@ -1,5 +1,8 @@
 # Changelog
 
+## v3.6.108 (2026-07-21)
+- matches: expose a stable `is_friendly` flag on each match (ESPN and API-Football), derived from the raw English league name. Cards can rely on this instead of guessing from the (possibly localised) competition name, which avoids false positives and makes the friendly-logo handling language-independent
+
 ## v3.6.107 (2026-07-21)
 - config flow: fixed the "could not load competitions/teams" abort messages being placed under `options.abort` (where Home Assistant never looks them up) in English, Dutch and Portuguese — they are raised in the config flow, so they now live under `config.abort` in every language. German/French/Spanish/Italian already had them there but were missing the reauth step, the reauth-success message and the "change API key" option label; all are now filled in
 - translations: added `strings.json` (the canonical English source Home Assistant expects) mirroring `translations/en.json`

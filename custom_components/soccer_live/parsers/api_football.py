@@ -499,6 +499,9 @@ def process_fixture_data(data, hass=None, team_name=None, team_id=None, include_
                 "league_name": league_name_display or "N/A",
                 "league_id": league.get("id"),
                 "league_logo": league.get("logo", ""),
+                # Stable friendly flag from the raw (English) league name, so
+                # cards don't have to guess from the localised display name.
+                "is_friendly": "friendl" in league_name.lower(),
                 "competition_name": league_name_display or "N/A",
                 "season_info": league.get("season", ""),
                 "week_number": None,
