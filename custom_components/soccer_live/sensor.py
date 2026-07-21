@@ -27,7 +27,6 @@ from .const import (
     PROVIDER_CAPABILITIES,
     PROVIDER_ESPN,
     compute_sync_status,
-    friendly_sensor_name,
     recommended_card_types,
 )
 
@@ -268,11 +267,13 @@ class SoccerLiveSensor(Entity):
                  enable_live_odds=False):
         self.hass = hass
         self._name = name
-        # Friendly display name comes from the sensor type (see the `name`
-        # property); the device supplies the team/competition context. Pin the
-        # verbose entity_id to the slug so it stays stable (and doesn't collapse
-        # to e.g. sensor.next_match) now that the display name is human-readable.
+        # Localised display name via the sensor type's translation_key (so Dutch
+        # users see "Volgende wedstrijd" etc.); the device supplies the team/
+        # competition context. Pin the verbose entity_id to the slug so it stays
+        # stable (and doesn't collapse to e.g. sensor.next_match) now that the
+        # display name is human-readable.
         self._attr_has_entity_name = True
+        self._attr_translation_key = sensor_type
         self.entity_id = f"sensor.{name}"
         self._code = code
         self._team_id = team_id
@@ -335,8 +336,6 @@ class SoccerLiveSensor(Entity):
         # Set when API-Football rejects the key (HTTP 401/403 or an errors.token
         # body); surfaces a clear status and triggers a reauth flow.
         self._auth_failed = False
-        # True while a fetch is running (drives the "fetching" sync status).
-        self._sync_fetching = False
 
         # Events collected during executor-thread processing, fired on event loop
         self._pending_events: list = []
@@ -407,13 +406,6 @@ class SoccerLiveSensor(Entity):
         """Persist the match_finished set to HA .storage."""
         if self._store:
             await self._store.async_save({"dispatched": self._match_finished_list[-500:]})
-
-    @property
-    def name(self):
-        # Human-readable entity name (e.g. "Next match", "All competitions").
-        # With has_entity_name the device (team/competition) adds the context,
-        # so this stays short. The verbose slug lives in entity_id / unique_id.
-        return friendly_sensor_name(self._sensor_type)
 
     @property
     def state(self):
@@ -503,15 +495,6 @@ class SoccerLiveSensor(Entity):
         return self._config_entry_id
 
     async def async_update(self):
-        # Mark an in-progress fetch so the `sync_status` attribute can report
-        # "fetching" during the first load; always cleared afterwards.
-        self._sync_fetching = True
-        try:
-            await self._async_update_impl()
-        finally:
-            self._sync_fetching = False
-
-    async def _async_update_impl(self):
         _LOGGER.info(f"Starting update for {self._name}")
 
         self._pending_events = []
@@ -1620,13 +1603,17 @@ class SoccerLiveSensor(Entity):
         return self._af_is_rate_limit_message(self._last_error or "")
 
     def _sync_status(self):
-        """Lifecycle status for the card (see const.compute_sync_status)."""
+        """Lifecycle status for the card (see const.compute_sync_status).
+
+        A polled sensor can't observably publish "fetching": HA only reads the
+        attributes after async_update() returns, so the first load is reported as
+        "initializing" (the card shows the same "fetching…" text for it). The
+        "fetching" value is reserved for a future push-based coordinator."""
         return compute_sync_status(
             auth_failed=self._auth_failed,
             rate_limited=self._is_rate_limited(),
             has_data=self._last_successful_update is not None,
             has_error=bool(self._last_error),
-            fetching=self._sync_fetching,
         )
 
     async def _refresh_api_football_status(self):

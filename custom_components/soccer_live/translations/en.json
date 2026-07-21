@@ -147,5 +147,44 @@
       "no_competitions": "Could not load the competition list. Check your internet connection and try again.",
       "no_teams": "Could not load the team list for this competition. Check your internet connection and try again."
     }
+  },
+  "entity": {
+    "sensor": {
+      "team_match": {
+        "name": "Next match"
+      },
+      "team_matches": {
+        "name": "All matches"
+      },
+      "team_matches_mixed": {
+        "name": "All competitions"
+      },
+      "match_day": {
+        "name": "All matches"
+      },
+      "standings": {
+        "name": "Standings"
+      },
+      "top_scorers": {
+        "name": "Top scorers"
+      },
+      "bracket": {
+        "name": "Knockout bracket"
+      },
+      "all_matches_today": {
+        "name": "All matches today"
+      },
+      "news": {
+        "name": "News"
+      },
+      "commentary": {
+        "name": "Live commentary"
+      }
+    },
+    "calendar": {
+      "match_calendar": {
+        "name": "Match calendar"
+      }
+    }
   }
 }

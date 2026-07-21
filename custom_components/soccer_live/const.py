@@ -105,8 +105,11 @@ def recommended_card_types(sensor_type):
 # can show concrete text (e.g. "fetching matches for the first time") instead of
 # an empty card that looks like a misconfiguration.
 SYNC_STATUSES = (
-    "initializing",          # entity created, no fetch has run yet
-    "fetching",              # a fetch is in progress and there is no data yet
+    "initializing",          # no successful fetch yet (covers the first-load window)
+    "fetching",              # reserved: a push coordinator could report an active
+                             # fetch. A polled sensor can't (HA reads attributes
+                             # only after async_update returns), so it uses
+                             # "initializing" for the first load instead.
     "ready",                 # data has been fetched successfully
     "rate_limited",          # provider is rate/quota limiting requests
     "authentication_failed",  # provider rejected the API key (needs reauth)

@@ -1,5 +1,11 @@
 # Changelog
 
+## v3.6.105 (2026-07-21)
+- calendar: the events cache now fingerprints each match's kickoff, live state and score (not just the list length and first/last time), so a match going pre → in → post or a score update refreshes the calendar entry instead of showing a stale "Team - Team" without the score
+- options: changing the API-Football key is now atomic — the key is only written once every field validates, so an invalid date (or other error) in the same submit no longer leaves the key already changed while the form reports failure
+- entities: sensor and calendar names are now localised via `translation_key` (entity name translations), so Dutch users see "Volgende wedstrijd", "Alle competities", "Wedstrijdkalender", etc. instead of the hardcoded English names (other languages fall back to English)
+- status: dropped the unobservable "fetching" state from the polled sensor — a polled entity only publishes attributes after the update finishes, so the first load is reported as "initializing" (the card shows the same "fetching…" text). "fetching" stays reserved for a future push-based coordinator
+
 ## v3.6.104 (2026-07-21)
 - calendar: fixed slow state updates ("Updating state for calendar.… took N seconds") that could block the event loop. The parsed/sorted events are now cached between refreshes and only rebuilt when the underlying match list actually changes (both `event` and `async_get_events` reuse the cache), and kickoff times are parsed with the fast stdlib ISO path instead of the slower dateutil fallback
 

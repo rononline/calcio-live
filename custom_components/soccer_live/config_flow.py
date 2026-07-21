@@ -536,18 +536,17 @@ class SoccerLiveOptionsFlow(config_entries.OptionsFlow):
             self.config_entry.data.get(CONF_PROVIDER, PROVIDER_ESPN)
         ) == PROVIDER_API_FOOTBALL
         if user_input is not None:
-            # "Change API key": a non-empty value replaces the stored key (after
-            # validation); left blank it keeps the current one. Stored in the
+            # "Change API key": validate here but only commit it once *every*
+            # field is valid, so a later error (e.g. a bad date) can't leave the
+            # key already changed while the form reports failure. Stored in the
             # entry data — same place reauth writes — not in the options.
             new_key = (user_input.pop("change_api_football_key", "") or "").strip()
+            key_to_commit = None
             if is_api_football and new_key:
                 if not await async_validate_api_football_key(self.hass, new_key):
                     errors["change_api_football_key"] = "invalid_api_key"
                 elif new_key != self.config_entry.data.get(CONF_API_FOOTBALL_KEY):
-                    self.hass.config_entries.async_update_entry(
-                        self.config_entry,
-                        data={**self.config_entry.data, CONF_API_FOOTBALL_KEY: new_key},
-                    )
+                    key_to_commit = new_key
             start = (user_input.get("start_date") or "").strip()
             end = (user_input.get("end_date") or "").strip()
             start_dt = end_dt = None
@@ -564,6 +563,11 @@ class SoccerLiveOptionsFlow(config_entries.OptionsFlow):
             if start_dt and end_dt and start_dt > end_dt:
                 errors["end_date"] = "end_before_start"
             if not errors:
+                if key_to_commit is not None:
+                    self.hass.config_entries.async_update_entry(
+                        self.config_entry,
+                        data={**self.config_entry.data, CONF_API_FOOTBALL_KEY: key_to_commit},
+                    )
                 user_input.pop("info", None)
                 return self.async_create_entry(title="", data=user_input)
 

@@ -147,5 +147,44 @@
       "no_competitions": "Kan de competitielijst niet laden. Controleer uw internetverbinding en probeer het opnieuw.",
       "no_teams": "Kan de teamlijst voor deze competitie niet laden. Controleer uw internetverbinding en probeer het opnieuw."
     }
+  },
+  "entity": {
+    "sensor": {
+      "team_match": {
+        "name": "Volgende wedstrijd"
+      },
+      "team_matches": {
+        "name": "Alle wedstrijden"
+      },
+      "team_matches_mixed": {
+        "name": "Alle competities"
+      },
+      "match_day": {
+        "name": "Alle wedstrijden"
+      },
+      "standings": {
+        "name": "Stand"
+      },
+      "top_scorers": {
+        "name": "Topscorers"
+      },
+      "bracket": {
+        "name": "Knock-outschema"
+      },
+      "all_matches_today": {
+        "name": "Alle wedstrijden vandaag"
+      },
+      "news": {
+        "name": "Nieuws"
+      },
+      "commentary": {
+        "name": "Live commentaar"
+      }
+    },
+    "calendar": {
+      "match_calendar": {
+        "name": "Wedstrijdkalender"
+      }
+    }
   }
 }

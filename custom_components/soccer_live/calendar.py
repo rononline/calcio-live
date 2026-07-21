@@ -78,8 +78,10 @@ class SoccerLiveCalendar(CalendarEntity):
         self.hass = hass
         self._entry = entry
         label = entry.data.get("team_name") or entry.data.get("competition_code") or "matches"
-        # Short entity name; the device (team/competition) supplies the context.
-        self._attr_name = "Match calendar"
+        # Localised entity name ("Match calendar" / "Wedstrijdkalender") via
+        # translation_key; the device (team/competition) supplies the context.
+        self._attr_has_entity_name = True
+        self._attr_translation_key = "match_calendar"
         self._attr_unique_id = f"{entry.entry_id}_calendar"
         # Keep the verbose entity_id stable now that the display name is short.
         slug = str(label).lower().replace(" ", "_").replace(".", "_")
@@ -127,13 +129,28 @@ class SoccerLiveCalendar(CalendarEntity):
 
     @staticmethod
     def _signature(matches):
-        """Cheap fingerprint of the source list so events are only re-parsed
-        when the matches actually change (length or first/last kickoff)."""
+        """Fingerprint of the source list so events are only re-parsed when the
+        matches actually change. Covers the fields that affect a calendar entry —
+        kickoff, live state and score — so a match going pre -> in -> post or a
+        score update invalidates the cache (a length/time-only fingerprint would
+        keep showing a stale "Team - Team" without the score). Building this tuple
+        is still far cheaper than re-parsing every date and rebuilding events."""
         if not matches:
-            return "0"
-        first = matches[0].get("date_iso") if isinstance(matches[0], dict) else None
-        last = matches[-1].get("date_iso") if isinstance(matches[-1], dict) else None
-        return f"{len(matches)}|{first}|{last}"
+            return ()
+        return tuple(
+            (
+                m.get("event_id"),
+                m.get("date_iso"),
+                m.get("state"),
+                m.get("home_score"),
+                m.get("away_score"),
+                m.get("home_team"),
+                m.get("away_team"),
+                m.get("venue"),
+                m.get("league_name"),
+            ) if isinstance(m, dict) else (m,)
+            for m in matches
+        )
 
     def _events(self):
         matches = self._source_matches()

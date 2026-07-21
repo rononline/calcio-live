@@ -14,11 +14,18 @@ from custom_components.soccer_live.const import (  # noqa: E402
     PROVIDER_API_FOOTBALL,
     PROVIDER_CAPABILITIES,
     PROVIDER_ESPN,
+    SENSOR_TYPE_NAMES,
     compute_sync_status,
     friendly_sensor_name,
     provider_supports,
     recommended_card_types,
 )
+
+
+def _load_translation(lang):
+    path = ROOT / "custom_components" / "soccer_live" / "translations" / f"{lang}.json"
+    with open(path, encoding="utf-8") as handle:
+        return json.load(handle)
 
 
 def test_espn_capabilities():
@@ -117,3 +124,17 @@ def test_integration_version_matches_manifest():
         manifest_version = json.load(handle)["version"]
     assert INTEGRATION_VERSION == manifest_version
     assert isinstance(DATA_SCHEMA_VERSION, int) and DATA_SCHEMA_VERSION >= 1
+
+
+def test_entity_name_translations_present_and_consistent():
+    # Every sensor type has a localised name via translation_key; English must
+    # match the canonical friendly_sensor_name, and Dutch must cover the same
+    # keys so NL users see "Volgende wedstrijd" etc. (not the English fallback).
+    en = _load_translation("en")["entity"]["sensor"]
+    nl = _load_translation("nl")["entity"]["sensor"]
+    for sensor_type, english in SENSOR_TYPE_NAMES.items():
+        assert en[sensor_type]["name"] == english == friendly_sensor_name(sensor_type)
+        assert nl[sensor_type]["name"], f"nl missing name for {sensor_type}"
+    # The calendar entity is localised too.
+    assert _load_translation("en")["entity"]["calendar"]["match_calendar"]["name"] == "Match calendar"
+    assert _load_translation("nl")["entity"]["calendar"]["match_calendar"]["name"] == "Wedstrijdkalender"

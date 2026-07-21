@@ -173,3 +173,19 @@ def test_calendar_caches_events_until_source_changes():
     second = cal._events()
     assert second is not first
     assert len(second) == 2
+
+
+def test_calendar_cache_invalidates_on_score_or_state_change():
+    # Same list length and kickoff times, but the match goes live and gets a
+    # score -> the cache must rebuild so the summary reflects the new score.
+    match = {"event_id": "1", "date_iso": "2027-07-17T11:30:00+00:00",
+             "home_team": "Feyenoord", "away_team": "Ajax", "state": "pre"}
+    store = {"s1": [dict(match)]}
+    cal = _calendar(store)
+    first = cal._events()
+    assert first[0].summary == "Feyenoord - Ajax"
+    # Identical length and times, only state + score changed.
+    store["s1"] = [{**match, "state": "in", "home_score": "2", "away_score": "1"}]
+    second = cal._events()
+    assert second is not first
+    assert second[0].summary == "Feyenoord 2 - 1 Ajax"

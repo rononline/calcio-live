@@ -423,3 +423,21 @@ def test_options_change_api_key_rejects_invalid():
 def test_options_change_api_key_field_hidden_for_espn():
     assert "change_api_football_key" not in _options_schema(_config_flow_mod.PROVIDER_ESPN)
     assert "change_api_football_key" in _options_schema(_config_flow_mod.PROVIDER_API_FOOTBALL)
+
+
+def test_options_valid_key_not_committed_when_another_field_invalid():
+    # A valid new key but an invalid date must NOT persist the key (atomicity):
+    # the form fails, so nothing — including the key — should change.
+    flow = _config_flow_mod.SoccerLiveOptionsFlow()
+    flow.config_entry = _MutableEntry({"provider": "api_football", "api_football_key": "old"})
+    flow.hass = _FakeHass()
+    original = _patch_validator(_mod_valid)
+    try:
+        result = asyncio.run(flow.async_step_init({
+            "change_api_football_key": "fresh-key",
+            "start_date": "not-a-date", "end_date": "",
+        }))
+    finally:
+        _patch_validator(original)
+    assert result["type"] == "form"  # re-shown with the date error
+    assert flow.config_entry.data["api_football_key"] == "old"  # key untouched
