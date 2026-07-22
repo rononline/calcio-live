@@ -1,5 +1,11 @@
 # Changelog
 
+## v3.7.0 (2026-07-22)
+- club monitoring: compare persisted daily club snapshots and expose transient `club_changes` for new transfers, injuries, recoveries, coach changes, squad changes and market-value changes
+- events: fire `soccer_live_club_change` plus specific `soccer_live_<change_type>` events when a real club snapshot transition is detected; the first snapshot never produces false alerts
+- lineups: fire `soccer_live_lineup_available` once when a fixture transitions from no lineup to an available lineup, including both player lists for automation filtering
+- tests: add pure snapshot/diff and lineup-transition coverage
+
 ## v3.6.108 (2026-07-21)
 - matches: expose a stable `is_friendly` flag on each match (ESPN and API-Football), derived from the raw English league name. Cards can rely on this instead of guessing from the (possibly localised) competition name, which avoids false positives and makes the friendly-logo handling language-independent
 

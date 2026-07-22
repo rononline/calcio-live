@@ -634,6 +634,7 @@ class SoccerLiveSensor(Entity):
     async def _process_and_apply(self, data):
         """Process raw ESPN data and apply state/attributes to this sensor.
         Carries forward last-event attributes so they survive between update cycles."""
+        previous_attrs = self._attributes
         result = await self.hass.async_add_executor_job(self._process_data, data)
         self._state = result["state"]
         attrs = result["attributes"]
@@ -654,8 +655,22 @@ class SoccerLiveSensor(Entity):
         await self._enrich_with_summary()
         await self._enrich_club_data()
         await self._enrich_api_football_assists()
+        self._fire_new_lineup_events(previous_attrs, self._attributes)
         await self._flush_pending_events()
         self._publish_matches(self._attributes.get("matches") or [])
+
+    def _fire_new_lineup_events(self, previous_attrs, current_attrs):
+        from .club_changes import newly_available_lineups
+        for match in newly_available_lineups(previous_attrs, current_attrs):
+            self.hass.bus.async_fire("soccer_live_lineup_available", {
+                "entity_id": self.entity_id,
+                "team_id": self._team_id,
+                "event_id": match.get("event_id"),
+                "home_team": match.get("home_team"),
+                "away_team": match.get("away_team"),
+                "home_players": [item.get("name") or item.get("player") for item in (match.get("lineup_home") or [])],
+                "away_players": [item.get("name") or item.get("player") for item in (match.get("lineup_away") or [])],
+            })
 
     def _publish_matches(self, matches):
         """Publish this sensor's match list to a shared per-entry store so other
@@ -1061,6 +1076,8 @@ class SoccerLiveSensor(Entity):
             self._fetch_api_football_json("transfers", {"team": team_id}),
         )
 
+        old_entry = SoccerLiveSensor._club_cache.get(str(team_id)) or {}
+        previous_club = old_entry.get("club") if isinstance(old_entry, dict) else None
         club = {}
         if profile_data is not None:
             profile = await self.hass.async_add_executor_job(process_team_profile, profile_data)
@@ -1079,12 +1096,26 @@ class SoccerLiveSensor(Entity):
             if transfers:
                 club["transfers"] = transfers
         if club:
+            from .club_changes import diff_club
+            changes = diff_club(previous_club, club)
             self._attributes["club"] = club
+            self._attributes["club_changes"] = changes
+            for change in changes:
+                fingerprint = f"{team_id}:{json.dumps(change, sort_keys=True, default=str)}"
+                now = datetime.now().timestamp()
+                last = SoccerLiveSensor._club_event_fingerprints.get(fingerprint, 0)
+                if now - last < 300:
+                    continue
+                SoccerLiveSensor._club_event_fingerprints[fingerprint] = now
+                event_data = {"entity_id": self.entity_id, "team_id": team_id, **change}
+                self.hass.bus.async_fire("soccer_live_club_change", event_data)
+                self.hass.bus.async_fire(f"soccer_live_{change['type']}", event_data)
             self._store_club(team_id, club)
 
     _club_cache = {}
     _club_store = None
     _club_loaded = False
+    _club_event_fingerprints = {}
     _CLUB_TTL = 86400  # seconds; matches the per-endpoint club cache TTL
     # Bump when the club blob's shape or parsing changes, so an upgrade doesn't
     # keep serving a stale blob (e.g. an old, wrongly-picked coach) for 24h.

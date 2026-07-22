@@ -473,6 +473,11 @@ Each config entry also creates a **calendar entity** (`calendar.soccer_live_<tea
 | `soccer_live_red_card` | Red card | `player`, `minute`, `team`, `home_team`, `away_team`, `league_name` |
 | `soccer_live_substitution` | Substitution | `player`, `minute`, `team`, `home_team`, `away_team`, `league_name` |
 | `soccer_live_match_finished` | Full time | `home_score`, `away_score`, `goal_scorers`, `goal_scorers_str`, `league_name` |
+| `soccer_live_lineup_available` | A fixture publishes its lineup for the first time | `event_id`, `home_team`, `away_team`, `home_players`, `away_players` |
+| `soccer_live_club_change` | A daily club snapshot changes | `type`, `team_id`, `player`/`name`, optional `delta` |
+| `soccer_live_transfer_added` | A new transfer appears | `team_id`, `player`, `direction` |
+| `soccer_live_injury_added` / `soccer_live_player_available` | A player becomes unavailable/available | `team_id`, `player` |
+| `soccer_live_coach_changed` | The published head coach changes | `team_id`, `name`, `previous` |
 
 Example automation blueprints are available in [`blueprints/automation`](blueprints/automation):
 goal, yellow card, red card, substitution, match started, full time (final score)
