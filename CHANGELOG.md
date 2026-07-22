@@ -1,5 +1,10 @@
 # Changelog
 
+## v3.7.1 (2026-07-22)
+- recorder: exclude transient `club_changes` from state-history attributes; change events remain the automation signal
+- club monitoring: suppress market-value noise below €100,000 or 1% of the previous squad value
+- tests: make the club-change module test runnable standalone without importing Home Assistant
+
 ## v3.7.0 (2026-07-22)
 - club monitoring: compare persisted daily club snapshots and expose transient `club_changes` for new transfers, injuries, recoveries, coach changes, squad changes and market-value changes
 - events: fire `soccer_live_club_change` plus specific `soccer_live_<change_type>` events when a real club snapshot transition is detected; the first snapshot never produces false alerts

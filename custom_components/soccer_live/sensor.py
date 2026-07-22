@@ -235,7 +235,7 @@ class SoccerLiveSensor(Entity):
         "matches", "previous_matches", "upcoming_matches", "next_match",
         "schedule_live_matches", "schedule_upcoming_matches", "schedule_recent_matches",
         "standings_groups", "scorers", "assists", "articles", "rounds",
-        "head_to_head", "league_info", "club", "card_defaults",
+        "head_to_head", "league_info", "club", "club_changes", "card_defaults",
         "last_event", "last_goal_event", "last_card_event",
         "last_match_started_event", "last_match_finished_event",
     })

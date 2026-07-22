@@ -46,7 +46,8 @@ def diff_club(previous_club, current_club):
     for key in sorted(previous["squad"].keys() - current["squad"].keys()):
         changes.append({"type": "squad_removed", "player": previous["squad"][key] or key})
     delta = current["market_value"] - previous["market_value"]
-    if delta:
+    threshold = max(100_000, abs(previous["market_value"]) * 0.01)
+    if abs(delta) >= threshold:
         changes.append({"type": "market_value_changed", "delta": delta})
     return changes
 
