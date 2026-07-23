@@ -1,5 +1,11 @@
 # Changelog
 
+## v3.9.0 (2026-07-23)
+- testing: add `soccer_live.simulate_match_event` for safe lifecycle, goal, card and lineup automation testing
+- safety: simulated events always carry `simulated: true` and never mutate sensors, caches, provider state or deduplication storage
+- service UI: add Home Assistant selectors and defaults for all supported test-event fields
+- tests: cover event mapping, normalized phases and deterministic simulated payloads
+
 ## v3.8.0 (2026-07-23)
 - match contract: expose provider-neutral `match_phase` values and annotate every published match
 - active fixture: add `current_match` separately while preserving the existing `next_match` contract

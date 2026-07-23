@@ -1,0 +1,62 @@
+simulate_match_event:
+  name: Simulate match event
+  description: Fires a safe provider-neutral test event without changing sensor data, caches or deduplication storage.
+  fields:
+    event_type:
+      name: Event type
+      required: true
+      selector:
+        select:
+          options:
+            - match_started
+            - goal
+            - red_card
+            - halftime
+            - second_half
+            - match_finished
+            - lineup_available
+            - postponed
+            - cancelled
+    event_id:
+      name: Match ID
+      default: simulated-match
+      selector:
+        text:
+    team_id:
+      name: Tracked team ID
+      selector:
+        text:
+    home_team:
+      name: Home team
+      default: Feyenoord
+      selector:
+        text:
+    away_team:
+      name: Away team
+      default: Tegenstander
+      selector:
+        text:
+    home_score:
+      name: Home score
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 20
+          mode: box
+    away_score:
+      name: Away score
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 20
+          mode: box
+    player:
+      name: Player
+      selector:
+        text:
+    minute:
+      name: Minute
+      selector:
+        text:
