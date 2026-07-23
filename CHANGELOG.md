@@ -1,5 +1,10 @@
 # Changelog
 
+## v3.9.1 (2026-07-23)
+- entity IDs: sanitize competition/team-derived object IDs to Home Assistant's supported lowercase ASCII format
+- compatibility: valid existing IDs remain unchanged; characters such as `#`, parentheses and accents are normalized safely
+- tests: cover the reported `Eredivisie #88 (Netherlands)` warning and accented club names
+
 ## v3.9.0 (2026-07-23)
 - testing: add `soccer_live.simulate_match_event` for safe lifecycle, goal, card and lineup automation testing
 - safety: simulated events always carry `simulated: true` and never mutate sensors, caches, provider state or deduplication storage

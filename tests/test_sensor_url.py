@@ -65,6 +65,14 @@ _sensor_mod = _load_sensor_module()
 SoccerLiveSensor = _sensor_mod.SoccerLiveSensor
 
 
+def test_entity_object_id_removes_home_assistant_invalid_characters():
+    assert _sensor_mod.safe_entity_object_id(
+        "soccerlive_standings_Eredivisie #88 (Netherlands)"
+    ) == "soccerlive_standings_eredivisie_88_netherlands"
+    assert _sensor_mod.safe_entity_object_id("soccer_live_next_feyenoord") == "soccer_live_next_feyenoord"
+    assert _sensor_mod.safe_entity_object_id("São Paulo") == "sao_paulo"
+
+
 def _sensor(sensor_type, code="ned.1", team_name=None, team_id="1234", provider="espn"):
     sensor = SoccerLiveSensor.__new__(SoccerLiveSensor)
     sensor._name = f"test_{sensor_type}"

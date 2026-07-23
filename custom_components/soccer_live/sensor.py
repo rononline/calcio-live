@@ -13,6 +13,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 import logging
 import random
 import re
+import unicodedata
 from urllib.parse import urlencode
 from .const import (
     CONF_API_FOOTBALL_KEY,
@@ -33,6 +34,14 @@ from .const import (
 _LIVE_POLL_TYPES = {"team_match", "team_matches", "team_matches_mixed", "match_day", "all_matches_today"}
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def safe_entity_object_id(value):
+    """Return a stable Home Assistant-safe object ID."""
+    normalized = unicodedata.normalize("NFKD", str(value or ""))
+    ascii_value = normalized.encode("ascii", "ignore").decode("ascii").lower()
+    slug = re.sub(r"[^a-z0-9_]+", "_", ascii_value)
+    return re.sub(r"_+", "_", slug).strip("_") or "soccer_live"
 
 _DATE_RANGE_SENSOR_TYPES = {"match_day", "team_match", "team_matches"}
 
@@ -274,7 +283,7 @@ class SoccerLiveSensor(Entity):
         # display name is human-readable.
         self._attr_has_entity_name = True
         self._attr_translation_key = sensor_type
-        self.entity_id = f"sensor.{name}"
+        self.entity_id = f"sensor.{safe_entity_object_id(name)}"
         self._code = code
         self._team_id = team_id
         self._sensor_type = sensor_type
