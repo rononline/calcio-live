@@ -232,7 +232,7 @@ class SoccerLiveSensor(Entity):
     # database doesn't balloon. The state itself (the score summary) and the
     # small scalar attributes are still recorded.
     _unrecorded_attributes = frozenset({
-        "matches", "previous_matches", "upcoming_matches", "next_match",
+        "matches", "previous_matches", "upcoming_matches", "next_match", "current_match",
         "schedule_live_matches", "schedule_upcoming_matches", "schedule_recent_matches",
         "standings_groups", "scorers", "assists", "articles", "rounds",
         "head_to_head", "league_info", "club", "club_changes", "card_defaults",
@@ -327,6 +327,7 @@ class SoccerLiveSensor(Entity):
         self._previous_scores = {}
         self._previous_match_details = {}
         self._previous_match_states = {}
+        self._previous_match_phases = {}
         self._dispatched_goal_details = {}
         self._match_finished_dispatched = set()
         self._match_finished_list = []
@@ -638,6 +639,18 @@ class SoccerLiveSensor(Entity):
         result = await self.hass.async_add_executor_job(self._process_data, data)
         self._state = result["state"]
         attrs = result["attributes"]
+        from .match_contract import annotate_match, current_match
+        for key in ("matches", "previous_matches", "upcoming_matches"):
+            if isinstance(attrs.get(key), list):
+                attrs[key] = [annotate_match(match) for match in attrs[key]]
+        if attrs.get("next_match"):
+            attrs["next_match"] = annotate_match(attrs["next_match"])
+        attrs["current_match"] = current_match(attrs.get("matches") or [])
+        attrs["match_phase"] = (
+            attrs["current_match"].get("match_phase")
+            if attrs["current_match"] else
+            (attrs.get("next_match") or {}).get("match_phase", "unknown")
+        )
         if self._max_matches and "matches" in attrs:
             _all = attrs["matches"]
             _live = [m for m in _all if m.get("state") == "in"]
@@ -651,6 +664,7 @@ class SoccerLiveSensor(Entity):
                 attrs[_k] = self._attributes[_k]
         self._attributes = attrs
         self._pending_events = result.get("events", [])
+        self._detect_and_dispatch_halftime(attrs.get("matches") or [], self._pending_events)
         self._save_store_needed = any(e[0] == "soccer_live_match_finished" for e in self._pending_events)
         await self._enrich_with_summary()
         await self._enrich_club_data()
@@ -2041,6 +2055,8 @@ class SoccerLiveSensor(Entity):
             prev_state = self._previous_match_states.get(match_id)
             if current_state == "in" and prev_state == "pre":
                 event_data = {
+                    "event_id": match.get("event_id"),
+                    "match_phase": "first_half",
                     "home_team": match.get("home_team", "N/A"),
                     "away_team": match.get("away_team", "N/A"),
                     "home_logo": match.get("home_logo", "N/A"),
@@ -2055,6 +2071,26 @@ class SoccerLiveSensor(Entity):
                 _LOGGER.info(f"Match started: {match.get('home_team', 'N/A')} vs {match.get('away_team', 'N/A')}")
             if current_state:
                 self._previous_match_states[match_id] = current_state
+
+    def _detect_and_dispatch_halftime(self, matches, events: list):
+        from .match_contract import match_phase
+        for match in matches:
+            match_id = str(match.get("event_id") or f"{match.get('home_team')}_{match.get('away_team')}")
+            phase = match_phase(match)
+            previous = self._previous_match_phases.get(match_id)
+            if phase == "halftime" and previous is not None and previous != "halftime":
+                events.append(("soccer_live_halftime", {
+                    "event_id": match.get("event_id"),
+                    "match_phase": phase,
+                    "home_team": match.get("home_team"),
+                    "away_team": match.get("away_team"),
+                    "home_score": match.get("home_score"),
+                    "away_score": match.get("away_score"),
+                    "league_name": match.get("league_name"),
+                    "competition_code": self._code,
+                    "sensor_name": self._name,
+                }))
+            self._previous_match_phases[match_id] = phase
 
     def _detect_and_dispatch_match_finished(self, matches, events: list):
         finished_matches = [m for m in matches if m.get("state") == "post"]
@@ -2081,6 +2117,8 @@ class SoccerLiveSensor(Entity):
             goal_scorers = self._extract_all_goal_scorers(match.get("match_details", []))
             
             event_data = {
+                "event_id": match.get("event_id"),
+                "match_phase": "finished",
                 "home_team": match.get("home_team", "N/A"),
                 "away_team": match.get("away_team", "N/A"),
                 "home_score": match.get("home_score", "N/A"),

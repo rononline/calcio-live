@@ -1,5 +1,11 @@
 # Changelog
 
+## v3.8.0 (2026-07-23)
+- match contract: expose provider-neutral `match_phase` values and annotate every published match
+- active fixture: add `current_match` separately while preserving the existing `next_match` contract
+- events: add `soccer_live_halftime` and include `event_id`/`match_phase` in start and finish payloads
+- compatibility: retain all existing states and attributes; high-churn `current_match` data stays out of recorder history
+
 ## v3.7.1 (2026-07-22)
 - recorder: exclude transient `club_changes` from state-history attributes; change events remain the automation signal
 - club monitoring: suppress market-value noise below €100,000 or 1% of the previous squad value
