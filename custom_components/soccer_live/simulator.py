@@ -6,7 +6,9 @@ from datetime import datetime, timezone
 EVENT_TYPES = {
     "match_started": ("soccer_live_match_started", "first_half"),
     "goal": ("soccer_live_goal", None),
+    "yellow_card": ("soccer_live_yellow_card", None),
     "red_card": ("soccer_live_red_card", None),
+    "substitution": ("soccer_live_substitution", None),
     "halftime": ("soccer_live_halftime", "halftime"),
     "second_half": ("soccer_live_second_half", "second_half"),
     "match_finished": ("soccer_live_match_finished", "finished"),

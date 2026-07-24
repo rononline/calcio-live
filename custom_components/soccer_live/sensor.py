@@ -673,7 +673,7 @@ class SoccerLiveSensor(Entity):
                 attrs[_k] = self._attributes[_k]
         self._attributes = attrs
         self._pending_events = result.get("events", [])
-        self._detect_and_dispatch_halftime(attrs.get("matches") or [], self._pending_events)
+        self._detect_and_dispatch_phase_events(attrs.get("matches") or [], self._pending_events)
         self._save_store_needed = any(e[0] == "soccer_live_match_finished" for e in self._pending_events)
         await self._enrich_with_summary()
         await self._enrich_club_data()
@@ -773,6 +773,12 @@ class SoccerLiveSensor(Entity):
                 message = f"{event_data.get('player','Unknown')} · {event_data.get('minute','')}"
             elif event_type == "soccer_live_match_finished":
                 title = f"🏁 Full time · {event_data.get('home_team','')} {event_data.get('home_score','')} - {event_data.get('away_score','')} {event_data.get('away_team','')}"
+                message = event_data.get('league_name','')
+            elif event_type == "soccer_live_match_postponed":
+                title = f"⏸️ Postponed · {event_data.get('home_team','')} vs {event_data.get('away_team','')}"
+                message = event_data.get('league_name','')
+            elif event_type == "soccer_live_match_cancelled":
+                title = f"❌ Cancelled · {event_data.get('home_team','')} vs {event_data.get('away_team','')}"
                 message = event_data.get('league_name','')
             else:
                 return
@@ -2138,14 +2144,20 @@ class SoccerLiveSensor(Entity):
             if current_state:
                 self._previous_match_states[match_id] = current_state
 
-    def _detect_and_dispatch_halftime(self, matches, events: list):
-        from .match_contract import match_phase
+    def _detect_and_dispatch_phase_events(self, matches, events: list):
+        """Fire a bus event on the transition into a notable phase (halftime,
+        second half, postponed, cancelled). The first-observation guard
+        (previous is not None) avoids false alerts on restart, matching the
+        club-change/lineup pattern. match_started/match_finished are handled by
+        state, so their phases are excluded from PHASE_EVENTS to avoid doubles."""
+        from .match_contract import match_phase, phase_event
         for match in matches:
             match_id = str(match.get("event_id") or f"{match.get('home_team')}_{match.get('away_team')}")
             phase = match_phase(match)
             previous = self._previous_match_phases.get(match_id)
-            if phase == "halftime" and previous is not None and previous != "halftime":
-                events.append(("soccer_live_halftime", {
+            event_name = phase_event(phase)
+            if event_name and previous is not None and previous != phase:
+                events.append((event_name, {
                     "event_id": match.get("event_id"),
                     "match_phase": phase,
                     "home_team": match.get("home_team"),

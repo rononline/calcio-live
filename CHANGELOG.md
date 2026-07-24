@@ -1,6 +1,10 @@
 # Changelog
 
-## v3.9.5 (2026-07-24)
+## v3.9.6 (2026-07-24)
+- match events: the integration now actually fires `soccer_live_second_half`, `soccer_live_match_postponed` and `soccer_live_match_cancelled` on the corresponding phase transition (they were only reachable via the test simulator before, so automations tested against them never triggered live). The halftime detector was generalised into a single phase-transition dispatcher driven by `match_contract.PHASE_EVENTS`, keeping the first-observation guard so a restart can't replay old transitions
+- notifications: postponed and cancelled matches now also send an optional push (when a notify service is configured), alongside the existing goal/card/full-time ones
+- simulator: added `yellow_card` and `substitution` (both are real events but weren't simulatable), so the simulator now covers the full match-lifecycle event set
+- tests: added a regression lock asserting every event the simulator can fire is one the integration actually emits, plus phase-transition mapping/dispatch coverage
 - lineup events: never announce restored lineup data for completed historical fixtures
 - restart safety: prevent summary enrichment after an HA restart from producing false "lineup available" notifications
 - tests: cover historical post-match lineup enrichment while preserving real pre-match transitions

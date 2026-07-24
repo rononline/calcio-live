@@ -34,3 +34,20 @@ def current_match(matches):
     return next((match for match in (matches or []) if match_phase(match) in {
         "first_half", "halftime", "second_half", "extra_time", "penalties"
     }), None)
+
+
+# Phases that warrant their own bus event, fired on the transition into the
+# phase. `match_started` (pre->in) and `match_finished` (->post) are detected
+# separately by state, so they're deliberately excluded here to avoid firing an
+# event twice for the same transition.
+PHASE_EVENTS = {
+    "halftime": "soccer_live_halftime",
+    "second_half": "soccer_live_second_half",
+    "postponed": "soccer_live_match_postponed",
+    "cancelled": "soccer_live_match_cancelled",
+}
+
+
+def phase_event(phase):
+    """Bus event name for a phase, or None when the phase has no own event."""
+    return PHASE_EVENTS.get(phase)

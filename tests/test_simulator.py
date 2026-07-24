@@ -30,3 +30,39 @@ def test_lifecycle_simulations_publish_normalized_phase():
     for kind, phase in expected.items():
         _event, payload = MODULE.simulated_event(kind, {})
         assert payload["match_phase"] == phase
+
+
+def test_yellow_card_and_substitution_are_simulatable():
+    for kind, bus in (("yellow_card", "soccer_live_yellow_card"),
+                      ("substitution", "soccer_live_substitution")):
+        event, payload = MODULE.simulated_event(kind, {"player": "X", "minute": 55, "team": "Home"})
+        assert event == bus
+        assert payload["simulated"] is True
+        assert payload["player"] == "X"
+        assert payload["minute"] == 55
+
+
+def _load(name):
+    path = Path(__file__).parents[1] / "custom_components" / "soccer_live" / f"{name}.py"
+    spec = importlib.util.spec_from_file_location(f"soccer_live_{name}_x", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_every_simulated_event_is_actually_emitted_by_the_integration():
+    """Guard against the simulator advertising events the integration never
+    fires (an automation would pass in simulation but never trigger live).
+
+    Events emitted by the state/detail dispatchers in sensor.py (kept in sync
+    here) plus the phase-transition events from match_contract.PHASE_EVENTS."""
+    state_and_detail = {
+        "soccer_live_match_started", "soccer_live_match_finished",
+        "soccer_live_goal", "soccer_live_yellow_card", "soccer_live_red_card",
+        "soccer_live_substitution", "soccer_live_lineup_available",
+    }
+    emitted = state_and_detail | set(_load("match_contract").PHASE_EVENTS.values())
+    for sim_type, (bus_event, _phase) in MODULE.EVENT_TYPES.items():
+        assert bus_event in emitted, (
+            f"simulator '{sim_type}' fires {bus_event}, which the integration never emits"
+        )

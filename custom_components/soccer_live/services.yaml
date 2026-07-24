@@ -10,7 +10,9 @@ simulate_match_event:
           options:
             - match_started
             - goal
+            - yellow_card
             - red_card
+            - substitution
             - halftime
             - second_half
             - match_finished
