@@ -1,5 +1,10 @@
 # Changelog
 
+## v3.9.3 (2026-07-24)
+- API-Football H2H: prioritize the single cached H2H request before historical fixture enrichment
+- quota: prevent events/statistics/lineup calls for list sensors from triggering provider backoff before H2H is fetched
+- tests: verify H2H is the first enrichment request for an upcoming fixture in a mixed team schedule
+
 ## v3.9.2 (2026-07-24)
 - API-Football H2H: fetch up to eight completed meetings for the live or nearest upcoming fixture
 - quota: canonicalize the team pair and cache H2H responses for 24 hours, sharing one request across sensors

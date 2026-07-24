@@ -982,6 +982,12 @@ class SoccerLiveSensor(Entity):
         if not matches:
             return
 
+        # H2H is the most useful enrichment for an upcoming fixture and costs a
+        # single, 24-hour cached request. Fetch it before enriching historical
+        # fixtures: a list sensor can otherwise spend up to fifteen requests on
+        # events/statistics/lineups and enter provider backoff before H2H runs.
+        await self._enrich_api_football_head_to_head(matches)
+
         if self._sensor_type in {"team_matches", "team_matches_mixed"}:
             targets = self._api_football_team_list_enrichment_targets(matches)
         else:
@@ -1022,7 +1028,6 @@ class SoccerLiveSensor(Entity):
                     self._summary_cache.pop(next(iter(self._summary_cache)))
                 self._summary_cache[event_id] = enrichment
 
-        await self._enrich_api_football_head_to_head(matches)
         await self._enrich_api_football_prematch(matches)
 
         self._detect_and_dispatch_goals(matches, self._pending_events)
