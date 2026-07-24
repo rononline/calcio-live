@@ -1,5 +1,10 @@
 # Changelog
 
+## v3.9.5 (2026-07-24)
+- lineup events: never announce restored lineup data for completed historical fixtures
+- restart safety: prevent summary enrichment after an HA restart from producing false "lineup available" notifications
+- tests: cover historical post-match lineup enrichment while preserving real pre-match transitions
+
 ## v3.9.4 (2026-07-24)
 - API-Football H2H: enrich the first three selectable live/upcoming fixtures on list sensors instead of only the nearest fixture
 - Match Center: switching from an earlier match such as Atalanta to Sparta now retains fixture-specific H2H data

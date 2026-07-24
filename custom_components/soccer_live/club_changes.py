@@ -65,6 +65,10 @@ def newly_available_lineups(previous_attrs, current_attrs):
         return []
     available = []
     for event_id, match in matches(current_attrs).items():
+        # Historical fixtures can gain lineup data when detail enrichment is
+        # rebuilt after a restart. That is not a newly announced lineup.
+        if match.get("state") == "post":
+            continue
         has_lineup = bool(match.get("lineup_home") or match.get("lineup_away") or match.get("formation_home") or match.get("formation_away"))
         old = previous.get(event_id) or {}
         had_lineup = bool(old.get("lineup_home") or old.get("lineup_away") or old.get("formation_home") or old.get("formation_away"))

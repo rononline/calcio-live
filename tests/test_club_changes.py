@@ -39,8 +39,21 @@ def test_market_value_change_ignores_small_provider_fluctuations():
 
 
 def test_newly_available_lineups_only_fires_on_transition():
-    base = {"matches": [{"event_id": "10", "lineup_home": [], "lineup_away": []}]}
-    current = {"matches": [{"event_id": "10", "lineup_home": [{"name": "A"}], "lineup_away": []}]}
+    base = {"matches": [{"event_id": "10", "state": "pre", "lineup_home": [], "lineup_away": []}]}
+    current = {"matches": [{"event_id": "10", "state": "pre", "lineup_home": [{"name": "A"}], "lineup_away": []}]}
     assert [item["event_id"] for item in newly_available_lineups(base, current)] == ["10"]
     assert newly_available_lineups(current, current) == []
     assert newly_available_lineups({}, current) == []
+
+
+def test_finished_match_enrichment_never_fires_lineup_event():
+    base = {"matches": [{"event_id": "10", "state": "post", "lineup_home": [], "lineup_away": []}]}
+    enriched = {
+        "matches": [{
+            "event_id": "10",
+            "state": "post",
+            "lineup_home": [{"name": "A"}],
+            "lineup_away": [{"name": "B"}],
+        }]
+    }
+    assert newly_available_lineups(base, enriched) == []
