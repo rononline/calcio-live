@@ -27,6 +27,7 @@ process_league_data = _scoreboard.process_league_data
 process_news_data = _scoreboard.process_news_data
 process_scorers_data = _scoreboard.process_scorers_data
 process_api_football_fixture_data = _api_football.process_fixture_data
+process_api_football_head_to_head = _api_football.process_head_to_head_data
 process_api_football_standings_data = _api_football.process_standings_data
 process_api_football_scorers_data = _api_football.process_scorers_data
 process_api_football_fixture_enrichment = _api_football.process_fixture_enrichment
@@ -336,6 +337,37 @@ class TestApiFootballParser:
         result = process_api_football_fixture_data(data, _MockHass(), team_id="1", include_friendlies=False)
 
         assert result["matches"] == []
+
+    def test_head_to_head_keeps_finished_matches_newest_first_and_compact(self):
+        def fixture(fixture_id, date, status, home_score, away_score):
+            return {
+                "fixture": {
+                    "id": fixture_id,
+                    "date": date,
+                    "status": {"short": status, "long": "Match Finished" if status == "FT" else "Not Started"},
+                    "venue": {"name": "Test Ground"},
+                },
+                "league": {"id": 39, "name": "Premier League", "season": 2025},
+                "teams": {
+                    "home": {"id": 42, "name": "Arsenal", "logo": "arsenal.png"},
+                    "away": {"id": 50, "name": "Chelsea", "logo": "chelsea.png"},
+                },
+                "goals": {"home": home_score, "away": away_score},
+            }
+
+        data = {"response": [
+            fixture(1, "2025-01-01T15:00:00+00:00", "FT", 1, 0),
+            fixture(3, "2027-01-01T15:00:00+00:00", "NS", None, None),
+            fixture(2, "2026-01-01T15:00:00+00:00", "FT", 2, 1),
+        ]}
+
+        result = process_api_football_head_to_head(data, _MockHass(), limit=8)
+
+        assert [match["event_id"] for match in result] == ["2", "1"]
+        assert result[0]["home_score"] == "2"
+        assert result[0]["away_score"] == "1"
+        assert result[0]["provider"] == "api_football"
+        assert "key_events" not in result[0]
 
     def test_standings_response_maps_to_standings_model(self):
         data = {"response": [{"league": {

@@ -624,6 +624,60 @@ def test_api_football_team_matches_mixed_enriches_recent_finished_match():
     assert match["match_details"][0] == "Goal - 22': Player One"
 
 
+def test_api_football_enrichment_attaches_cached_head_to_head_to_next_match():
+    sensor = _sensor("team_match", code="39", team_name="Arsenal", team_id="42", provider="api_football")
+    sensor._attributes = {
+        "matches": [{
+            "event_id": "100",
+            "state": "pre",
+            "date_iso": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+            "home_id": 50,
+            "away_id": 42,
+            "home_team": "Chelsea",
+            "away_team": "Arsenal",
+        }]
+    }
+    calls = []
+
+    class _Hass:
+        class config:
+            language = "en"
+            time_zone = "Europe/Amsterdam"
+
+        async def async_add_executor_job(self, func, *args):
+            return func(*args)
+
+    async def _fetch(path, params=None):
+        calls.append((path, params))
+        if path == "fixtures/headtohead":
+            return {"response": [{
+                "fixture": {
+                    "id": 90,
+                    "date": "2026-01-01T15:00:00+00:00",
+                    "status": {"short": "FT", "long": "Match Finished"},
+                    "venue": {"name": "Emirates Stadium"},
+                },
+                "league": {"id": 39, "name": "Premier League", "season": 2025},
+                "teams": {
+                    "home": {"id": 42, "name": "Arsenal"},
+                    "away": {"id": 50, "name": "Chelsea"},
+                },
+                "goals": {"home": 2, "away": 1},
+            }]}
+        return {"response": []}
+
+    sensor.hass = _Hass()
+    sensor._fetch_api_football_json = _fetch
+
+    asyncio.run(sensor._enrich_with_api_football_fixture())
+
+    head_to_head = sensor._attributes["matches"][0]["head_to_head"]
+    assert head_to_head[0]["event_id"] == "90"
+    assert head_to_head[0]["home_score"] == "2"
+    assert ("fixtures/headtohead", {"h2h": "42-50", "last": 8}) in calls
+    assert sensor._api_football_cache_ttl("fixtures/headtohead") == 86400
+
+
 def test_api_football_empty_post_match_enrichment_is_not_cached():
     sensor = _sensor("team_matches_mixed", code="39", team_name="Arsenal", team_id="42", provider="api_football")
     sensor._attributes = {

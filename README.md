@@ -108,7 +108,7 @@ Current API-Football support:
 - `all_matches_today`
 - `standings`
 - `top_scorers`
-- Optional match enrichment for `team_match`, `team_matches` and `team_matches_mixed` via fixture events, statistics and lineups
+- Optional match enrichment for `team_match`, `team_matches` and `team_matches_mixed` via fixture events, statistics, lineups and head-to-head history
 
 API-Football news and knockout brackets are not supported yet. News and bracket sensors remain ESPN-only.
 
@@ -116,6 +116,7 @@ The integration caches API-Football calls to reduce quota use:
 - Main fixture/standings/scorers responses are shared by URL for up to 60 seconds. While a match is live, this cache follows `live_scan_interval` when that value is lower than 60 seconds.
 - Fixture events are cached for 30 seconds.
 - Fixture statistics and lineups are cached for 5 minutes.
+- Head-to-head history is cached for 24 hours per unique team pairing.
 - Predictions are cached for 6 hours, standings for 6 hours, injuries for 3 hours, and odds for 1 hour.
 - The `api_football_quota` diagnostic attribute is refreshed through API-Football `/status` every 30 minutes.
 
@@ -527,6 +528,7 @@ These are attached to the nearest upcoming match, and **only when real data exis
 | `odds` | dict | Averaged Match-Winner odds: `home` / `draw` / `away` (float), `bookmaker_count` |
 | `home_rank` / `away_rank` | int | League position (structured, so cards can localize the label) |
 | `home_points` / `away_points` | int | League points |
+| `head_to_head` | list | Up to 8 completed meetings, newest first; shared for 24 hours per unique team pairing |
 
 ### Compact match objects (`previous_matches`)
 
@@ -577,7 +579,7 @@ league identity in this order:
 The integration intentionally does not guess arbitrary ESPN CDN logo URLs from
 league IDs, because many IDs do not match the logo file number.
 
-### Enriched team_match sensor (via summary endpoint)
+### Enriched team_match sensor
 
 Available after kick-off when `enable_summary_enrichment` is on:
 
@@ -586,7 +588,7 @@ Available after kick-off when `enable_summary_enrichment` is on:
 | `home_statistics` / `away_statistics` | dict | Raw ESPN stat keys → values |
 | `key_events` | list | Goals, cards, subs with `clock`, `type`, `team`, `athletes` |
 | `lineup_home` / `lineup_away` | list | Players with `position`, `jersey`, `headshot` |
-| `head_to_head` | list | Recent H2H matches |
+| `head_to_head` | list | Recent H2H matches (ESPN summary or API-Football H2H endpoint) |
 | `home_standing_summary` / `away_standing_summary` | string | League position |
 | `home_record_summary` / `away_record_summary` | string | Season record |
 | `last_five_home` / `last_five_away` | string | Form string (e.g. `WDWLW`) |

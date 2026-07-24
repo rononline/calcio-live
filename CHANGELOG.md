@@ -1,5 +1,12 @@
 # Changelog
 
+## v3.9.2 (2026-07-24)
+- API-Football H2H: fetch up to eight completed meetings for the live or nearest upcoming fixture
+- quota: canonicalize the team pair and cache H2H responses for 24 hours, sharing one request across sensors
+- match contract: attach normalized, newest-first `head_to_head` data already supported by Team, Countdown, Matches and Match Center cards
+- robustness: ignore future/unstarted H2H fixtures and skip enrichment cleanly when team IDs are unavailable
+- tests: cover H2H parsing, ordering, compact output, canonical request parameters and cache lifetime
+
 ## v3.9.1 (2026-07-23)
 - entity IDs: sanitize competition/team-derived object IDs to Home Assistant's supported lowercase ASCII format
 - compatibility: valid existing IDs remain unchanged; characters such as `#`, parentheses and accents are normalized safely

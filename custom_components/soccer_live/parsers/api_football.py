@@ -527,6 +527,31 @@ def process_fixture_data(data, hass=None, team_name=None, team_id=None, include_
     }
 
 
+def process_head_to_head_data(data, hass=None, limit=8):
+    """Normalize API-Football H2H fixtures for the shared match contract.
+
+    The endpoint returns the regular fixture shape. Keep only completed
+    meetings, newest first, and publish the compact subset consumed by cards.
+    """
+    parsed = process_fixture_data(data, hass=hass)
+    finished = [
+        match for match in parsed.get("matches", [])
+        if match.get("state") == "post"
+    ]
+    finished.sort(key=lambda match: match.get("date_iso") or "", reverse=True)
+    fields = (
+        "event_id", "date_iso", "date", "home_id", "away_id",
+        "home_team", "away_team", "home_abbrev", "away_abbrev",
+        "home_logo", "away_logo", "home_score", "away_score",
+        "state", "status", "league_name", "league_id", "season_info",
+        "week_number", "venue", "provider",
+    )
+    return [
+        {key: match.get(key) for key in fields}
+        for match in finished[:max(0, int(limit or 0))]
+    ]
+
+
 def _league_info(response):
     seen = set()
     leagues = []

@@ -1022,6 +1022,7 @@ class SoccerLiveSensor(Entity):
                     self._summary_cache.pop(next(iter(self._summary_cache)))
                 self._summary_cache[event_id] = enrichment
 
+        await self._enrich_api_football_head_to_head(matches)
         await self._enrich_api_football_prematch(matches)
 
         self._detect_and_dispatch_goals(matches, self._pending_events)
@@ -1029,6 +1030,38 @@ class SoccerLiveSensor(Entity):
         self._detect_and_dispatch_match_finished(matches, self._pending_events)
         self._detect_and_dispatch_match_started(matches, self._pending_events)
         self._refresh_api_football_enriched_schedule_attributes(matches)
+
+    async def _enrich_api_football_head_to_head(self, matches):
+        """Attach recent completed meetings to the live/next fixture.
+
+        Team IDs are sorted in the request so every sensor following the same
+        matchup shares one 24-hour endpoint-cache entry.
+        """
+        target = self._prematch_target_match(matches)
+        if not target or target.get("head_to_head"):
+            return
+        try:
+            team_ids = sorted(
+                (int(target.get("home_id")), int(target.get("away_id")))
+            )
+        except (TypeError, ValueError):
+            return
+        if team_ids[0] <= 0 or team_ids[0] == team_ids[1]:
+            return
+
+        data = await self._fetch_api_football_json(
+            "fixtures/headtohead",
+            {"h2h": f"{team_ids[0]}-{team_ids[1]}", "last": 8},
+        )
+        if not self._api_football_response_has_items(data):
+            return
+
+        from .parsers.api_football import process_head_to_head_data
+        head_to_head = await self.hass.async_add_executor_job(
+            process_head_to_head_data, data, self.hass, 8
+        )
+        if head_to_head:
+            target["head_to_head"] = head_to_head
 
     def _next_upcoming_api_football_match(self, matches):
         """The nearest not-yet-started match with an event id, or None."""
@@ -1705,6 +1738,8 @@ class SoccerLiveSensor(Entity):
             return 45  # in-play odds move fast; short cache dedups sensors on the same fixture
         if path == "standings":
             return 21600  # league table changes at most daily; cache for 6 hours
+        if path == "fixtures/headtohead":
+            return 86400  # historical meetings are immutable; one call per matchup/day
         if path in {"teams", "coachs", "players/squads", "transfers"}:
             return 86400  # club profile / squad / transfers change rarely; cache 24h
         if path == "players/topassists":
