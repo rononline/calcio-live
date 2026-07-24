@@ -733,6 +733,59 @@ def test_api_football_list_enrichment_fetches_head_to_head_before_fixture_detail
     )
 
 
+def test_api_football_list_enrichment_fetches_h2h_for_selectable_upcoming_matches():
+    sensor = _sensor(
+        "team_matches_mixed",
+        code="88",
+        team_name="Feyenoord",
+        team_id="209",
+        provider="api_football",
+    )
+    now = datetime.now(timezone.utc)
+    sensor._attributes = {
+        "matches": [
+            {
+                "event_id": "atalanta",
+                "state": "pre",
+                "date_iso": (now + timedelta(days=2)).isoformat(),
+                "home_id": 209,
+                "away_id": 499,
+            },
+            {
+                "event_id": "sparta",
+                "state": "pre",
+                "date_iso": (now + timedelta(days=9)).isoformat(),
+                "home_id": 426,
+                "away_id": 209,
+            },
+        ]
+    }
+    calls = []
+
+    class _Hass:
+        class config:
+            language = "nl"
+            time_zone = "Europe/Amsterdam"
+
+        async def async_add_executor_job(self, func, *args):
+            return func(*args)
+
+    async def _fetch(path, params=None):
+        calls.append((path, params))
+        return {"response": []}
+
+    sensor.hass = _Hass()
+    sensor._fetch_api_football_json = _fetch
+
+    asyncio.run(sensor._enrich_with_api_football_fixture())
+
+    h2h_calls = [call for call in calls if call[0] == "fixtures/headtohead"]
+    assert h2h_calls == [
+        ("fixtures/headtohead", {"h2h": "209-499", "last": 8}),
+        ("fixtures/headtohead", {"h2h": "209-426", "last": 8}),
+    ]
+
+
 def test_api_football_empty_post_match_enrichment_is_not_cached():
     sensor = _sensor("team_matches_mixed", code="39", team_name="Arsenal", team_id="42", provider="api_football")
     sensor._attributes = {

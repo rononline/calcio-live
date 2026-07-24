@@ -1037,36 +1037,53 @@ class SoccerLiveSensor(Entity):
         self._refresh_api_football_enriched_schedule_attributes(matches)
 
     async def _enrich_api_football_head_to_head(self, matches):
-        """Attach recent completed meetings to the live/next fixture.
+        """Attach recent completed meetings to relevant selectable fixtures.
 
         Team IDs are sorted in the request so every sensor following the same
-        matchup shares one 24-hour endpoint-cache entry.
+        matchup shares one 24-hour endpoint-cache entry. Single-match sensors
+        only need their active fixture; list sensors enrich the first three
+        live/upcoming fixtures so changing the card selector keeps H2H useful
+        without fetching the entire season.
         """
-        target = self._prematch_target_match(matches)
-        if not target or target.get("head_to_head"):
-            return
-        try:
-            team_ids = sorted(
-                (int(target.get("home_id")), int(target.get("away_id")))
-            )
-        except (TypeError, ValueError):
-            return
-        if team_ids[0] <= 0 or team_ids[0] == team_ids[1]:
-            return
-
-        data = await self._fetch_api_football_json(
-            "fixtures/headtohead",
-            {"h2h": f"{team_ids[0]}-{team_ids[1]}", "last": 8},
-        )
-        if not self._api_football_response_has_items(data):
-            return
-
         from .parsers.api_football import process_head_to_head_data
-        head_to_head = await self.hass.async_add_executor_job(
-            process_head_to_head_data, data, self.hass, 8
-        )
-        if head_to_head:
-            target["head_to_head"] = head_to_head
+
+        for target in self._api_football_h2h_targets(matches):
+            if target.get("head_to_head"):
+                continue
+            try:
+                team_ids = sorted(
+                    (int(target.get("home_id")), int(target.get("away_id")))
+                )
+            except (TypeError, ValueError):
+                continue
+            if team_ids[0] <= 0 or team_ids[0] == team_ids[1]:
+                continue
+
+            data = await self._fetch_api_football_json(
+                "fixtures/headtohead",
+                {"h2h": f"{team_ids[0]}-{team_ids[1]}", "last": 8},
+            )
+            if not self._api_football_response_has_items(data):
+                continue
+
+            head_to_head = await self.hass.async_add_executor_job(
+                process_head_to_head_data, data, self.hass, 8
+            )
+            if head_to_head:
+                target["head_to_head"] = head_to_head
+
+    def _api_football_h2h_targets(self, matches):
+        """Return the active fixtures whose H2H can be selected in the card."""
+        if self._sensor_type not in {"team_matches", "team_matches_mixed"}:
+            target = self._prematch_target_match(matches)
+            return [target] if target else []
+
+        live = [m for m in matches if m.get("state") == "in" and m.get("event_id")]
+        upcoming = [
+            m for m in matches if m.get("state") == "pre" and m.get("event_id")
+        ]
+        upcoming.sort(key=lambda m: m.get("date_iso") or "")
+        return (live + upcoming)[:3]
 
     def _next_upcoming_api_football_match(self, matches):
         """The nearest not-yet-started match with an event id, or None."""

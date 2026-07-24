@@ -1,5 +1,11 @@
 # Changelog
 
+## v3.9.4 (2026-07-24)
+- API-Football H2H: enrich the first three selectable live/upcoming fixtures on list sensors instead of only the nearest fixture
+- Match Center: switching from an earlier match such as Atalanta to Sparta now retains fixture-specific H2H data
+- quota: keep H2H bounded to three fixtures and reuse the existing canonical 24-hour matchup cache
+- tests: reproduce and cover a schedule where the requested H2H fixture is not the first upcoming match
+
 ## v3.9.3 (2026-07-24)
 - API-Football H2H: prioritize the single cached H2H request before historical fixture enrichment
 - quota: prevent events/statistics/lineup calls for list sensors from triggering provider backoff before H2H is fetched
