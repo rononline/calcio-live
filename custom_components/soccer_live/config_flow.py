@@ -7,7 +7,17 @@ import logging
 import aiohttp
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
-from homeassistant.helpers.selector import SelectSelector, SelectSelectorConfig
+try:
+    from homeassistant.helpers.selector import SelectSelector, SelectSelectorConfig
+except ImportError:  # pragma: no cover - lightweight test stubs
+    class SelectSelectorConfig:  # minimal fallback for unit-test stubs
+        def __init__(self, options=None, translation_key=None):
+            self.options = options
+            self.translation_key = translation_key
+
+    class SelectSelector:  # minimal fallback for unit-test stubs
+        def __init__(self, config):
+            self.config = config
 from .const import (
     CONF_API_FOOTBALL_KEY,
     CONF_API_FOOTBALL_SEASON,
@@ -30,6 +40,16 @@ FOLLOW_ALL_TODAY = "all_today"
 FOLLOW_NEWS = "news"
 TEAM_METHOD_SEARCH = "search"
 TEAM_METHOD_LEAGUE = "league"
+
+# Backward-compatible aliases for the older English labels used by the tests
+# and by any saved config that still carries the legacy values.
+OPTION_SELECT_TEAM = FOLLOW_TEAM
+OPTION_SELECT_LEAGUE = FOLLOW_LEAGUE
+OPTION_MANUAL_TEAM = FOLLOW_MANUAL
+OPTION_ALL_TODAY = FOLLOW_ALL_TODAY
+OPTION_NEWS = FOLLOW_NEWS
+OPTION_API_FOOTBALL_TEAM_SEARCH = TEAM_METHOD_SEARCH
+OPTION_API_FOOTBALL_TEAM_BY_LEAGUE = TEAM_METHOD_LEAGUE
 
 LEGACY_FOLLOW_SELECTIONS = {
     "team": FOLLOW_TEAM,

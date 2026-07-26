@@ -211,7 +211,7 @@ def test_follow_offers_news_for_espn_and_defaults_to_team():
     flow._data["provider"] = "espn"
     result = asyncio.run(flow.async_step_follow())
     assert result["step_id"] == "follow"
-    selections = result["data_schema"]["selection"]
+    selections = result["data_schema"]["selection"].config.options
     assert OPT_NEWS in selections
     # Team is offered first so it is the default choice.
     assert selections[0] == OPT_TEAM
@@ -221,7 +221,7 @@ def test_follow_hides_news_for_api_football():
     flow = SoccerLiveConfigFlow()
     flow._data["provider"] = "api_football"
     result = asyncio.run(flow.async_step_follow())
-    selections = result["data_schema"]["selection"]
+    selections = result["data_schema"]["selection"].config.options
     assert OPT_NEWS not in selections
     assert OPT_TEAM in selections
 

@@ -97,6 +97,29 @@
         }
       }
     },
+    "selector": {
+      "provider_source": {
+        "options": {
+          "espn": "ESPN — gratuito, senza chiave API (consigliato)",
+          "api_football": "API-Football — chiave API richiesta (pronostici, quote, infortuni)"
+        }
+      },
+      "follow_selection": {
+        "options": {
+          "team": "Squadra",
+          "league": "Campionato",
+          "all_today": "Tutte le partite di oggi",
+          "news": "Notizie",
+          "manual": "Inserimento manuale"
+        }
+      },
+      "api_football_team_method": {
+        "options": {
+          "search": "Cerca squadra per nome",
+          "league": "Seleziona squadra dal campionato"
+        }
+      }
+    },
     "error": {
       "api_key_required": "API-Football richiede una chiave API.",
       "unsupported_provider_selection": "Le notizie API-Football non sono ancora supportate.",

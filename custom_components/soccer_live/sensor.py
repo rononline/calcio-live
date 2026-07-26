@@ -2,6 +2,8 @@ import asyncio
 import json
 import aiohttp
 from datetime import datetime, timedelta, timezone
+import re
+import unicodedata
 from zoneinfo import ZoneInfo
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.storage import Store
@@ -63,6 +65,19 @@ KNOCKOUT_LEAGUES = {
     "ger.dfb_pokal",
     "fra.coupe_de_france",
 }
+
+
+def safe_entity_object_id(value):
+    """Return a Home Assistant-safe object ID fragment.
+
+    Kept as a small public helper for test coverage and for any future entity
+    naming cleanups.
+    """
+    text = unicodedata.normalize("NFKD", str(value or "")).encode("ascii", "ignore").decode("ascii")
+    text = text.lower().replace(" ", "_")
+    text = re.sub(r"[^a-z0-9_]+", "_", text)
+    text = re.sub(r"_+", "_", text).strip("_")
+    return text
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback):
     try:
