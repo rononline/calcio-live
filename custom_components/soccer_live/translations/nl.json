@@ -97,6 +97,29 @@
         }
       }
     },
+    "selector": {
+      "provider_source": {
+        "options": {
+          "espn": "ESPN — gratis, geen API-key (aanbevolen)",
+          "api_football": "API-Football — API-key vereist (voorspellingen, odds, blessures)"
+        }
+      },
+      "follow_selection": {
+        "options": {
+          "team": "Team",
+          "league": "Competitie",
+          "all_today": "Alle wedstrijden vandaag",
+          "news": "Nieuws",
+          "manual": "Handmatige invoer"
+        }
+      },
+      "api_football_team_method": {
+        "options": {
+          "search": "Teamnaam zoeken",
+          "league": "Selecteer team uit competitie"
+        }
+      }
+    },
     "error": {
       "api_key_required": "API-Football vereist een API-key.",
       "unsupported_provider_selection": "API-Football nieuws wordt nog niet ondersteund.",

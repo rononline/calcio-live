@@ -12,8 +12,6 @@ from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 import logging
 import random
-import re
-import unicodedata
 from urllib.parse import urlencode
 from .const import (
     CONF_API_FOOTBALL_KEY,
@@ -32,16 +30,15 @@ from .const import (
 )
 
 _LIVE_POLL_TYPES = {"team_match", "team_matches", "team_matches_mixed", "match_day", "all_matches_today"}
+_LEGACY_SELECTIONS = {
+    "news": "news",
+    "team": "team",
+    "league": "league",
+    "all matches today": "all_today",
+    "manual entry": "manual",
+}
 
 _LOGGER = logging.getLogger(__name__)
-
-
-def safe_entity_object_id(value):
-    """Return a stable Home Assistant-safe object ID."""
-    normalized = unicodedata.normalize("NFKD", str(value or ""))
-    ascii_value = normalized.encode("ascii", "ignore").decode("ascii").lower()
-    slug = re.sub(r"[^a-z0-9_]+", "_", ascii_value)
-    return re.sub(r"_+", "_", slug).strip("_") or "soccer_live"
 
 _DATE_RANGE_SENSOR_TYPES = {"match_day", "team_match", "team_matches"}
 
@@ -72,7 +69,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
         competition_name = entry.data.get("name")
         competition_code = entry.data.get("competition_code")
         team_name = entry.data.get("team_name")
-        selection = entry.data.get("selection")
+        selection = _LEGACY_SELECTIONS.get(str(entry.data.get("selection") or "").strip().lower(), str(entry.data.get("selection") or "").strip().lower())
         team_id = entry.data.get("team_id")
         provider = entry.data.get(CONF_PROVIDER, PROVIDER_ESPN)
         api_football_key = entry.data.get(CONF_API_FOOTBALL_KEY, "")
@@ -109,7 +106,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
         if DOMAIN not in hass.data:
             hass.data[DOMAIN] = {}
     
-        if selection == "News":
+        if selection == "news":
             comp_norm = competition_code.replace(" ", "_").replace(".", "_").lower()
             sensors += [
                 SoccerLiveSensor(
@@ -278,12 +275,9 @@ class SoccerLiveSensor(Entity):
         self._name = name
         # Localised display name via the sensor type's translation_key (so Dutch
         # users see "Volgende wedstrijd" etc.); the device supplies the team/
-        # competition context. Pin the verbose entity_id to the slug so it stays
-        # stable (and doesn't collapse to e.g. sensor.next_match) now that the
-        # display name is human-readable.
+        # competition context.
         self._attr_has_entity_name = True
         self._attr_translation_key = sensor_type
-        self.entity_id = f"sensor.{safe_entity_object_id(name)}"
         self._code = code
         self._team_id = team_id
         self._sensor_type = sensor_type

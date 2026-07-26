@@ -97,6 +97,29 @@
         }
       }
     },
+    "selector": {
+      "provider_source": {
+        "options": {
+          "espn": "ESPN — free, no API key (recommended)",
+          "api_football": "API-Football — API key required (predictions, odds, injuries)"
+        }
+      },
+      "follow_selection": {
+        "options": {
+          "team": "Team",
+          "league": "League",
+          "all_today": "All matches today",
+          "news": "News",
+          "manual": "Manual entry"
+        }
+      },
+      "api_football_team_method": {
+        "options": {
+          "search": "Search team by name",
+          "league": "Select team from league"
+        }
+      }
+    },
     "error": {
       "api_key_required": "API-Football requires an API key.",
       "unsupported_provider_selection": "API-Football news is not supported yet.",

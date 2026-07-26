@@ -83,9 +83,6 @@ class SoccerLiveCalendar(CalendarEntity):
         self._attr_has_entity_name = True
         self._attr_translation_key = "match_calendar"
         self._attr_unique_id = f"{entry.entry_id}_calendar"
-        # Keep the verbose entity_id stable now that the display name is short.
-        slug = str(label).lower().replace(" ", "_").replace(".", "_")
-        self.entity_id = f"calendar.soccer_live_{slug}"
         # Group under the same device as this entry's sensors.
         self._attr_device_info = {
             "identifiers": {(DOMAIN, entry.entry_id)},

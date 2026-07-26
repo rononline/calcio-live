@@ -7,6 +7,7 @@ import logging
 import aiohttp
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
+from homeassistant.helpers.selector import SelectSelector, SelectSelectorConfig
 from .const import (
     CONF_API_FOOTBALL_KEY,
     CONF_API_FOOTBALL_SEASON,
@@ -22,13 +23,25 @@ from .data import parse_competitions, parse_teams
 
 _LOGGER = logging.getLogger(__name__)
 
-OPTION_SELECT_LEAGUE = "League"
-OPTION_SELECT_TEAM = "Team"
-OPTION_MANUAL_TEAM = "Manual entry"
-OPTION_ALL_TODAY = "All matches today"
-OPTION_NEWS = "News"
-OPTION_API_FOOTBALL_TEAM_SEARCH = "Search team by name"
-OPTION_API_FOOTBALL_TEAM_BY_LEAGUE = "Select team from league"
+FOLLOW_TEAM = "team"
+FOLLOW_LEAGUE = "league"
+FOLLOW_MANUAL = "manual"
+FOLLOW_ALL_TODAY = "all_today"
+FOLLOW_NEWS = "news"
+TEAM_METHOD_SEARCH = "search"
+TEAM_METHOD_LEAGUE = "league"
+
+LEGACY_FOLLOW_SELECTIONS = {
+    "team": FOLLOW_TEAM,
+    "league": FOLLOW_LEAGUE,
+    "manual entry": FOLLOW_MANUAL,
+    "all matches today": FOLLOW_ALL_TODAY,
+    "news": FOLLOW_NEWS,
+}
+
+
+def _normalize_follow_selection(value):
+    return LEGACY_FOLLOW_SELECTIONS.get(str(value or "").strip().lower(), str(value or "").strip().lower())
 
 
 def _normalize_provider(provider):
@@ -98,10 +111,12 @@ class SoccerLiveConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema({
-                vol.Required(CONF_PROVIDER, default=PROVIDER_ESPN): vol.In({
-                    PROVIDER_ESPN: "ESPN — free, no API key (recommended)",
-                    PROVIDER_API_FOOTBALL: "API-Football — API key required (predictions, odds, injuries)",
-                }),
+                vol.Required(CONF_PROVIDER, default=PROVIDER_ESPN): SelectSelector(
+                    SelectSelectorConfig(
+                        options=[PROVIDER_ESPN, PROVIDER_API_FOOTBALL],
+                        translation_key="provider_source",
+                    )
+                ),
             }),
             errors=self._errors,
         )
@@ -178,39 +193,44 @@ class SoccerLiveConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         provider = _normalize_provider(self._data.get(CONF_PROVIDER))
 
         if user_input is not None:
-            selection = user_input.get("selection")
+            selection = _normalize_follow_selection(user_input.get("selection"))
             # Defensive guard in case a client submits a filtered-out combo.
-            if provider == PROVIDER_API_FOOTBALL and selection == OPTION_NEWS:
+            if provider == PROVIDER_API_FOOTBALL and selection == FOLLOW_NEWS:
                 self._errors["selection"] = "unsupported_provider_selection"
             else:
                 self._data["selection"] = selection
-                if selection == OPTION_SELECT_LEAGUE:
+                if selection == FOLLOW_LEAGUE:
                     return await self.async_step_league()
-                if selection == OPTION_SELECT_TEAM:
+                if selection == FOLLOW_TEAM:
                     if provider == PROVIDER_API_FOOTBALL:
                         return await self.async_step_api_football_team_search()
                     return await self.async_step_select_competition_for_team()
-                if selection == OPTION_ALL_TODAY:
+                if selection == FOLLOW_ALL_TODAY:
                     self._data["competition_code"] = "99999"  # Dummy code for the "all matches today" sensor
                     return self.async_create_entry(
                         title="All matches today",
                         data=self._data,
                     )
-                if selection == OPTION_NEWS:
+                if selection == FOLLOW_NEWS:
                     return await self.async_step_news_competition()
-                if selection == OPTION_MANUAL_TEAM:
+                if selection == FOLLOW_MANUAL:
                     return await self.async_step_manual_team()
 
         # Team first so it is the default; News only for providers that supply it.
-        selections = [OPTION_SELECT_TEAM, OPTION_SELECT_LEAGUE, OPTION_ALL_TODAY]
+        selections = [FOLLOW_TEAM, FOLLOW_LEAGUE, FOLLOW_ALL_TODAY]
         if provider_supports(provider, "news"):
-            selections.append(OPTION_NEWS)
-        selections.append(OPTION_MANUAL_TEAM)
+            selections.append(FOLLOW_NEWS)
+        selections.append(FOLLOW_MANUAL)
 
         return self.async_show_form(
             step_id="follow",
             data_schema=vol.Schema({
-                vol.Required("selection", default=OPTION_SELECT_TEAM): vol.In(selections),
+                vol.Required("selection", default=FOLLOW_TEAM): SelectSelector(
+                    SelectSelectorConfig(
+                        options=selections,
+                        translation_key="follow_selection",
+                    )
+                ),
             }),
             errors=self._errors,
         )
@@ -218,17 +238,19 @@ class SoccerLiveConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_api_football_team_method(self, user_input=None):
         if user_input is not None:
             method = user_input.get("team_method")
-            if method == OPTION_API_FOOTBALL_TEAM_SEARCH:
+            if method == TEAM_METHOD_SEARCH:
                 return await self.async_step_api_football_team_search()
             return await self.async_step_select_competition_for_team()
 
         return self.async_show_form(
             step_id="api_football_team_method",
             data_schema=vol.Schema({
-                vol.Required("team_method", default=OPTION_API_FOOTBALL_TEAM_SEARCH): vol.In([
-                    OPTION_API_FOOTBALL_TEAM_SEARCH,
-                    OPTION_API_FOOTBALL_TEAM_BY_LEAGUE,
-                ]),
+                vol.Required("team_method", default=TEAM_METHOD_SEARCH): SelectSelector(
+                    SelectSelectorConfig(
+                        options=[TEAM_METHOD_SEARCH, TEAM_METHOD_LEAGUE],
+                        translation_key="api_football_team_method",
+                    )
+                ),
             }),
             errors=self._errors,
         )

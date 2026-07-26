@@ -1,5 +1,11 @@
 # Changelog
 
+## v3.9.7 (2026-07-26)
+- Localization: convert config-flow choice fields to translated selectors so setup no longer shows raw English labels
+- Compatibility: keep legacy config entries working while normalizing the stored follow-selection values
+- UI: localize Match Center preview coverage labels and clean up the Club recent-match detail row
+- Hygiene: stop forcing custom entity IDs on sensor and calendar entities so Home Assistant warnings go away
+
 ## v3.9.6 (2026-07-24)
 - match events: the integration now actually fires `soccer_live_second_half`, `soccer_live_match_postponed` and `soccer_live_match_cancelled` on the corresponding phase transition (they were only reachable via the test simulator before, so automations tested against them never triggered live). The halftime detector was generalised into a single phase-transition dispatcher driven by `match_contract.PHASE_EVENTS`, keeping the first-observation guard so a restart can't replay old transitions
 - notifications: postponed and cancelled matches now also send an optional push (when a notify service is configured), alongside the existing goal/card/full-time ones
