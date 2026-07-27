@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- release automation: publish only after the existing tests, real Home Assistant test, blueprint validation, Hassfest and HACS validation succeed
+- release notes: use the matching changelog section and verify the generated zip before and after upload
+- CI: cancel stale runs and enable weekly Dependabot updates for GitHub Actions and Python dependencies
+
 ## v3.9.9 (2026-07-27)
 - events: deduplicate provider events across the next/all/mixed sensors of one config entry, including lineup and match-phase transitions
 - notifications: localize direct goal, card, full-time, postponed and cancelled push messages in all seven supported languages

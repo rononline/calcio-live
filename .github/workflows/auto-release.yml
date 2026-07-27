@@ -9,8 +9,22 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: auto-release-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  tests:
+    uses: ./.github/workflows/tests.yaml
+
+  hassfest:
+    uses: ./.github/workflows/hassfest.yaml
+
+  hacs:
+    uses: ./.github/workflows/hacs_action.yaml
+
   release:
+    needs: [tests, hassfest, hacs]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -34,20 +48,16 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Build release notes from version-bump commit
+      - name: Build release notes from changelog
         if: steps.check.outputs.exists == 'false'
         id: notes
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          # Find the commit that first introduced this version in manifest.json
-          NOTE=$(git log --format="%H" -- custom_components/soccer_live/manifest.json | while read sha; do
-            prev=$(git show "${sha}^:custom_components/soccer_live/manifest.json" 2>/dev/null | jq -r '.version // empty' 2>/dev/null || true)
-            curr=$(git show "${sha}:custom_components/soccer_live/manifest.json" 2>/dev/null | jq -r '.version // empty' 2>/dev/null || true)
-            if [ "$curr" = "$VERSION" ] && [ "$prev" != "$VERSION" ]; then
-              git log -1 --pretty=%B "$sha"
-              break
-            fi
-          done)
+          NOTE=$(awk -v version="$VERSION" '
+            $0 ~ "^## v" version "([ (]|$)" { found=1; next }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md)
           [ -z "$NOTE" ] && NOTE=$(git log -1 --pretty=%B)
           {
             echo 'notes<<EOF_NOTES'
@@ -63,6 +73,7 @@ jobs:
             --exclude "soccer_live/__pycache__/*" \
             --exclude "soccer_live/*.pyc" \
             --exclude "soccer_live/.claude/*"
+          test -s "$GITHUB_WORKSPACE/soccer_live.zip"
 
       - name: Create tag and release
         if: steps.check.outputs.exists == 'false'
@@ -74,3 +85,14 @@ jobs:
           files: soccer_live.zip
           draft: false
           prerelease: false
+
+      - name: Verify release asset
+        if: steps.check.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          SIZE=$(gh release view "${{ steps.version.outputs.tag }}" \
+            --json assets \
+            --jq '.assets[] | select(.name == "soccer_live.zip") | .size')
+          test -n "$SIZE"
+          test "$SIZE" -gt 0

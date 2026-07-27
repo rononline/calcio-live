@@ -1,9 +1,14 @@
 name: Tests
 
 on:
+  workflow_call:
   workflow_dispatch:
   push:
   pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-tests-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   pytest:

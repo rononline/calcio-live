@@ -1,11 +1,16 @@
 name: Hassfest
 
 on:
+  workflow_call:
   workflow_dispatch:
   push:
   pull_request:
   schedule:
     - cron: "0 0 * * *"
+
+concurrency:
+  group: ${{ github.workflow }}-hassfest-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   validate:
