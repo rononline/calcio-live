@@ -77,6 +77,7 @@ def _sensor(sensor_type, code="ned.1", team_name=None, team_id="1234", provider=
     sensor = SoccerLiveSensor.__new__(SoccerLiveSensor)
     sensor._name = f"test_{sensor_type}"
     sensor.hass = None
+    sensor._config_entry_id = "entry-1"
     sensor._code = code
     sensor._sensor_type = sensor_type
     sensor._team_name = team_name
@@ -114,6 +115,79 @@ def _sensor(sensor_type, code="ned.1", team_name=None, team_id="1234", provider=
 
     sensor._get_calendar_data = _calendar_should_not_be_called
     return sensor
+
+
+def test_bus_events_are_deduplicated_across_sensors_in_one_entry():
+    SoccerLiveSensor._bus_event_fingerprints = {}
+    first = _sensor("team_matches")
+    second = _sensor("team_matches_mixed")
+    event = {
+        "event_id": "fixture-1",
+        "sensor_name": "sensor-a",
+        "home_team": "Feyenoord",
+        "away_team": "Sparta",
+        "home_score": 1,
+        "away_score": 0,
+    }
+
+    assert first._claim_bus_event("soccer_live_goal", event) is True
+    assert second._claim_bus_event(
+        "soccer_live_goal", {**event, "sensor_name": "sensor-b"}
+    ) is False
+    assert second._claim_bus_event(
+        "soccer_live_goal", {**event, "sensor_name": "sensor-b", "home_score": 2}
+    ) is True
+    assert first._claim_bus_event(
+        "soccer_live_lineup_available",
+        {"event_id": "fixture-2", "home_players": ["A"]},
+    ) is True
+    assert second._claim_bus_event(
+        "soccer_live_lineup_available",
+        {"event_id": "fixture-2", "home_players": ["A", "B"]},
+    ) is False
+
+
+def test_direct_notification_uses_configured_language():
+    calls = []
+
+    class _ConfigEntries:
+        @staticmethod
+        def async_get_entry(_entry_id):
+            return types.SimpleNamespace(
+                options={
+                    "notify_service": "notify.mobile_app_phone",
+                    "card_language": "nl-NL",
+                }
+            )
+
+    class _Services:
+        @staticmethod
+        async def async_call(domain, service, data, blocking=False):
+            calls.append((domain, service, data, blocking))
+
+    sensor = _sensor("team_matches")
+    sensor.hass = types.SimpleNamespace(
+        config_entries=_ConfigEntries(),
+        config=types.SimpleNamespace(language="en"),
+        services=_Services(),
+    )
+    asyncio.run(
+        sensor._send_notification(
+            "soccer_live_goal",
+            {
+                "home_team": "Feyenoord",
+                "away_team": "Sparta",
+                "home_score": 1,
+                "away_score": 0,
+                "player": "",
+                "minute": "12",
+            },
+        )
+    )
+
+    assert calls[0][0:2] == ("notify", "mobile_app_phone")
+    assert calls[0][2]["title"].startswith("⚽ Doelpunt!")
+    assert calls[0][2]["message"].startswith("Onbekend")
 
 
 def test_pick_goal_strings_attributes_penalties_across_providers():
@@ -248,7 +322,6 @@ def test_rate_limit_backoff_pauses_and_resets():
     assert SoccerLiveSensor._af_backoff == 1800
 
     # Once the pause window has elapsed, a success clears it.
-    import datetime as _dt
     SoccerLiveSensor._af_enrich_pause_until = _dt.datetime.now() - _dt.timedelta(seconds=1)
     SoccerLiveSensor._af_note_success()
     assert SoccerLiveSensor._af_backoff == 0

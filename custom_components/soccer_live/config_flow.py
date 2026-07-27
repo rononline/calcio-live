@@ -5,7 +5,7 @@ from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 import logging
 import aiohttp
-from datetime import datetime, timedelta
+from datetime import datetime
 from dateutil.relativedelta import relativedelta
 try:
     from homeassistant.helpers.selector import SelectSelector, SelectSelectorConfig

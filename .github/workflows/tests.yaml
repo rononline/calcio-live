@@ -10,12 +10,14 @@ jobs:
     name: Unit tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7.0.0
+      - uses: actions/setup-python@v6.2.0
         with:
           python-version: "3.12"
       - name: Install test dependencies
         run: pip install -r requirements-test.txt
+      - name: Check for undefined names and syntax errors
+        run: ruff check custom_components/soccer_live tests scripts --select E9,F63,F7,F82
       - name: Run tests
         # The real-HA test (tests/test_ha_config_flow.py) is skipped here
         # (its plugin isn't installed) and runs in the ha-tests job instead.
@@ -25,8 +27,8 @@ jobs:
     name: Real Home Assistant test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7.0.0
+      - uses: actions/setup-python@v6.2.0
         with:
           python-version: "3.13"
       - name: Install Home Assistant test dependencies
@@ -40,8 +42,8 @@ jobs:
     name: Validate blueprints
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7.0.0
+      - uses: actions/setup-python@v6.2.0
         with:
           python-version: "3.12"
       - name: Install test dependencies

@@ -694,6 +694,6 @@ def _parse_date(hass, date_str, show_time=True):
             return local_date.strftime("%d-%m-%Y %H:%M")
         else:
             return local_date.strftime("%d-%m-%Y")
-    except (ValueError, TypeError) as e:
+    except (ValueError, TypeError):
 
         return "N/A"

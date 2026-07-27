@@ -1,7 +1,7 @@
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
-from .const import DOMAIN, _LOGGER
+from .const import DOMAIN
 from .simulator import EVENT_TYPES, simulated_event
 
 PLATFORMS = ["sensor", "calendar"]

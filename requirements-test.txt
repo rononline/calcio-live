@@ -9,3 +9,4 @@ pytest>=8.0
 pytest-asyncio>=0.23     # for the pytest.ini asyncio_mode=auto config
 python-dateutil>=2.8.2   # runtime dependency, also imported directly by tests
 PyYAML>=6.0              # scripts/validate_blueprints.py
+ruff>=0.16,<0.17         # critical static checks (undefined names/import errors)

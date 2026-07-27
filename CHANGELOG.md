@@ -1,5 +1,13 @@
 # Changelog
 
+## v3.9.9 (2026-07-27)
+- events: deduplicate provider events across the next/all/mixed sensors of one config entry, including lineup and match-phase transitions
+- notifications: localize direct goal, card, full-time, postponed and cancelled push messages in all seven supported languages
+- logging: move routine per-sensor update messages from info to debug
+- CI: add a focused Ruff undefined-name/syntax check and update GitHub Actions to Node 24-based versions
+- repository: normalize accidental executable permissions on Python and JSON integration files
+- tests: cover cross-sensor event fingerprints and localized direct notifications
+
 ## v3.9.8 (2026-07-27)
 - bugfix: restore the missing `re` import in `sensor.py` so card-event dispatch no longer throws `name 're' is not defined` during live updates
 - release: publish the runtime fix as a new integration version so Home Assistant users can actually receive it

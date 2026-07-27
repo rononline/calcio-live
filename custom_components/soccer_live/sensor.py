@@ -14,6 +14,7 @@ from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 import logging
 import random
+import time
 from urllib.parse import urlencode
 from .const import (
     CONF_API_FOOTBALL_KEY,
@@ -43,6 +44,81 @@ _LEGACY_SELECTIONS = {
 _LOGGER = logging.getLogger(__name__)
 
 _DATE_RANGE_SENSOR_TYPES = {"match_day", "team_match", "team_matches"}
+_SINGLE_FIXTURE_EVENT_TYPES = {
+    "soccer_live_lineup_available",
+    "soccer_live_match_started",
+    "soccer_live_halftime",
+    "soccer_live_second_half",
+    "soccer_live_match_finished",
+    "soccer_live_match_postponed",
+    "soccer_live_match_cancelled",
+}
+
+_NOTIFICATION_TEXT = {
+    "en": {
+        "goal": "Goal!",
+        "yellow_card": "Yellow card",
+        "red_card": "Red card",
+        "full_time": "Full time",
+        "postponed": "Postponed",
+        "cancelled": "Cancelled",
+        "unknown": "Unknown",
+    },
+    "nl": {
+        "goal": "Doelpunt!",
+        "yellow_card": "Gele kaart",
+        "red_card": "Rode kaart",
+        "full_time": "Einde wedstrijd",
+        "postponed": "Uitgesteld",
+        "cancelled": "Afgelast",
+        "unknown": "Onbekend",
+    },
+    "de": {
+        "goal": "Tor!",
+        "yellow_card": "Gelbe Karte",
+        "red_card": "Rote Karte",
+        "full_time": "Abpfiff",
+        "postponed": "Verschoben",
+        "cancelled": "Abgesagt",
+        "unknown": "Unbekannt",
+    },
+    "fr": {
+        "goal": "But !",
+        "yellow_card": "Carton jaune",
+        "red_card": "Carton rouge",
+        "full_time": "Fin du match",
+        "postponed": "Reporté",
+        "cancelled": "Annulé",
+        "unknown": "Inconnu",
+    },
+    "es": {
+        "goal": "¡Gol!",
+        "yellow_card": "Tarjeta amarilla",
+        "red_card": "Tarjeta roja",
+        "full_time": "Final del partido",
+        "postponed": "Aplazado",
+        "cancelled": "Cancelado",
+        "unknown": "Desconocido",
+    },
+    "it": {
+        "goal": "Gol!",
+        "yellow_card": "Cartellino giallo",
+        "red_card": "Cartellino rosso",
+        "full_time": "Fine partita",
+        "postponed": "Rinviata",
+        "cancelled": "Annullata",
+        "unknown": "Sconosciuto",
+    },
+    "pt": {
+        "goal": "Golo!",
+        "yellow_card": "Cartão amarelo",
+        "red_card": "Cartão vermelho",
+        "full_time": "Fim do jogo",
+        "postponed": "Adiado",
+        "cancelled": "Cancelado",
+        "unknown": "Desconhecido",
+    },
+}
 
 # Competitions with a knockout bracket phase
 KNOCKOUT_LEAGUES = {
@@ -268,6 +344,7 @@ class SoccerLiveSensor(Entity):
     _calendar_error_logs = {}
     _api_football_endpoint_cache = {}
     _api_football_endpoint_locks = {}
+    _bus_event_fingerprints = {}
     # API-usage diagnostics (shared across sensors): per-endpoint calls,
     # cache hits, last success and last HTTP status, plus a rate-limit marker.
     _api_football_stats = {}
@@ -514,7 +591,7 @@ class SoccerLiveSensor(Entity):
         return self._config_entry_id
 
     async def async_update(self):
-        _LOGGER.info(f"Starting update for {self._name}")
+        _LOGGER.debug("Starting update for %s", self._name)
 
         self._pending_events = []
         self._save_store_needed = False
@@ -694,7 +771,7 @@ class SoccerLiveSensor(Entity):
     def _fire_new_lineup_events(self, previous_attrs, current_attrs):
         from .club_changes import newly_available_lineups
         for match in newly_available_lineups(previous_attrs, current_attrs):
-            self.hass.bus.async_fire("soccer_live_lineup_available", {
+            event_data = {
                 "entity_id": self.entity_id,
                 "team_id": self._team_id,
                 "event_id": match.get("event_id"),
@@ -702,7 +779,9 @@ class SoccerLiveSensor(Entity):
                 "away_team": match.get("away_team"),
                 "home_players": [item.get("name") or item.get("player") for item in (match.get("lineup_home") or [])],
                 "away_players": [item.get("name") or item.get("player") for item in (match.get("lineup_away") or [])],
-            })
+            }
+            if self._claim_bus_event("soccer_live_lineup_available", event_data):
+                self.hass.bus.async_fire("soccer_live_lineup_available", event_data)
 
     def _publish_matches(self, matches):
         """Publish this sensor's match list to a shared per-entry store so other
@@ -736,13 +815,44 @@ class SoccerLiveSensor(Entity):
         now_iso = datetime.now().isoformat()
         for event_type, event_data in self._pending_events:
             self._store_last_event_attributes(event_type, event_data, now_iso)
-            if fire_bus:
+            if fire_bus and self._claim_bus_event(event_type, event_data):
                 self.hass.bus.fire(event_type, event_data)
                 await self._send_notification(event_type, event_data)
         self._pending_events = []
         if self._save_store_needed:
             self._save_store_needed = False
             await self._save_match_finished_store()
+
+    def _claim_bus_event(self, event_type, event_data, ttl=300):
+        """Claim an event fingerprint shared by all sensors in this HA process."""
+        now = time.monotonic()
+        cache = SoccerLiveSensor._bus_event_fingerprints
+        expired = [key for key, timestamp in cache.items() if now - timestamp >= ttl]
+        for key in expired:
+            cache.pop(key, None)
+
+        canonical = (
+            {"event_id": (event_data or {}).get("event_id")}
+            if event_type in _SINGLE_FIXTURE_EVENT_TYPES
+            else {
+                key: value
+                for key, value in (event_data or {}).items()
+                if key not in {"entity_id", "sensor_name"}
+            }
+        )
+        fingerprint = (
+            self._config_entry_id,
+            event_type,
+            str((event_data or {}).get("event_id") or ""),
+            json.dumps(canonical, sort_keys=True, default=str, separators=(",", ":")),
+        )
+        previous = cache.get(fingerprint)
+        if previous is not None and now - previous < ttl:
+            return False
+        cache[fingerprint] = now
+        if len(cache) > 500:
+            cache.pop(min(cache, key=cache.get), None)
+        return True
 
     def _store_last_event_attributes(self, event_type, event_data, timestamp):
         """Expose the latest detected event as sensor attributes for simple automations."""
@@ -768,26 +878,33 @@ class SoccerLiveSensor(Entity):
         """Send HA notification when a goal or card event fires, if notify_service is configured."""
         try:
             config_entry = self.hass.config_entries.async_get_entry(self._config_entry_id)
-            notify_service = (config_entry.options if config_entry else {}).get("notify_service", "")
+            options = config_entry.options if config_entry else {}
+            notify_service = options.get("notify_service", "")
             if not notify_service:
                 return
+            language = str(
+                options.get("card_language")
+                or getattr(self.hass.config, "language", "")
+                or "en"
+            ).lower().replace("_", "-").split("-", 1)[0]
+            text = _NOTIFICATION_TEXT.get(language, _NOTIFICATION_TEXT["en"])
             if event_type == "soccer_live_goal":
-                title = f"⚽ Goal! {event_data.get('home_team','')} {event_data.get('home_score','')} - {event_data.get('away_score','')} {event_data.get('away_team','')}"
-                message = f"{event_data.get('player','Unknown')} · {event_data.get('minute','')}"
+                title = f"⚽ {text['goal']} {event_data.get('home_team','')} {event_data.get('home_score','')} - {event_data.get('away_score','')} {event_data.get('away_team','')}"
+                message = f"{event_data.get('player') or text['unknown']} · {event_data.get('minute','')}"
             elif event_type == "soccer_live_yellow_card":
-                title = f"🟨 Yellow card · {event_data.get('home_team','')} vs {event_data.get('away_team','')}"
-                message = f"{event_data.get('player','Unknown')} · {event_data.get('minute','')}"
+                title = f"🟨 {text['yellow_card']} · {event_data.get('home_team','')} vs {event_data.get('away_team','')}"
+                message = f"{event_data.get('player') or text['unknown']} · {event_data.get('minute','')}"
             elif event_type == "soccer_live_red_card":
-                title = f"🟥 Red card · {event_data.get('home_team','')} vs {event_data.get('away_team','')}"
-                message = f"{event_data.get('player','Unknown')} · {event_data.get('minute','')}"
+                title = f"🟥 {text['red_card']} · {event_data.get('home_team','')} vs {event_data.get('away_team','')}"
+                message = f"{event_data.get('player') or text['unknown']} · {event_data.get('minute','')}"
             elif event_type == "soccer_live_match_finished":
-                title = f"🏁 Full time · {event_data.get('home_team','')} {event_data.get('home_score','')} - {event_data.get('away_score','')} {event_data.get('away_team','')}"
+                title = f"🏁 {text['full_time']} · {event_data.get('home_team','')} {event_data.get('home_score','')} - {event_data.get('away_score','')} {event_data.get('away_team','')}"
                 message = event_data.get('league_name','')
             elif event_type == "soccer_live_match_postponed":
-                title = f"⏸️ Postponed · {event_data.get('home_team','')} vs {event_data.get('away_team','')}"
+                title = f"⏸️ {text['postponed']} · {event_data.get('home_team','')} vs {event_data.get('away_team','')}"
                 message = event_data.get('league_name','')
             elif event_type == "soccer_live_match_cancelled":
-                title = f"❌ Cancelled · {event_data.get('home_team','')} vs {event_data.get('away_team','')}"
+                title = f"❌ {text['cancelled']} · {event_data.get('home_team','')} vs {event_data.get('away_team','')}"
                 message = event_data.get('league_name','')
             else:
                 return
@@ -1936,7 +2053,6 @@ class SoccerLiveSensor(Entity):
                 continue
             prev_home = self._previous_scores[match_id]["home"]
             prev_away = self._previous_scores[match_id]["away"]
-            prev_details = self._previous_scores[match_id].get("match_details", [])
             curr_details = match.get("match_details", [])
             if match_id not in self._dispatched_goal_details:
                 self._dispatched_goal_details[match_id] = set()
