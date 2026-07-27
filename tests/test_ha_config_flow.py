@@ -127,13 +127,14 @@ async def test_team_entry_wiring(hass: HomeAssistant):
     entities = er.async_entries_for_config_entry(ent_reg, entry.entry_id)
     entity_ids = {e.entity_id for e in entities}
 
-    # Verbose, pinned entity_ids (not collapsed to sensor.next_match etc.).
-    assert any(eid.startswith("sensor.soccerlive_next_") for eid in entity_ids), entity_ids
-    assert any(eid.startswith("sensor.soccerlive_all_mixed_") for eid in entity_ids), entity_ids
+    # Home Assistant generates stable IDs from the integration, device and
+    # translated entity names; the integration no longer forces custom IDs.
+    assert any(eid.endswith("_next_match") for eid in entity_ids), entity_ids
+    assert any(eid.endswith("_all_matches") for eid in entity_ids), entity_ids
     assert any(eid.startswith("calendar.soccer_live_") for eid in entity_ids), entity_ids
 
     # Names come from translation_key + has_entity_name.
-    next_sensor = next(e for e in entities if e.entity_id.startswith("sensor.soccerlive_next_"))
+    next_sensor = next(e for e in entities if e.entity_id.endswith("_next_match"))
     assert next_sensor.has_entity_name is True
     assert next_sensor.translation_key == "team_match"
 

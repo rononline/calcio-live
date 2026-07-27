@@ -97,29 +97,6 @@
         }
       }
     },
-    "selector": {
-      "provider_source": {
-        "options": {
-          "espn": "ESPN — gratuit, sans clé API (recommandé)",
-          "api_football": "API-Football — clé API requise (prédictions, cotes, blessures)"
-        }
-      },
-      "follow_selection": {
-        "options": {
-          "team": "Équipe",
-          "league": "Ligue",
-          "all_today": "Tous les matchs aujourd'hui",
-          "news": "Actualités",
-          "manual": "Saisie manuelle"
-        }
-      },
-      "api_football_team_method": {
-        "options": {
-          "search": "Rechercher une équipe par nom",
-          "league": "Sélectionner une équipe dans la ligue"
-        }
-      }
-    },
     "error": {
       "api_key_required": "API-Football nécessite une clé API.",
       "unsupported_provider_selection": "Les actualités API-Football ne sont pas encore prises en charge.",
@@ -131,6 +108,29 @@
       "reauth_successful": "La clé API-Football a été mise à jour.",
       "no_competitions": "Impossible de charger la liste des compétitions. Vérifiez votre connexion internet et réessayez.",
       "no_teams": "Impossible de charger la liste des équipes pour cette compétition. Vérifiez votre connexion internet et réessayez."
+    }
+  },
+  "selector": {
+    "provider_source": {
+      "options": {
+        "espn": "ESPN — gratuit, sans clé API (recommandé)",
+        "api_football": "API-Football — clé API requise (prédictions, cotes, blessures)"
+      }
+    },
+    "follow_selection": {
+      "options": {
+        "team": "Équipe",
+        "league": "Ligue",
+        "all_today": "Tous les matchs aujourd'hui",
+        "news": "Actualités",
+        "manual": "Saisie manuelle"
+      }
+    },
+    "api_football_team_method": {
+      "options": {
+        "search": "Rechercher une équipe par nom",
+        "league": "Sélectionner une équipe dans la ligue"
+      }
     }
   },
   "options": {
