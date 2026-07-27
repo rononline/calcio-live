@@ -1,5 +1,9 @@
 # Changelog
 
+## v3.9.8 (2026-07-27)
+- bugfix: restore the missing `re` import in `sensor.py` so card-event dispatch no longer throws `name 're' is not defined` during live updates
+- release: publish the runtime fix as a new integration version so Home Assistant users can actually receive it
+
 ## v3.9.7 (2026-07-26)
 - Localization: convert config-flow choice fields to translated selectors so setup no longer shows raw English labels
 - Compatibility: keep legacy config entries working while normalizing the stored follow-selection values
