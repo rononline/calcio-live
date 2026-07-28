@@ -18,11 +18,15 @@
 - CI: avoid duplicate branch and pull-request runs, pin moving HACS/Hassfest actions to audited commits and enforce additional safe Ruff rules
 - dates: validate option dates as dates and make diagnostics robust for aware and legacy-naive cache timestamps
 - release verification: retry GitHub asset lookups to tolerate short API consistency delays
+
+## v3.10.0 (2026-07-28)
+
 - insights: publish provider-neutral match completeness, sensor-level data quality and matchday summaries
+- archive: persist up to 100 compact finished-match records per config entry for local history cards
 - watchlist: resolve configurable comma-separated player names against current club squad data
 - notifications: add goal/card/status category switches and local quiet hours
 - Repairs: report rejected credentials and active API-Football rate limiting through Home Assistant Repairs
-- contract: bump the published data schema to version 4 and recommend Matchday/Archive cards where applicable
+- contract: bump the published data schema to version 3 and recommend Matchday/Archive cards where applicable
 - recorder: exclude all new high-churn insight, watchlist and archive attributes from state history
 - tests: cover completeness, matchday selection, player matching and archive deduplication
 
