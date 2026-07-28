@@ -1,7 +1,6 @@
 import importlib.util
 from pathlib import Path
 
-
 PATH = Path(__file__).parents[1] / "custom_components" / "soccer_live" / "match_contract.py"
 SPEC = importlib.util.spec_from_file_location("soccer_live_match_contract", PATH)
 MODULE = importlib.util.module_from_spec(SPEC)

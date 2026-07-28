@@ -5,6 +5,10 @@
 - release automation: publish only after the existing tests, real Home Assistant test, blueprint validation, Hassfest and HACS validation succeed
 - release notes: use the matching changelog section and verify the generated zip before and after upload
 - CI: cancel stale runs and enable weekly Dependabot updates for GitHub Actions and Python dependencies
+- dependencies: group weekly updates and pin the mutually compatible Python/HA test toolchain for reproducible CI
+- CI: avoid duplicate branch and pull-request runs, pin moving HACS/Hassfest actions to audited commits and enforce additional safe Ruff rules
+- dates: validate option dates as dates and make diagnostics robust for aware and legacy-naive cache timestamps
+- release verification: retry GitHub asset lookups to tolerate short API consistency delays
 
 ## v3.9.9 (2026-07-27)
 - events: deduplicate provider events across the next/all/mixed sensors of one config entry, including lineup and match-phase transitions

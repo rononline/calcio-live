@@ -54,7 +54,7 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           NOTE=$(awk -v version="$VERSION" '
-            $0 ~ "^## v" version "([ (]|$)" { found=1; next }
+            index($0, "## v" version " ") == 1 || $0 == "## v" version { found=1; next }
             found && /^## / { exit }
             found { print }
           ' CHANGELOG.md)
@@ -91,8 +91,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          SIZE=$(gh release view "${{ steps.version.outputs.tag }}" \
-            --json assets \
-            --jq '.assets[] | select(.name == "soccer_live.zip") | .size')
+          SIZE=""
+          for attempt in 1 2 3 4 5; do
+            SIZE=$(gh release view "${{ steps.version.outputs.tag }}" \
+              --json assets \
+              --jq '.assets[] | select(.name == "soccer_live.zip") | .size' \
+              2>/dev/null || true)
+            [ -n "$SIZE" ] && [ "$SIZE" -gt 0 ] && break
+            sleep $((attempt * 2))
+          done
           test -n "$SIZE"
           test "$SIZE" -gt 0

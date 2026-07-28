@@ -1,8 +1,11 @@
 import logging
+
 _LOGGER = logging.getLogger(__name__)
-from dateutil import parser
-from zoneinfo import ZoneInfo
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
+
+from dateutil import parser
+
 
 def _as_dict(v):
     """Return v if it is a dict, otherwise return {}.  Guards against ESPN returning

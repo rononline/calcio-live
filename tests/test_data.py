@@ -3,7 +3,6 @@
 import importlib.util
 from pathlib import Path
 
-
 ROOT = Path(__file__).parent.parent
 DATA_MODULE = ROOT / "custom_components" / "soccer_live" / "data.py"
 SPEC = importlib.util.spec_from_file_location("soccer_live_data", DATA_MODULE)

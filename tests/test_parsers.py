@@ -2,9 +2,10 @@
 
 Run with:  python -m pytest tests/ -v
 """
-import json
 import importlib.util
+import json
 from pathlib import Path
+
 import pytest
 
 FIXTURES = Path(__file__).parent / "fixtures"

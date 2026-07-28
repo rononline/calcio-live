@@ -1,29 +1,32 @@
 import asyncio
 import json
-import aiohttp
-from datetime import datetime, timedelta, timezone
-import re
-import unicodedata
-from zoneinfo import ZoneInfo
-from homeassistant.helpers.entity import Entity
-from homeassistant.helpers.storage import Store
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.event import async_call_later
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 import logging
 import random
+import re
 import time
+import unicodedata
+from datetime import datetime, timedelta, timezone
+from typing import ClassVar
 from urllib.parse import urlencode
+from zoneinfo import ZoneInfo
+
+import aiohttp
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.entity import Entity
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.event import async_call_later
+from homeassistant.helpers.storage import Store
+
 from .const import (
     CONF_API_FOOTBALL_KEY,
     CONF_API_FOOTBALL_SEASON,
     CONF_INCLUDE_FRIENDLIES,
     CONF_LIVE_SCAN_INTERVAL,
     CONF_PROVIDER,
-    DOMAIN,
     DATA_SCHEMA_VERSION,
+    DOMAIN,
     INTEGRATION_VERSION,
     PROVIDER_API_FOOTBALL,
     PROVIDER_CAPABILITIES,
@@ -337,17 +340,17 @@ class SoccerLiveSensor(Entity):
         "last_match_started_event", "last_match_finished_event",
     })
 
-    _cache = {}
-    _fetch_locks = {}
-    _calendar_cache = {}
-    _calendar_locks = {}
-    _calendar_error_logs = {}
-    _api_football_endpoint_cache = {}
-    _api_football_endpoint_locks = {}
-    _bus_event_fingerprints = {}
+    _cache: ClassVar[dict] = {}
+    _fetch_locks: ClassVar[dict] = {}
+    _calendar_cache: ClassVar[dict] = {}
+    _calendar_locks: ClassVar[dict] = {}
+    _calendar_error_logs: ClassVar[dict] = {}
+    _api_football_endpoint_cache: ClassVar[dict] = {}
+    _api_football_endpoint_locks: ClassVar[dict] = {}
+    _bus_event_fingerprints: ClassVar[dict] = {}
     # API-usage diagnostics (shared across sensors): per-endpoint calls,
     # cache hits, last success and last HTTP status, plus a rate-limit marker.
-    _api_football_stats = {}
+    _api_football_stats: ClassVar[dict] = {}
     _api_football_rate_limited_at = None
     # Rate-limit backoff: after an HTTP 429, pause new enrichment requests until
     # this time, doubling the wait on each consecutive 429 (reset on success).
@@ -355,7 +358,7 @@ class SoccerLiveSensor(Entity):
     _af_backoff = 0
     # Config entries for which an API-Football reauth flow has been started, so
     # a persistent bad key doesn't spawn a new flow on every poll.
-    _af_reauth_entries = set()
+    _af_reauth_entries: ClassVar[set] = set()
 
     def __init__(self, hass, name, code, sensor_type=None, scan_interval=timedelta(minutes=5),
                  team_name=None, config_entry_id=None, start_date=None, end_date=None, team_id=None,
@@ -1273,9 +1276,9 @@ class SoccerLiveSensor(Entity):
             return
 
         from .parsers.api_football import (
-            process_team_profile,
             process_coach,
             process_squad,
+            process_team_profile,
             process_transfers,
         )
 
@@ -1322,10 +1325,10 @@ class SoccerLiveSensor(Entity):
                 self.hass.bus.async_fire(f"soccer_live_{change['type']}", event_data)
             self._store_club(team_id, club)
 
-    _club_cache = {}
+    _club_cache: ClassVar[dict] = {}
     _club_store = None
     _club_loaded = False
-    _club_event_fingerprints = {}
+    _club_event_fingerprints: ClassVar[dict] = {}
     _CLUB_TTL = 86400  # seconds; matches the per-endpoint club cache TTL
     # Bump when the club blob's shape or parsing changes, so an upgrade doesn't
     # keep serving a stale blob (e.g. an old, wrongly-picked coach) for 24h.
@@ -1393,11 +1396,11 @@ class SoccerLiveSensor(Entity):
         given (upcoming) match, then cache the snapshot by fixture id."""
         fixture_id = match["event_id"]
         from .parsers.api_football import (
-            process_prediction_data,
-            process_injuries_data,
-            process_odds_data,
-            process_live_odds_data,
             extract_team_standing,
+            process_injuries_data,
+            process_live_odds_data,
+            process_odds_data,
+            process_prediction_data,
         )
 
         league_id = match.get("league_id")
@@ -1479,7 +1482,7 @@ class SoccerLiveSensor(Entity):
         "prediction", "odds", "injuries_home", "injuries_away",
         "home_rank", "home_points", "away_rank", "away_points",
     )
-    _prematch_cache = {}
+    _prematch_cache: ClassVar[dict] = {}
     _prematch_store = None
     _prematch_loaded = False
 
@@ -2123,7 +2126,7 @@ class SoccerLiveSensor(Entity):
                 _LOGGER.debug(f"Error extracting player name: {e}")
         return new_goals[:goals_count]
 
-    def _dispatch_goal_event(self, scoring_team, opponent_team, goals_count, home_score, away_score, match, goal_scorers=None, events: list = None):
+    def _dispatch_goal_event(self, scoring_team, opponent_team, goals_count, home_score, away_score, match, goal_scorers=None, events: list | None = None):
         """Build and collect a goal event."""
         try:
             # goal_scorers is a list of {player, minute} dicts.
@@ -2184,7 +2187,7 @@ class SoccerLiveSensor(Entity):
                         self._dispatch_substitution_event(detail, match, events)
             self._previous_match_details[match_id] = match_details.copy()
 
-    def _dispatch_card_event(self, card_type, detail_str, match, events: list = None):
+    def _dispatch_card_event(self, card_type, detail_str, match, events: list | None = None):
         """Build and collect a card event."""
         try:
             # Parse: "Yellow Card [TOT] - 27': Destiny Udogie" or "Red Card - 29': Cristian Romero"
@@ -2218,7 +2221,7 @@ class SoccerLiveSensor(Entity):
         except Exception as e:
             _LOGGER.error(f"Error dispatching card event: {e}")
 
-    def _dispatch_substitution_event(self, detail_str, match, events: list = None):
+    def _dispatch_substitution_event(self, detail_str, match, events: list | None = None):
         """Dispatch a substitution event."""
         try:
             parts = detail_str.split("': ")
@@ -2313,7 +2316,7 @@ class SoccerLiveSensor(Entity):
                 self._match_finished_list.append(match_id)
             self._previous_match_states[match_id] = "post"
 
-    def _dispatch_match_finished_event(self, match, events: list = None):
+    def _dispatch_match_finished_event(self, match, events: list | None = None):
         """Build and collect a match finished event."""
         try:
             # Extract goal scorers from match details
@@ -2464,7 +2467,7 @@ class SoccerLiveSensor(Entity):
             "live_match_h2h_count": len(match.get("head_to_head") or []),
         }
 
-    def _compute_all_matches_attributes(self, matches, events: list = None, detect_events=True):
+    def _compute_all_matches_attributes(self, matches, events: list | None = None, detect_events=True):
         if events is None:
             events = []
         if detect_events and self._sensor_type != "team_matches_mixed":
@@ -2612,7 +2615,9 @@ class SoccerLiveSensor(Entity):
                 }
 
             if self._sensor_type == "top_scorers":
-                from .parsers.api_football import process_scorers_data as process_api_football_scorers_data
+                from .parsers.api_football import (
+                    process_scorers_data as process_api_football_scorers_data,
+                )
                 scorer_data = process_api_football_scorers_data(data)
                 scorers = scorer_data.get("scorers", [])
                 return {

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -50,7 +50,9 @@ async def async_get_config_entry_diagnostics(
             if isinstance(entry_cache, dict):
                 t = entry_cache.get("time")
                 if t and isinstance(t, datetime):
-                    age = (datetime.now() - t).total_seconds()
+                    now = datetime.now(t.tzinfo or timezone.utc)
+                    comparable = t if t.tzinfo else t.replace(tzinfo=timezone.utc)
+                    age = (now - comparable).total_seconds()
                     if cache_time is None or age < cache_time:
                         cache_time = age
         if cache_time is not None:

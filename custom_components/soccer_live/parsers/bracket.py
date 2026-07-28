@@ -8,6 +8,7 @@ Round names are English; the card translates them via i18n keys (round.*).
 """
 
 import logging
+
 _LOGGER = logging.getLogger(__name__)
 import re
 
@@ -174,8 +175,8 @@ def process_bracket_data(data):
             key=lambda t: t.get("first_leg_date") or t.get("leg2", {}).get("date", "") if t.get("leg2") else "",
         )
 
-        from datetime import datetime
         from collections import OrderedDict
+        from datetime import datetime
 
         def parse_iso(s):
             if not s:

@@ -1,7 +1,10 @@
 import logging
+
 _LOGGER = logging.getLogger(__name__)
-from dateutil import parser
 from datetime import datetime
+
+from dateutil import parser
+
 
 def _as_dict(v):
     return v if isinstance(v, dict) else {}

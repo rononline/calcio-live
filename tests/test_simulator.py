@@ -2,7 +2,6 @@ import importlib.util
 from datetime import datetime, timezone
 from pathlib import Path
 
-
 PATH = Path(__file__).parents[1] / "custom_components" / "soccer_live" / "simulator.py"
 SPEC = importlib.util.spec_from_file_location("soccer_live_simulator", PATH)
 MODULE = importlib.util.module_from_spec(SPEC)

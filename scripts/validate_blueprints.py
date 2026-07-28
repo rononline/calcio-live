@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Validate the automation blueprints.
 
 Checks that each blueprint under blueprints/ is valid YAML and has a sound

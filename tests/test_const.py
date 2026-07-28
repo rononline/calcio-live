@@ -6,9 +6,9 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import json  # noqa: E402
+import json
 
-from custom_components.soccer_live.const import (  # noqa: E402
+from custom_components.soccer_live.const import (
     DATA_SCHEMA_VERSION,
     INTEGRATION_VERSION,
     PROVIDER_API_FOOTBALL,

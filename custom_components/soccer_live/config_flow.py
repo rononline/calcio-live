@@ -1,12 +1,14 @@
 import asyncio
+import logging
+from datetime import date, datetime, timezone
+
+import aiohttp
 import voluptuous as vol
+from dateutil.relativedelta import relativedelta
 from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-import logging
-import aiohttp
-from datetime import datetime
-from dateutil.relativedelta import relativedelta
+
 try:
     from homeassistant.helpers.selector import SelectSelector, SelectSelectorConfig
 except ImportError:  # pragma: no cover - lightweight test stubs
@@ -560,9 +562,9 @@ class SoccerLiveConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def _api_football_config_season(self):
         try:
             season = int(self._data.get(CONF_API_FOOTBALL_SEASON) or 0)
-            return season or datetime.now().year
+            return season or datetime.now(timezone.utc).astimezone().year
         except (TypeError, ValueError):
-            return datetime.now().year
+            return datetime.now(timezone.utc).astimezone().year
 
     @staticmethod
     @callback
@@ -594,12 +596,12 @@ class SoccerLiveOptionsFlow(config_entries.OptionsFlow):
             start_dt = end_dt = None
             if start:
                 try:
-                    start_dt = datetime.strptime(start, "%Y-%m-%d")
+                    start_dt = date.fromisoformat(start)
                 except ValueError:
                     errors["start_date"] = "invalid_date"
             if end:
                 try:
-                    end_dt = datetime.strptime(end, "%Y-%m-%d")
+                    end_dt = date.fromisoformat(end)
                 except ValueError:
                     errors["end_date"] = "invalid_date"
             if start_dt and end_dt and start_dt > end_dt:
@@ -613,7 +615,7 @@ class SoccerLiveOptionsFlow(config_entries.OptionsFlow):
                 user_input.pop("info", None)
                 return self.async_create_entry(title="", data=user_input)
 
-        today = datetime.now()
+        today = datetime.now(timezone.utc).astimezone()
 
         start_date = self.config_entry.options.get(
             "start_date", self.config_entry.data.get("start_date", (today - relativedelta(months=3)).strftime("%Y-%m-%d"))
