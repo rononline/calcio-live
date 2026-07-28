@@ -22,7 +22,7 @@ def _read_manifest_version():
 # integration, and detect breaking attribute-shape changes.
 INTEGRATION_VERSION = _read_manifest_version()
 # Bump when the published attribute shape changes in a way a card must handle.
-DATA_SCHEMA_VERSION = 2
+DATA_SCHEMA_VERSION = 3
 CONF_COMPETITION_CODE = "competition_code"
 CONF_PROVIDER = "provider"
 CONF_API_FOOTBALL_KEY = "api_football_key"
@@ -64,11 +64,11 @@ def provider_supports(provider, capability):
 # with each sensor type. Published as `recommended_card_types` so the card's
 # editor can suggest the right card for the selected entity.
 RECOMMENDED_CARD_TYPES = {
-    "team_match": ["team", "countdown", "match-center", "lineup", "timeline", "team-form"],
-    "team_matches": ["matches", "ticker", "team-form"],
-    "team_matches_mixed": ["team-competitions", "matches", "ticker", "team-form"],
-    "match_day": ["matches", "ticker"],
-    "all_matches_today": ["matches", "ticker"],
+    "team_match": ["team", "countdown", "match-center", "lineup", "timeline", "team-form", "archive"],
+    "team_matches": ["matches", "ticker", "team-form", "matchday", "archive"],
+    "team_matches_mixed": ["team-competitions", "matches", "ticker", "team-form", "matchday", "archive"],
+    "match_day": ["matches", "ticker", "matchday"],
+    "all_matches_today": ["matches", "ticker", "matchday"],
     "standings": ["standings", "mini-standings"],
     "top_scorers": ["scorers"],
     "bracket": ["bracket"],

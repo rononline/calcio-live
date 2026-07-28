@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- insights: publish provider-neutral match completeness, sensor-level data quality and matchday summaries
+- archive: persist up to 100 compact finished-match records per config entry for local history cards
+- watchlist: resolve configurable comma-separated player names against current club squad data
+- notifications: add goal/card/status category switches and local quiet hours
+- Repairs: report rejected credentials and active API-Football rate limiting through Home Assistant Repairs
+- contract: bump the published data schema to version 3 and recommend Matchday/Archive cards where applicable
+- recorder: exclude all new high-churn insight, watchlist and archive attributes from state history
+- tests: cover completeness, matchday selection, player matching and archive deduplication
 - release automation: publish only after the existing tests, real Home Assistant test, blueprint validation, Hassfest and HACS validation succeed
 - release notes: use the matching changelog section and verify the generated zip before and after upload
 - CI: cancel stale runs and enable weekly Dependabot updates for GitHub Actions and Python dependencies

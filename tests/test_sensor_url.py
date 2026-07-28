@@ -11,6 +11,7 @@ import sys
 import types
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -187,6 +188,46 @@ def test_direct_notification_uses_configured_language():
     assert calls[0][0:2] == ("notify", "mobile_app_phone")
     assert calls[0][2]["title"].startswith("⚽ Doelpunt!")
     assert calls[0][2]["message"].startswith("Onbekend")
+
+
+def test_direct_notification_profile_can_disable_goal_category():
+    calls = []
+
+    class _ConfigEntries:
+        @staticmethod
+        def async_get_entry(_entry_id):
+            return types.SimpleNamespace(options={
+                "notify_service": "notify.mobile_app_phone",
+                "notify_goals": False,
+            })
+
+    class _Services:
+        @staticmethod
+        async def async_call(*args, **kwargs):
+            calls.append((args, kwargs))
+
+    sensor = _sensor("team_matches")
+    sensor.hass = types.SimpleNamespace(
+        config_entries=_ConfigEntries(),
+        config=types.SimpleNamespace(language="en"),
+        services=_Services(),
+    )
+    asyncio.run(sensor._send_notification("soccer_live_goal", {}))
+    assert calls == []
+
+
+def test_notification_quiet_hours_supports_window_across_midnight():
+    with patch.object(_sensor_mod, "datetime") as mocked_datetime:
+        mocked_datetime.now.return_value = datetime(2026, 7, 28, 23, 30)
+        assert SoccerLiveSensor._notification_quiet_hours({
+            "quiet_hours_start": "22:00",
+            "quiet_hours_end": "07:00",
+        }) is True
+        mocked_datetime.now.return_value = datetime(2026, 7, 28, 12, 0)
+        assert SoccerLiveSensor._notification_quiet_hours({
+            "quiet_hours_start": "22:00",
+            "quiet_hours_end": "07:00",
+        }) is False
 
 
 def test_pick_goal_strings_attributes_penalties_across_providers():

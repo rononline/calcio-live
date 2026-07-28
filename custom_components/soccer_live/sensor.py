@@ -336,6 +336,7 @@ class SoccerLiveSensor(Entity):
         "schedule_live_matches", "schedule_upcoming_matches", "schedule_recent_matches",
         "standings_groups", "scorers", "assists", "articles", "rounds",
         "head_to_head", "league_info", "club", "club_changes", "card_defaults",
+        "data_quality", "matchday", "match_archive", "player_watchlist",
         "last_event", "last_goal_event", "last_card_event",
         "last_match_started_event", "last_match_finished_event",
     })
@@ -359,6 +360,9 @@ class SoccerLiveSensor(Entity):
     # Config entries for which an API-Football reauth flow has been started, so
     # a persistent bad key doesn't spawn a new flow on every poll.
     _af_reauth_entries: ClassVar[set] = set()
+    _match_archives: ClassVar[dict] = {}
+    _archive_stores: ClassVar[dict] = {}
+    _archive_loaded: ClassVar[set] = set()
 
     def __init__(self, hass, name, code, sensor_type=None, scan_interval=timedelta(minutes=5),
                  team_name=None, config_entry_id=None, start_date=None, end_date=None, team_id=None,
@@ -487,6 +491,7 @@ class SoccerLiveSensor(Entity):
         do not re-fire events for matches that already ended."""
         await self._load_prematch_cache()
         await self._load_club_cache()
+        await self._load_match_archive()
         store_key = f"soccer_live_{self._config_entry_id or 'default'}_{self._name}_finished"
         self._store = Store(self.hass, 1, store_key)
         stored = await self._store.async_load()
@@ -767,9 +772,112 @@ class SoccerLiveSensor(Entity):
         await self._enrich_with_summary()
         await self._enrich_club_data()
         await self._enrich_api_football_assists()
+        await self._apply_insights()
         self._fire_new_lineup_events(previous_attrs, self._attributes)
         await self._flush_pending_events()
         self._publish_matches(self._attributes.get("matches") or [])
+
+    async def _load_match_archive(self):
+        """Load the compact per-entry finished-match archive once."""
+        key = self._config_entry_id or "default"
+        if key in SoccerLiveSensor._archive_loaded:
+            return
+        SoccerLiveSensor._archive_loaded.add(key)
+        try:
+            store = Store(self.hass, 1, f"soccer_live_archive_{key}")
+            SoccerLiveSensor._archive_stores[key] = store
+            stored = await store.async_load()
+            if isinstance(stored, dict) and isinstance(stored.get("matches"), list):
+                SoccerLiveSensor._match_archives[key] = stored["matches"][:100]
+        except Exception as err:  # pragma: no cover - storage is best-effort
+            _LOGGER.debug("Could not load match archive: %s", err)
+
+    async def _apply_insights(self):
+        """Attach provider-neutral quality, matchday, watchlist and archive data."""
+        from .insights import (
+            annotate_completeness,
+            data_quality,
+            matchday_summary,
+            player_watchlist,
+            update_archive,
+        )
+
+        matches = annotate_completeness(self._attributes.get("matches") or [])
+        self._attributes["matches"] = matches
+        if self._attributes.get("next_match"):
+            self._attributes["next_match"] = {
+                **self._attributes["next_match"],
+                "data_completeness": (
+                    annotate_completeness([self._attributes["next_match"]])[0]
+                    ["data_completeness"]
+                ),
+            }
+        self._attributes["data_quality"] = data_quality(
+            matches,
+            self._provider,
+            self._last_successful_update,
+            self._last_error,
+        )
+        summary = matchday_summary(matches)
+        if summary:
+            self._attributes["matchday"] = summary
+
+        entry = self.hass.config_entries.async_get_entry(self._config_entry_id)
+        options = entry.options if entry else {}
+        watchlist = player_watchlist(
+            self._attributes.get("club"),
+            options.get("player_watchlist", ""),
+        )
+        if watchlist:
+            self._attributes["player_watchlist"] = watchlist
+
+        key = self._config_entry_id or "default"
+        archive = update_archive(
+            SoccerLiveSensor._match_archives.get(key),
+            matches,
+            self._provider,
+        )
+        SoccerLiveSensor._match_archives[key] = archive
+        if archive:
+            self._attributes["match_archive"] = archive
+            store = SoccerLiveSensor._archive_stores.get(key)
+            if store is not None:
+                store.async_delay_save(lambda: {"matches": archive}, 60)
+        self._update_repairs()
+
+    def _update_repairs(self):
+        """Expose actionable provider failures through Home Assistant Repairs."""
+        try:
+            from homeassistant.helpers import issue_registry as ir
+        except ImportError:  # pragma: no cover - compatibility with test stubs
+            return
+        entry_id = self._config_entry_id or "default"
+        auth_issue = f"{entry_id}_authentication_failed"
+        rate_issue = f"{entry_id}_rate_limited"
+        if self._auth_failed:
+            ir.async_create_issue(
+                self.hass,
+                DOMAIN,
+                auth_issue,
+                is_fixable=False,
+                is_persistent=True,
+                severity=ir.IssueSeverity.ERROR,
+                translation_key="authentication_failed",
+            )
+        else:
+            ir.async_delete_issue(self.hass, DOMAIN, auth_issue)
+        if self._is_rate_limited():
+            ir.async_create_issue(
+                self.hass,
+                DOMAIN,
+                rate_issue,
+                is_fixable=False,
+                is_persistent=False,
+                severity=ir.IssueSeverity.WARNING,
+                translation_key="rate_limited",
+            )
+        else:
+            ir.async_delete_issue(self.hass, DOMAIN, rate_issue)
 
     def _fire_new_lineup_events(self, previous_attrs, current_attrs):
         from .club_changes import newly_available_lineups
@@ -885,6 +993,15 @@ class SoccerLiveSensor(Entity):
             notify_service = options.get("notify_service", "")
             if not notify_service:
                 return
+            category = (
+                "goals" if event_type == "soccer_live_goal"
+                else "cards" if event_type in ("soccer_live_yellow_card", "soccer_live_red_card")
+                else "status"
+            )
+            if not options.get(f"notify_{category if category != 'status' else 'match_status'}", True):
+                return
+            if self._notification_quiet_hours(options):
+                return
             language = str(
                 options.get("card_language")
                 or getattr(self.hass.config, "language", "")
@@ -915,6 +1032,25 @@ class SoccerLiveSensor(Entity):
             await self.hass.services.async_call(domain, service, {"title": title, "message": message}, blocking=False)
         except Exception as e:
             _LOGGER.debug(f"Notification error: {e}")
+
+    @staticmethod
+    def _notification_quiet_hours(options):
+        """Return True when local time falls inside the optional quiet window."""
+        start = str(options.get("quiet_hours_start") or "").strip()
+        end = str(options.get("quiet_hours_end") or "").strip()
+        if not start or not end:
+            return False
+        try:
+            start_minutes = int(start[:2]) * 60 + int(start[3:5])
+            end_minutes = int(end[:2]) * 60 + int(end[3:5])
+        except (TypeError, ValueError):
+            return False
+        now = datetime.now().hour * 60 + datetime.now().minute
+        if start_minutes == end_minutes:
+            return False
+        if start_minutes < end_minutes:
+            return start_minutes <= now < end_minutes
+        return now >= start_minutes or now < end_minutes
 
     async def _enrich_with_summary(self):
         """For team_match sensors, add lineup, formation, key events, and h2h
@@ -1818,6 +1954,7 @@ class SoccerLiveSensor(Entity):
         self._auth_failed = True
         self._last_error = "API-Football API key is invalid"
         self._state = "Authentication failed"
+        self._update_repairs()
         entry_id = self._config_entry_id
         if not entry_id or entry_id in SoccerLiveSensor._af_reauth_entries:
             return

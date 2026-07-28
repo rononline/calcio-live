@@ -89,12 +89,21 @@ Configure via **Settings → Devices & Services → Soccer Live → Configure**:
 | `api_football_season` | `0` (auto) | API-Football season to query. For standings/top scorers, auto mode uses the previous season before August. |
 | `change_api_football_key` | — | *(API-Football only)* Paste a new key here to replace an expired/revoked one; leave blank to keep the current key. The value is validated on save. |
 | `max_matches` | `0` (unlimited) | Limit the number of matches stored per sensor (5 / 10 / 15 / 20 / 30). Useful to reduce state size on large sensors. |
+| `notify_goals`, `notify_cards`, `notify_match_status` | `true` | Choose which direct push-notification categories are enabled. |
+| `quiet_hours_start` / `quiet_hours_end` | empty | Optional local quiet window in `HH:MM` format, including windows across midnight. |
+| `player_watchlist` | empty | Comma-separated exact player names to expose in `player_watchlist` for the Club card. |
 
 > **API key expired or revoked?** When API-Football rejects the key, the sensors report `api_status: authentication_failed` and Home Assistant automatically prompts you to re-enter it (a repair/notification appears — no need to delete the integration). You can also change it any time via the option above.
 
 > **Sync status.** Each sensor also publishes a `sync_status` attribute — `initializing`, `fetching`, `ready`, `rate_limited`, `authentication_failed` or `provider_unavailable` — so a card can show concrete text (e.g. "fetching matches for the first time") during the first update instead of an empty card that looks like a misconfiguration.
 
 > **Card contract.** Sensors publish `integration_version`, `data_schema_version` and `recommended_card_types` (the `card_type` slugs that suit the sensor), so the card editor can recommend the right card for a selected entity and warn when the integration is outdated.
+
+> **Insights and local history.** Match sensors publish a provider-neutral
+> `data_completeness` object per match, plus `data_quality`, `matchday` and a
+> compact `match_archive`. Finished matches are kept locally in Home Assistant
+> (up to 100 per integration entry); no extra provider request is made. Large
+> derived attributes are excluded from Recorder history.
 
 ---
 
@@ -164,12 +173,15 @@ The integration can automatically send push notifications when goals, cards, or 
    - `notify.pushbullet` — PushBullet (requires notify.pushbullet service)
 4. Save
 
-**Notifications sent for:**
+**Notifications sent for (individually configurable):**
 - ⚽ Goal scored
 - 🟨 Yellow card issued
 - 🟥 Red card issued
 - 🔄 Substitution made
 - 🏁 Match finished
+
+You can also configure a quiet-hours window. Notifications are suppressed
+during that window, while events and sensor updates continue normally.
 
 Example notification: `"⚽ GOAL! Kramer (34') — Feyenoord 1 - 0 Sparta Rotterdam"`
 

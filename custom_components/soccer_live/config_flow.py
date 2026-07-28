@@ -630,6 +630,12 @@ class SoccerLiveOptionsFlow(config_entries.OptionsFlow):
             self.config_entry.data.get(CONF_LIVE_SCAN_INTERVAL, 60),
         )
         notify_service = self.config_entry.options.get("notify_service", "")
+        notify_goals = self.config_entry.options.get("notify_goals", True)
+        notify_cards = self.config_entry.options.get("notify_cards", True)
+        notify_match_status = self.config_entry.options.get("notify_match_status", True)
+        quiet_hours_start = self.config_entry.options.get("quiet_hours_start", "")
+        quiet_hours_end = self.config_entry.options.get("quiet_hours_end", "")
+        player_watchlist = self.config_entry.options.get("player_watchlist", "")
         enable_summary_enrichment = self.config_entry.options.get("enable_summary_enrichment", True)
         enable_club_data = self.config_entry.options.get("enable_club_data", True)
         enable_live_odds = self.config_entry.options.get("enable_live_odds", False)
@@ -653,6 +659,12 @@ class SoccerLiveOptionsFlow(config_entries.OptionsFlow):
             vol.Optional("start_date", default=start_date): str,
             vol.Optional("end_date", default=end_date): str,
             vol.Optional("notify_service", default=notify_service): str,
+            vol.Optional("notify_goals", default=notify_goals): bool,
+            vol.Optional("notify_cards", default=notify_cards): bool,
+            vol.Optional("notify_match_status", default=notify_match_status): bool,
+            vol.Optional("quiet_hours_start", default=quiet_hours_start): str,
+            vol.Optional("quiet_hours_end", default=quiet_hours_end): str,
+            vol.Optional("player_watchlist", default=player_watchlist): str,
             vol.Optional("enable_summary_enrichment", default=enable_summary_enrichment): bool,
         }
         # Club enrichment (profile/coach/squad/transfers) is API-Football only.

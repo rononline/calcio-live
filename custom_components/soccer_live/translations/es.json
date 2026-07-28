@@ -133,6 +133,16 @@
       }
     }
   },
+  "issues": {
+    "authentication_failed": {
+      "title": "Falló la autenticación de Soccer Live",
+      "description": "El proveedor rechazó las credenciales. Abre la integración Soccer Live y vuelve a autenticarte o sustituye la clave API."
+    },
+    "rate_limited": {
+      "title": "Soccer Live está limitado",
+      "description": "El proveedor limita temporalmente las solicitudes. Soccer Live reintentará automáticamente; reduce el enriquecimiento opcional si es necesario."
+    }
+  },
   "options": {
     "step": {
       "init": {
@@ -155,7 +165,13 @@
           "api_football_season": "Temporada API-Football (0 = automático)",
           "change_api_football_key": "Cambiar la clave de API-Football (déjalo en blanco para mantener la actual)",
           "max_matches": "Máx. partidos en atributos (0 = ilimitado)",
-          "notify_service": "Servicio de notificación (ej. notify.mobile_app)"
+          "notify_service": "Servicio de notificación (ej. notify.mobile_app)",
+          "notify_goals": "Notificar goles",
+          "notify_cards": "Notificar tarjetas",
+          "notify_match_status": "Notificar final, aplazamientos y cancelaciones",
+          "quiet_hours_start": "Inicio de horas silenciosas (HH:MM; vacío = desactivado)",
+          "quiet_hours_end": "Fin de horas silenciosas (HH:MM; vacío = desactivado)",
+          "player_watchlist": "Seguimiento de jugadores (nombres separados por comas)"
         }
       }
     },

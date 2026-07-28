@@ -133,6 +133,16 @@
       }
     }
   },
+  "issues": {
+    "authentication_failed": {
+      "title": "Soccer Live authentication failed",
+      "description": "The provider rejected the configured credentials. Open the Soccer Live integration and reauthenticate or replace the API key."
+    },
+    "rate_limited": {
+      "title": "Soccer Live is being rate limited",
+      "description": "The provider is temporarily limiting requests. Soccer Live will retry automatically with backoff; reduce optional enrichment or wait for the quota to recover."
+    }
+  },
   "options": {
     "step": {
       "init": {
@@ -155,7 +165,13 @@
           "api_football_season": "API-Football season (0 = auto)",
           "change_api_football_key": "Change API-Football key (leave blank to keep current)",
           "max_matches": "Max matches in attributes (0 = unlimited)",
-          "notify_service": "Notification service (e.g. notify.mobile_app)"
+          "notify_service": "Notification service (e.g. notify.mobile_app)",
+          "notify_goals": "Notify for goals",
+          "notify_cards": "Notify for cards",
+          "notify_match_status": "Notify for full time, postponements and cancellations",
+          "quiet_hours_start": "Quiet hours start (HH:MM; blank = disabled)",
+          "quiet_hours_end": "Quiet hours end (HH:MM; blank = disabled)",
+          "player_watchlist": "Player watchlist (comma-separated names)"
         }
       }
     },

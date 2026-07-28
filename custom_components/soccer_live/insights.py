@@ -1,0 +1,192 @@
+"""Provider-neutral derived insights for Soccer Live sensors."""
+
+from __future__ import annotations
+
+from datetime import datetime, timezone
+
+
+def _present(value) -> bool:
+    return value not in (None, "", [], {})
+
+
+def match_completeness(match: dict | None) -> dict:
+    """Describe which commonly useful parts of a match payload are available."""
+    match = match or {}
+    checks = {
+        "identity": bool(match.get("event_id") and match.get("date_iso")),
+        "teams": bool(match.get("home_team") and match.get("away_team")),
+        "competition": _present(match.get("competition_name") or match.get("league_name")),
+        "venue": _present(match.get("venue")),
+        "score": match.get("state") == "pre" or (
+            _present(match.get("home_score")) and _present(match.get("away_score"))
+        ),
+        "timeline": bool(match.get("key_events")),
+        "lineup": bool(match.get("lineup_home") or match.get("lineup_away")),
+        "statistics": bool(
+            match.get("has_stats")
+            or match.get("home_statistics")
+            or match.get("away_statistics")
+        ),
+        "head_to_head": bool(match.get("head_to_head")),
+        "prematch": bool(
+            match.get("prediction")
+            or match.get("odds")
+            or match.get("injuries_home")
+            or match.get("injuries_away")
+        ),
+    }
+    weights = {
+        "identity": 15,
+        "teams": 15,
+        "competition": 10,
+        "venue": 5,
+        "score": 10,
+        "timeline": 10,
+        "lineup": 15,
+        "statistics": 10,
+        "head_to_head": 5,
+        "prematch": 5,
+    }
+    score = sum(weights[key] for key, available in checks.items() if available)
+    level = "excellent" if score >= 85 else "good" if score >= 65 else "partial" if score >= 40 else "limited"
+    return {
+        "score": score,
+        "level": level,
+        "available": [key for key, available in checks.items() if available],
+        "missing": [key for key, available in checks.items() if not available],
+    }
+
+
+def annotate_completeness(matches: list[dict] | None) -> list[dict]:
+    """Return copied match objects with a compact completeness descriptor."""
+    return [
+        {**match, "data_completeness": match_completeness(match)}
+        for match in (matches or [])
+        if isinstance(match, dict)
+    ]
+
+
+def data_quality(matches, provider, last_successful_update=None, last_error=None) -> dict:
+    """Build a provider-neutral quality summary without inventing missing data."""
+    matches = matches or []
+    scores = [
+        (match.get("data_completeness") or match_completeness(match))["score"]
+        for match in matches
+        if isinstance(match, dict)
+    ]
+    average = round(sum(scores) / len(scores)) if scores else 0
+    issues = []
+    if not matches:
+        issues.append("no_matches")
+    if last_error:
+        issues.append("provider_error")
+    if matches and average < 40:
+        issues.append("limited_coverage")
+    conflicts = []
+    for match in matches:
+        if match.get("state") == "pre" and (
+            str(match.get("home_score") or "0") not in ("", "0")
+            or str(match.get("away_score") or "0") not in ("", "0")
+        ):
+            conflicts.append({
+                "event_id": match.get("event_id"),
+                "field": "score",
+                "reason": "scheduled_match_has_score",
+            })
+    return {
+        "provider": provider,
+        "updated_at": last_successful_update,
+        "match_count": len(matches),
+        "average_completeness": average,
+        "level": "excellent" if average >= 85 else "good" if average >= 65 else "partial" if average >= 40 else "limited",
+        "issues": issues,
+        "conflicts": conflicts,
+    }
+
+
+def matchday_summary(matches: list[dict] | None) -> dict | None:
+    """Summarise the most relevant calendar day represented by the payload."""
+    matches = [match for match in (matches or []) if isinstance(match, dict)]
+    if not matches:
+        return None
+    live = [match for match in matches if match.get("state") in ("in", "live")]
+    upcoming = [match for match in matches if match.get("state") == "pre"]
+    finished = [match for match in matches if match.get("state") == "post"]
+    focus = (live or upcoming or list(reversed(finished)))[0]
+    date = str(focus.get("date_iso") or focus.get("date") or "")[:10]
+    same_day = [
+        match for match in matches
+        if str(match.get("date_iso") or match.get("date") or "")[:10] == date
+    ]
+    return {
+        "date": date or None,
+        "competition": focus.get("competition_name") or focus.get("league_name"),
+        "focus_event_id": focus.get("event_id"),
+        "phase": "live" if live else "upcoming" if upcoming else "finished",
+        "matches": same_day,
+        "total": len(same_day),
+        "live": sum(match.get("state") in ("in", "live") for match in same_day),
+        "upcoming": sum(match.get("state") == "pre" for match in same_day),
+        "finished": sum(match.get("state") == "post" for match in same_day),
+    }
+
+
+def player_watchlist(club: dict | None, names: str | list[str] | None) -> list[dict]:
+    """Resolve configured player names against the current squad."""
+    if isinstance(names, str):
+        names = [part.strip() for part in names.split(",") if part.strip()]
+    wanted = {str(name).casefold() for name in (names or [])}
+    if not wanted:
+        return []
+    squad = (club or {}).get("squad") or []
+    results = []
+    for player in squad:
+        name = str(player.get("name") or "")
+        if name.casefold() not in wanted:
+            continue
+        results.append({
+            key: player.get(key)
+            for key in (
+                "id", "name", "photo", "number", "position", "age", "injured",
+                "goals", "assists", "rating",
+            )
+            if player.get(key) is not None
+        })
+    return results
+
+
+def archive_snapshot(match: dict, provider: str) -> dict:
+    """Create a bounded, recorder-friendly historical match record."""
+    return {
+        key: match.get(key)
+        for key in (
+            "event_id", "date", "date_iso", "competition_name", "league_name",
+            "home_team", "away_team", "home_logo", "away_logo", "home_score",
+            "away_score", "status", "venue",
+        )
+        if match.get(key) is not None
+    } | {
+        "provider": provider,
+        "archived_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+def update_archive(existing: list[dict] | None, matches: list[dict] | None, provider: str, limit=100) -> list[dict]:
+    """Merge newly finished matches into an archive, newest first."""
+    by_id = {
+        str(item.get("event_id") or f"{item.get('date_iso')}|{item.get('home_team')}|{item.get('away_team')}"): item
+        for item in (existing or [])
+    }
+    for match in matches or []:
+        if match.get("state") != "post":
+            continue
+        snapshot = archive_snapshot(match, provider)
+        key = str(snapshot.get("event_id") or f"{snapshot.get('date_iso')}|{snapshot.get('home_team')}|{snapshot.get('away_team')}")
+        if key in by_id:
+            snapshot["archived_at"] = by_id[key].get("archived_at", snapshot["archived_at"])
+        by_id[key] = snapshot
+    return sorted(
+        by_id.values(),
+        key=lambda item: str(item.get("date_iso") or item.get("date") or ""),
+        reverse=True,
+    )[:limit]

@@ -133,6 +133,16 @@
       }
     }
   },
+  "issues": {
+    "authentication_failed": {
+      "title": "Soccer Live-authenticatie mislukt",
+      "description": "De provider heeft de ingestelde aanmeldgegevens geweigerd. Open de Soccer Live-integratie en authenticeer opnieuw of vervang de API-sleutel."
+    },
+    "rate_limited": {
+      "title": "Soccer Live wordt tijdelijk begrensd",
+      "description": "De provider beperkt tijdelijk het aantal aanvragen. Soccer Live probeert het automatisch opnieuw; schakel optionele verrijking uit of wacht tot het quotum herstelt."
+    }
+  },
   "options": {
     "step": {
       "init": {
@@ -155,7 +165,13 @@
           "api_football_season": "API-Football seizoen (0 = auto)",
           "change_api_football_key": "API-Football-key wijzigen (leeg laten = huidige behouden)",
           "max_matches": "Max wedstrijden in attributen (0 = onbeperkt)",
-          "notify_service": "Meldingsservice (bijv. notify.mobile_app)"
+          "notify_service": "Meldingsservice (bijv. notify.mobile_app)",
+          "notify_goals": "Meldingen bij doelpunten",
+          "notify_cards": "Meldingen bij kaarten",
+          "notify_match_status": "Meldingen bij einde, uitstel en afgelasting",
+          "quiet_hours_start": "Stille uren beginnen (UU:MM; leeg = uit)",
+          "quiet_hours_end": "Stille uren eindigen (UU:MM; leeg = uit)",
+          "player_watchlist": "Spelersvolglijst (namen gescheiden door komma's)"
         }
       }
     },
