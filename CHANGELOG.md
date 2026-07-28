@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- release automation: publish only after the existing tests, real Home Assistant test, blueprint validation, Hassfest and HACS validation succeed
+- release notes: use the matching changelog section and verify the generated zip before and after upload
+- CI: cancel stale runs and enable weekly Dependabot updates for GitHub Actions and Python dependencies
+- dependencies: group weekly updates and pin the mutually compatible Python 3.13/HA test toolchain for reproducible CI
+- CI: avoid duplicate branch and pull-request runs, pin moving HACS/Hassfest actions to audited commits and enforce additional safe Ruff rules
+- dates: validate option dates as dates and make diagnostics robust for aware and legacy-naive cache timestamps
+- release verification: retry GitHub asset lookups to tolerate short API consistency delays
+
+## v3.10.0 (2026-07-28)
+
 - insights: publish provider-neutral match completeness, sensor-level data quality and matchday summaries
 - archive: persist up to 100 compact finished-match records per config entry for local history cards
 - watchlist: resolve configurable comma-separated player names against current club squad data
@@ -10,13 +20,6 @@
 - contract: bump the published data schema to version 3 and recommend Matchday/Archive cards where applicable
 - recorder: exclude all new high-churn insight, watchlist and archive attributes from state history
 - tests: cover completeness, matchday selection, player matching and archive deduplication
-- release automation: publish only after the existing tests, real Home Assistant test, blueprint validation, Hassfest and HACS validation succeed
-- release notes: use the matching changelog section and verify the generated zip before and after upload
-- CI: cancel stale runs and enable weekly Dependabot updates for GitHub Actions and Python dependencies
-- dependencies: group weekly updates and pin the mutually compatible Python 3.13/HA test toolchain for reproducible CI
-- CI: avoid duplicate branch and pull-request runs, pin moving HACS/Hassfest actions to audited commits and enforce additional safe Ruff rules
-- dates: validate option dates as dates and make diagnostics robust for aware and legacy-naive cache timestamps
-- release verification: retry GitHub asset lookups to tolerate short API consistency delays
 
 ## v3.9.9 (2026-07-27)
 - events: deduplicate provider events across the next/all/mixed sensors of one config entry, including lineup and match-phase transitions
