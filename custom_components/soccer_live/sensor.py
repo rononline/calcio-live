@@ -336,7 +336,8 @@ class SoccerLiveSensor(Entity):
         "schedule_live_matches", "schedule_upcoming_matches", "schedule_recent_matches",
         "standings_groups", "scorers", "assists", "articles", "rounds",
         "head_to_head", "league_info", "club", "club_changes", "card_defaults",
-        "data_quality", "matchday", "match_archive", "player_watchlist",
+        "data_quality", "matchday", "match_readiness", "match_archive",
+        "match_archive_summary", "player_watchlist",
         "last_event", "last_goal_event", "last_card_event",
         "last_match_started_event", "last_match_finished_event",
     })
@@ -384,6 +385,15 @@ class SoccerLiveSensor(Entity):
         self._state = None
         self._attributes = {}
         self._config_entry_id = config_entry_id
+        self._coordinator = (
+            hass.data.get(DOMAIN, {})
+            .get(config_entry_id, {})
+            .get("coordinator")
+            if config_entry_id
+            else None
+        )
+        self._coordinator_unsub = None
+        self._coordinator_entity_unsub = None
         self._team_name = team_name
         self._recent_match_hours = recent_match_hours
         self._enable_summary_enrichment = enable_summary_enrichment
@@ -456,6 +466,12 @@ class SoccerLiveSensor(Entity):
         if self._live_unsub:
             self._live_unsub()
             self._live_unsub = None
+        if self._coordinator_unsub:
+            self._coordinator_unsub()
+            self._coordinator_unsub = None
+        if self._coordinator_entity_unsub:
+            self._coordinator_entity_unsub()
+            self._coordinator_entity_unsub = None
 
     def _is_live(self):
         """Return True if any tracked match is currently in progress."""
@@ -489,6 +505,11 @@ class SoccerLiveSensor(Entity):
     async def async_added_to_hass(self):
         """Load previously dispatched match_finished keys from disk so HA restarts
         do not re-fire events for matches that already ended."""
+        if self._coordinator:
+            self._coordinator_entity_unsub = self._coordinator.register_entity(self)
+            self._coordinator_unsub = self._coordinator.add_listener(
+                self._coordinator_updated
+            )
         await self._load_prematch_cache()
         await self._load_club_cache()
         await self._load_match_archive()
@@ -505,6 +526,11 @@ class SoccerLiveSensor(Entity):
             _LOGGER.debug(
                 f"Loaded {len(self._match_finished_dispatched)} match_finished entries from storage for {self._name}"
             )
+
+    def _coordinator_updated(self):
+        """Publish observable entry-wide fetching state immediately."""
+        if self.hass and self.entity_id:
+            self.async_write_ha_state()
 
     async def _save_match_finished_store(self):
         """Persist the match_finished set to HA .storage."""
@@ -551,6 +577,7 @@ class SoccerLiveSensor(Entity):
             "provider": self._provider,
             "provider_capabilities": list(PROVIDER_CAPABILITIES.get(self._provider, ())),
             "integration_version": INTEGRATION_VERSION,
+            "config_entry_id": self._config_entry_id,
             "data_schema_version": DATA_SCHEMA_VERSION,
             "recommended_card_types": recommended_card_types(self._sensor_type),
             "api_football_season": self._api_football_season,
@@ -599,6 +626,17 @@ class SoccerLiveSensor(Entity):
         return self._config_entry_id
 
     async def async_update(self):
+        """Run one sensor update while publishing shared fetching state."""
+        coordinator = getattr(self, "_coordinator", None)
+        if coordinator:
+            coordinator.begin_fetch()
+        try:
+            await self._async_update_impl()
+        finally:
+            if coordinator:
+                coordinator.end_fetch()
+
+    async def _async_update_impl(self):
         _LOGGER.debug("Starting update for %s", self._name)
 
         self._pending_events = []
@@ -788,7 +826,7 @@ class SoccerLiveSensor(Entity):
             SoccerLiveSensor._archive_stores[key] = store
             stored = await store.async_load()
             if isinstance(stored, dict) and isinstance(stored.get("matches"), list):
-                SoccerLiveSensor._match_archives[key] = stored["matches"][:100]
+                SoccerLiveSensor._match_archives[key] = stored["matches"][:500]
         except Exception as err:  # pragma: no cover - storage is best-effort
             _LOGGER.debug("Could not load match archive: %s", err)
 
@@ -796,6 +834,7 @@ class SoccerLiveSensor(Entity):
         """Attach provider-neutral quality, matchday, watchlist and archive data."""
         from .insights import (
             annotate_completeness,
+            archive_summary,
             data_quality,
             matchday_summary,
             player_watchlist,
@@ -811,7 +850,14 @@ class SoccerLiveSensor(Entity):
                     annotate_completeness([self._attributes["next_match"]])[0]
                     ["data_completeness"]
                 ),
+                "match_readiness": (
+                    annotate_completeness([self._attributes["next_match"]])[0]
+                    ["match_readiness"]
+                ),
             }
+            self._attributes["match_readiness"] = self._attributes["next_match"][
+                "match_readiness"
+            ]
         self._attributes["data_quality"] = data_quality(
             matches,
             self._provider,
@@ -840,10 +886,36 @@ class SoccerLiveSensor(Entity):
         SoccerLiveSensor._match_archives[key] = archive
         if archive:
             self._attributes["match_archive"] = archive
+            self._attributes["match_archive_summary"] = archive_summary(
+                archive,
+                self._team_name,
+            )
             store = SoccerLiveSensor._archive_stores.get(key)
             if store is not None:
                 store.async_delay_save(lambda: {"matches": archive}, 60)
         self._update_repairs()
+
+    async def async_replace_archive(self, matches):
+        """Replace this entry's archive after a management service call."""
+        from .archive import validate_archive
+        from .insights import archive_summary
+
+        key = self._config_entry_id or "default"
+        archive = validate_archive(matches)
+        SoccerLiveSensor._match_archives[key] = archive
+        if archive:
+            self._attributes["match_archive"] = archive
+        else:
+            self._attributes.pop("match_archive", None)
+        self._attributes["match_archive_summary"] = archive_summary(
+            archive,
+            self._team_name,
+        )
+        store = SoccerLiveSensor._archive_stores.get(key)
+        if store is not None:
+            await store.async_save({"matches": archive})
+        if self.hass and self.entity_id:
+            self.async_write_ha_state()
 
     def _update_repairs(self):
         """Expose actionable provider failures through Home Assistant Repairs."""
@@ -1986,15 +2058,18 @@ class SoccerLiveSensor(Entity):
     def _sync_status(self):
         """Lifecycle status for the card (see const.compute_sync_status).
 
-        A polled sensor can't observably publish "fetching": HA only reads the
-        attributes after async_update() returns, so the first load is reported as
-        "initializing" (the card shows the same "fetching…" text for it). The
-        "fetching" value is reserved for a future push-based coordinator."""
+        The entry coordinator notifies listeners when the first shared request
+        starts and the final one ends, so cards can observe ``fetching`` even
+        though the provider entities themselves retain HA polling semantics."""
         return compute_sync_status(
             auth_failed=self._auth_failed,
             rate_limited=self._is_rate_limited(),
             has_data=self._last_successful_update is not None,
             has_error=bool(self._last_error),
+            fetching=bool(
+                getattr(self, "_coordinator", None)
+                and self._coordinator.is_fetching
+            ),
         )
 
     async def _refresh_api_football_status(self):

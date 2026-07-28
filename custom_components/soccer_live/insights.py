@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 
 
 def _present(value) -> bool:
-    return value not in (None, "", [], {})
+    if value in (None, "", [], {}):
+        return False
+    if isinstance(value, str):
+        return value.strip().casefold() not in {"n/a", "unknown", "none", "null", "-"}
+    return True
 
 
 def match_completeness(match: dict | None) -> dict:
@@ -57,10 +62,75 @@ def match_completeness(match: dict | None) -> dict:
     }
 
 
+def match_readiness(match: dict | None) -> dict:
+    """Summarise useful pre-match preparation data without inventing coverage.
+
+    Completeness describes the whole payload, including live/post-match fields.
+    Readiness deliberately looks only at information that is useful before
+    kick-off, so a scheduled fixture can reach 100% without statistics/events.
+    """
+    match = match or {}
+    checks = {
+        "kickoff": _present(match.get("date_iso") or match.get("date")),
+        "competition": _present(match.get("competition_name") or match.get("league_name")),
+        "venue": _present(match.get("venue")),
+        "broadcasts": bool(match.get("broadcasts")),
+        "weather": bool(
+            match.get("weather")
+            or match.get("temperature")
+            or match.get("venue_lat")
+            or match.get("venue_lon")
+        ),
+        "head_to_head": bool(match.get("head_to_head")),
+        "prediction": bool(match.get("prediction")),
+        "odds": bool(match.get("odds")),
+        "absences": bool(
+            match.get("injuries_home")
+            or match.get("injuries_away")
+            or match.get("absences")
+        ),
+        "lineup": bool(
+            match.get("lineup_home")
+            or match.get("lineup_away")
+            or match.get("expected_lineup_home")
+            or match.get("expected_lineup_away")
+        ),
+    }
+    weights = {
+        "kickoff": 15,
+        "competition": 10,
+        "venue": 10,
+        "broadcasts": 5,
+        "weather": 5,
+        "head_to_head": 10,
+        "prediction": 10,
+        "odds": 10,
+        "absences": 10,
+        "lineup": 15,
+    }
+    score = sum(weights[key] for key, available in checks.items() if available)
+    level = (
+        "ready" if score >= 80
+        else "good" if score >= 55
+        else "building" if score >= 30
+        else "early"
+    )
+    return {
+        "score": score,
+        "level": level,
+        "available": [key for key, available in checks.items() if available],
+        "missing": [key for key, available in checks.items() if not available],
+    }
+
+
 def annotate_completeness(matches: list[dict] | None) -> list[dict]:
     """Return copied match objects with a compact completeness descriptor."""
     return [
-        {**match, "data_completeness": match_completeness(match)}
+        {
+            **match,
+            "data_completeness": match_completeness(match),
+            "match_readiness": match_readiness(match),
+        }
         for match in (matches or [])
         if isinstance(match, dict)
     ]
@@ -157,21 +227,149 @@ def player_watchlist(club: dict | None, names: str | list[str] | None) -> list[d
 
 def archive_snapshot(match: dict, provider: str) -> dict:
     """Create a bounded, recorder-friendly historical match record."""
-    return {
+    snapshot = {
         key: match.get(key)
         for key in (
             "event_id", "date", "date_iso", "competition_name", "league_name",
             "home_team", "away_team", "home_logo", "away_logo", "home_score",
-            "away_score", "status", "venue",
+            "away_score", "status", "venue", "season_info", "round",
+            "home_id", "away_id", "is_friendly",
         )
         if match.get(key) is not None
-    } | {
+    }
+    snapshot["season"] = archive_season(snapshot)
+    return snapshot | {
         "provider": provider,
         "archived_at": datetime.now(timezone.utc).isoformat(),
     }
 
 
-def update_archive(existing: list[dict] | None, matches: list[dict] | None, provider: str, limit=100) -> list[dict]:
+def archive_season(match: dict) -> str:
+    """Return a stable season label from provider data or the fixture date."""
+    raw = match.get("season") or match.get("season_info")
+    if isinstance(raw, dict):
+        raw = raw.get("displayName") or raw.get("name") or raw.get("year")
+    if raw not in (None, "", "N/A"):
+        text = str(raw).strip()
+        years = re.findall(r"(?:19|20)\d{2}", text)
+        if len(years) >= 2:
+            return f"{years[0]}/{years[1][-2:]}"
+        if len(years) == 1:
+            year = int(years[0])
+            return f"{year}/{str(year + 1)[-2:]}"
+        return text
+    raw_date = str(match.get("date_iso") or match.get("date") or "")
+    found = re.search(r"((?:19|20)\d{2})-(\d{2})", raw_date)
+    if not found:
+        return "unknown"
+    year, month = int(found.group(1)), int(found.group(2))
+    start = year if month >= 7 else year - 1
+    return f"{start}/{str(start + 1)[-2:]}"
+
+
+def _tracked_result(match: dict, team_name: str | None) -> tuple[int, int] | None:
+    """Return goals for/against for a tracked team, or home/away as fallback."""
+    try:
+        home_score = int(match.get("home_score"))
+        away_score = int(match.get("away_score"))
+    except (TypeError, ValueError):
+        return None
+    team = str(team_name or "").casefold().strip()
+    home = str(match.get("home_team") or "").casefold()
+    away = str(match.get("away_team") or "").casefold()
+    def same(left, right):
+        return (
+            left == right
+            or (
+                len(left) >= 4
+                and len(right) >= 4
+                and (left in right or right in left)
+            )
+        )
+    if team and same(team, away):
+        return away_score, home_score
+    if not team or same(team, home):
+        return home_score, away_score
+    return None
+
+
+def archive_statistics(
+    matches: list[dict] | None,
+    team_name: str | None = None,
+    season: str | None = None,
+    competition: str | None = None,
+) -> dict:
+    """Calculate compact archive statistics for one optional filter."""
+    selected = []
+    for match in matches or []:
+        if not isinstance(match, dict):
+            continue
+        if season and archive_season(match) != season:
+            continue
+        name = match.get("competition_name") or match.get("league_name") or ""
+        if competition and name != competition:
+            continue
+        result = _tracked_result(match, team_name)
+        if result is not None:
+            selected.append((match, result))
+
+    won = drawn = lost = goals_for = goals_against = clean_sheets = 0
+    current_unbeaten = longest_unbeaten = current_wins = longest_wins = 0
+    for _match, (own, other) in reversed(selected):
+        goals_for += own
+        goals_against += other
+        clean_sheets += other == 0
+        if own > other:
+            won += 1
+            current_wins += 1
+            current_unbeaten += 1
+        elif own == other:
+            drawn += 1
+            current_wins = 0
+            current_unbeaten += 1
+        else:
+            lost += 1
+            current_wins = 0
+            current_unbeaten = 0
+        longest_wins = max(longest_wins, current_wins)
+        longest_unbeaten = max(longest_unbeaten, current_unbeaten)
+    total = len(selected)
+    return {
+        "matches": total,
+        "won": won,
+        "drawn": drawn,
+        "lost": lost,
+        "win_percentage": round((won / total) * 100) if total else 0,
+        "goals_for": goals_for,
+        "goals_against": goals_against,
+        "goal_difference": goals_for - goals_against,
+        "clean_sheets": clean_sheets,
+        "longest_unbeaten": longest_unbeaten,
+        "longest_winning": longest_wins,
+    }
+
+
+def archive_summary(matches: list[dict] | None, team_name: str | None = None) -> dict:
+    """Describe filters and all-time statistics for the local archive."""
+    matches = [match for match in (matches or []) if isinstance(match, dict)]
+    seasons = sorted(
+        {archive_season(match) for match in matches if archive_season(match) != "unknown"},
+        reverse=True,
+    )
+    competitions = sorted({
+        str(match.get("competition_name") or match.get("league_name"))
+        for match in matches
+        if match.get("competition_name") or match.get("league_name")
+    })
+    return {
+        "count": len(matches),
+        "seasons": seasons,
+        "competitions": competitions,
+        "statistics": archive_statistics(matches, team_name),
+    }
+
+
+def update_archive(existing: list[dict] | None, matches: list[dict] | None, provider: str, limit=500) -> list[dict]:
     """Merge newly finished matches into an archive, newest first."""
     by_id = {
         str(item.get("event_id") or f"{item.get('date_iso')}|{item.get('home_team')}|{item.get('away_team')}"): item

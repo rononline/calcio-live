@@ -22,7 +22,7 @@ def _read_manifest_version():
 # integration, and detect breaking attribute-shape changes.
 INTEGRATION_VERSION = _read_manifest_version()
 # Bump when the published attribute shape changes in a way a card must handle.
-DATA_SCHEMA_VERSION = 3
+DATA_SCHEMA_VERSION = 4
 CONF_COMPETITION_CODE = "competition_code"
 CONF_PROVIDER = "provider"
 CONF_API_FOOTBALL_KEY = "api_football_key"
@@ -86,10 +86,7 @@ def recommended_card_types(sensor_type):
 # an empty card that looks like a misconfiguration.
 SYNC_STATUSES = (
     "initializing",          # no successful fetch yet (covers the first-load window)
-    "fetching",              # reserved: a push coordinator could report an active
-                             # fetch. A polled sensor can't (HA reads attributes
-                             # only after async_update returns), so it uses
-                             # "initializing" for the first load instead.
+    "fetching",              # the entry coordinator currently has active work
     "ready",                 # data has been fetched successfully
     "rate_limited",          # provider is rate/quota limiting requests
     "authentication_failed",  # provider rejected the API key (needs reauth)

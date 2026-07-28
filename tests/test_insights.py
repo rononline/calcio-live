@@ -27,6 +27,30 @@ def test_match_completeness_is_honest_about_optional_sections():
     assert "venue" in result["available"]
 
 
+def test_match_readiness_only_scores_prematch_information():
+    result = insights.match_readiness(
+        _match(
+            venue="Het Kasteel",
+            head_to_head=[{"event_id": "old"}],
+            lineup_home=[{"name": "Keeper"}],
+        )
+    )
+    assert result["score"] == 60
+    assert result["level"] == "good"
+    assert "lineup" in result["available"]
+    assert "statistics" not in result["missing"]
+
+
+def test_match_readiness_ignores_provider_placeholders():
+    result = insights.match_readiness({
+        "date": "N/A",
+        "competition_name": "unknown",
+        "venue": "-",
+    })
+    assert result["score"] == 0
+    assert result["level"] == "early"
+
+
 def test_matchday_prefers_live_and_limits_matches_to_same_day():
     live = _match(event_id="live", state="in")
     other = _match(event_id="tomorrow", date_iso="2026-08-10T12:15:00+00:00")
@@ -57,3 +81,35 @@ def test_archive_deduplicates_updates_and_is_newest_first():
     updated = insights.update_archive([old], [newer], "api_football")
     assert [item["event_id"] for item in updated] == ["2", "1"]
     assert updated[0]["provider"] == "api_football"
+
+
+def test_archive_summary_supports_seasons_and_team_statistics():
+    matches = [
+        insights.archive_snapshot(
+            _match(
+                event_id="1",
+                state="post",
+                date_iso="2026-08-10T12:15:00+00:00",
+                home_score=1,
+                away_score=2,
+            ),
+            "espn",
+        ),
+        insights.archive_snapshot(
+            _match(
+                event_id="2",
+                state="post",
+                date_iso="2027-02-10T12:15:00+00:00",
+                home_score=0,
+                away_score=0,
+            ),
+            "espn",
+        ),
+    ]
+    result = insights.archive_summary(matches, "Feyenoord")
+    assert result["seasons"] == ["2026/27"]
+    assert result["statistics"]["matches"] == 2
+    assert result["statistics"]["won"] == 1
+    assert result["statistics"]["drawn"] == 1
+    assert result["statistics"]["goals_for"] == 2
+    assert result["statistics"]["clean_sheets"] == 1

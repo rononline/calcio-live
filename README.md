@@ -20,9 +20,7 @@ New here? This gets you a live team card in a few minutes:
 
 > Want predictions, odds and injuries? Choose **API-Football** as the data source in step 2 instead and paste your API key when prompted — everything else works the same.
 
-<!-- TODO screenshots for the new 3-step wizard (ESPN default -> Team -> search):
-     quickstart-1-source.png, quickstart-2-follow.png, quickstart-3-team.png, quickstart-4-card.png.
-     The existing setup1-4.png show the old single-step flow (and old name) and should be replaced. -->
+![Soccer Live first-install walkthrough](images/setup-wizard.svg)
 
 ---
 
@@ -100,10 +98,35 @@ Configure via **Settings → Devices & Services → Soccer Live → Configure**:
 > **Card contract.** Sensors publish `integration_version`, `data_schema_version` and `recommended_card_types` (the `card_type` slugs that suit the sensor), so the card editor can recommend the right card for a selected entity and warn when the integration is outdated.
 
 > **Insights and local history.** Match sensors publish a provider-neutral
-> `data_completeness` object per match, plus `data_quality`, `matchday` and a
-> compact `match_archive`. Finished matches are kept locally in Home Assistant
-> (up to 100 per integration entry); no extra provider request is made. Large
-> derived attributes are excluded from Recorder history.
+> `data_completeness` and `match_readiness` object per match, plus
+> `data_quality`, `matchday`, `match_archive` and `match_archive_summary`.
+> Finished matches are kept locally in Home Assistant (up to 500 per
+> integration entry); no extra provider request is made. Large derived
+> attributes are excluded from Recorder history.
+
+### Local archive and refresh services
+
+The integration registers services under the `soccer_live` domain:
+
+| Service | Purpose |
+|---|---|
+| `soccer_live.refresh` | Immediately request a refresh from one or all config entries. |
+| `soccer_live.rebuild_match_archive` | Add currently available finished matches to the local archive. |
+| `soccer_live.clear_match_archive` | Permanently clear the selected local archive. |
+| `soccer_live.export_match_archive` | Return a versioned JSON-compatible archive backup as response data. |
+| `soccer_live.import_match_archive` | Replace an archive from a previous JSON export. |
+
+Every service accepts an optional `config_entry_id`; without one it applies to
+all Soccer Live entries. The Archive card supplies the correct ID
+automatically for its rebuild and clear buttons.
+The complete response from `export_match_archive` can be pasted into
+`import_match_archive`; a one-entry backup also remains portable when Home
+Assistant assigned the restored integration a different config-entry ID.
+
+> **Shared coordinator.** Entities retain their provider-specific polling
+> intervals, while an entry-wide coordinator publishes a real `fetching`
+> transition, tracks the entry's entities and handles manual refreshes. Existing
+> entity IDs, provider caches and event semantics are unchanged.
 
 ---
 

@@ -11,6 +11,7 @@ Home Assistant test package is installed:
     pip install -r requirements-test.txt -r requirements-ha-test.txt
     pytest tests/test_ha_config_flow.py
 """
+import json
 from unittest.mock import patch
 
 import pytest
@@ -145,3 +146,89 @@ async def test_team_entry_wiring(hass: HomeAssistant):
     devices = dr.async_entries_for_config_entry(dev_reg, entry.entry_id)
     assert len(devices) == 1
     assert all(e.device_id == devices[0].id for e in entities)
+
+
+async def test_archive_services_round_trip_in_real_home_assistant(hass: HomeAssistant):
+    """Archive response/import/clear services use HA's real service registry."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            CONF_PROVIDER: PROVIDER_ESPN,
+            "team_id": "1",
+            "team_name": "Feyenoord",
+            "competition_code": "ned.1",
+            "selection": "Team",
+            "name": "Team Eredivisie Feyenoord",
+        },
+        title="Soccer Live · Feyenoord",
+    )
+    entry.add_to_hass(hass)
+    with patch(
+        "custom_components.soccer_live.sensor.SoccerLiveSensor.async_update",
+        return_value=None,
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+    archive = {
+        "version": 1,
+        "matches": [{
+            "event_id": "fixture-1",
+            "date_iso": "2026-08-09T12:15:00+00:00",
+            "home_team": "Sparta",
+            "away_team": "Feyenoord",
+            "home_score": 0,
+            "away_score": 2,
+        }],
+    }
+    imported = await hass.services.async_call(
+        DOMAIN,
+        "import_match_archive",
+        {
+            "config_entry_id": entry.entry_id,
+            "archive": json.dumps(archive),
+        },
+        blocking=True,
+        return_response=True,
+    )
+    assert imported == {"matches": 1}
+    exported = await hass.services.async_call(
+        DOMAIN,
+        "export_match_archive",
+        {"config_entry_id": entry.entry_id},
+        blocking=True,
+        return_response=True,
+    )
+    assert exported["archives"][entry.entry_id]["matches"][0]["event_id"] == "fixture-1"
+
+    await hass.services.async_call(
+        DOMAIN,
+        "clear_match_archive",
+        {"config_entry_id": entry.entry_id},
+        blocking=True,
+    )
+    restored = await hass.services.async_call(
+        DOMAIN,
+        "import_match_archive",
+        {
+            "config_entry_id": entry.entry_id,
+            "archive": json.dumps(exported),
+        },
+        blocking=True,
+        return_response=True,
+    )
+    assert restored == {"matches": 1}
+    await hass.services.async_call(
+        DOMAIN,
+        "clear_match_archive",
+        {"config_entry_id": entry.entry_id},
+        blocking=True,
+    )
+    exported = await hass.services.async_call(
+        DOMAIN,
+        "export_match_archive",
+        {"config_entry_id": entry.entry_id},
+        blocking=True,
+        return_response=True,
+    )
+    assert exported["archives"][entry.entry_id]["matches"] == []

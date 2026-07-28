@@ -62,3 +62,64 @@ simulate_match_event:
       name: Minute
       selector:
         text:
+
+refresh:
+  name: Refresh Soccer Live
+  description: Requests an immediate refresh from all sensors, or one selected config entry.
+  fields:
+    config_entry_id:
+      name: Config entry ID
+      description: Optional Soccer Live config entry ID. Leave empty to refresh all entries.
+      selector:
+        config_entry:
+          integration: soccer_live
+
+clear_match_archive:
+  name: Clear match archive
+  description: Permanently clears the locally stored match archive for one or all Soccer Live entries.
+  fields:
+    config_entry_id:
+      name: Config entry ID
+      description: Optional Soccer Live config entry ID. Leave empty to clear all entries.
+      selector:
+        config_entry:
+          integration: soccer_live
+
+rebuild_match_archive:
+  name: Rebuild match archive
+  description: Adds currently available finished matches to the local archive.
+  fields:
+    config_entry_id:
+      name: Config entry ID
+      description: Optional Soccer Live config entry ID. Leave empty to rebuild all entries.
+      selector:
+        config_entry:
+          integration: soccer_live
+
+import_match_archive:
+  name: Import match archive
+  description: Replaces the local archive with a Soccer Live JSON export.
+  fields:
+    config_entry_id:
+      name: Config entry ID
+      description: Optional Soccer Live config entry ID. Leave empty to import into all entries.
+      selector:
+        config_entry:
+          integration: soccer_live
+    archive:
+      name: Archive JSON
+      required: true
+      selector:
+        text:
+          multiline: true
+
+export_match_archive:
+  name: Export match archive
+  description: Returns the locally stored archives as JSON-compatible service response data.
+  fields:
+    config_entry_id:
+      name: Config entry ID
+      description: Optional Soccer Live config entry ID. Leave empty to export all entries.
+      selector:
+        config_entry:
+          integration: soccer_live
