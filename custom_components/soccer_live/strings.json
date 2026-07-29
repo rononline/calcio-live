@@ -216,11 +216,31 @@
       },
       "commentary": {
         "name": "Live commentary"
+      },
+      "runtime_status": {
+        "name": "Sync status"
+      },
+      "next_kickoff": {
+        "name": "Next kick-off"
+      },
+      "api_quota_remaining": {
+        "name": "API requests remaining"
       }
     },
     "calendar": {
       "match_calendar": {
         "name": "Match calendar"
+      }
+    },
+    "button": {
+      "refresh": {
+        "name": "Refresh now"
+      },
+      "rebuild_archive": {
+        "name": "Rebuild match archive"
+      },
+      "play_replay": {
+        "name": "Play match replay"
       }
     }
   }

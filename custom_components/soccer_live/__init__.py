@@ -15,7 +15,7 @@ from .const import DOMAIN
 from .coordinator import SoccerLiveEntryCoordinator
 from .simulator import EVENT_TYPES, simulated_event
 
-PLATFORMS = ["sensor", "calendar"]
+PLATFORMS = ["sensor", "calendar", "button"]
 
 
 def _coordinators(hass, requested=None):
@@ -99,6 +99,31 @@ def _register_services(hass: HomeAssistant) -> None:
             }
         }
 
+    async def async_play_match_replay(call):
+        total = 0
+        for coordinator in _coordinators(hass, call.data.get("config_entry_id")):
+            total += await coordinator.async_play_replay(
+                speed=call.data.get("speed", 20),
+                demo=call.data.get("demo", False),
+            )
+        return {"events": total}
+
+    async def async_clear_match_replay(call):
+        for coordinator in _coordinators(hass, call.data.get("config_entry_id")):
+            await coordinator.async_clear_replay()
+
+    async def async_export_match_replay(call):
+        selected = _coordinators(hass, call.data.get("config_entry_id"))
+        return {
+            "replays": {
+                coordinator.entry_id: {
+                    "version": 1,
+                    "snapshots": coordinator.replay(),
+                }
+                for coordinator in selected
+            }
+        }
+
     entry_schema = {vol.Optional("config_entry_id"): str}
     hass.services.async_register(
         DOMAIN,
@@ -156,14 +181,38 @@ def _register_services(hass: HomeAssistant) -> None:
         schema=vol.Schema(entry_schema),
         supports_response=SupportsResponse.ONLY,
     )
+    hass.services.async_register(
+        DOMAIN,
+        "play_match_replay",
+        async_play_match_replay,
+        schema=vol.Schema({
+            **entry_schema,
+            vol.Optional("speed", default=20): vol.Coerce(float),
+            vol.Optional("demo", default=False): bool,
+        }),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        "clear_match_replay",
+        async_clear_match_replay,
+        schema=vol.Schema(entry_schema),
+    )
+    hass.services.async_register(
+        DOMAIN,
+        "export_match_replay",
+        async_export_match_replay,
+        schema=vol.Schema(entry_schema),
+        supports_response=SupportsResponse.ONLY,
+    )
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if DOMAIN not in hass.data:
         hass.data[DOMAIN] = {}
-    hass.data[DOMAIN].setdefault(entry.entry_id, {})["coordinator"] = (
-        SoccerLiveEntryCoordinator(hass, entry.entry_id)
-    )
+    coordinator = SoccerLiveEntryCoordinator(hass, entry.entry_id)
+    await coordinator.async_initialize()
+    hass.data[DOMAIN].setdefault(entry.entry_id, {})["coordinator"] = coordinator
     _register_services(hass)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -187,6 +236,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 "rebuild_match_archive",
                 "import_match_archive",
                 "export_match_archive",
+                "play_match_replay",
+                "clear_match_replay",
+                "export_match_replay",
             ):
                 hass.services.async_remove(DOMAIN, service)
             hass.data.pop(DOMAIN, None)

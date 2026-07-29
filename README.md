@@ -95,6 +95,12 @@ Configure via **Settings → Devices & Services → Soccer Live → Configure**:
 
 > **Sync status.** Each sensor also publishes a `sync_status` attribute — `initializing`, `fetching`, `ready`, `rate_limited`, `authentication_failed` or `provider_unavailable` — so a card can show concrete text (e.g. "fetching matches for the first time") during the first update instead of an empty card that looks like a misconfiguration.
 
+> **Native helpers.** Every entry also creates a **Sync status** sensor and
+> native **Refresh now**, **Rebuild match archive** and **Play match replay**
+> buttons. Team entries add a **Next kick-off** sensor; API-Football entries add
+> an **API requests remaining** sensor. These compact entities are convenient
+> automation triggers without templating large match attributes.
+
 > **Card contract.** Sensors publish `integration_version`, `data_schema_version` and `recommended_card_types` (the `card_type` slugs that suit the sensor), so the card editor can recommend the right card for a selected entity and warn when the integration is outdated.
 
 > **Insights and local history.** Match sensors publish a provider-neutral
@@ -103,6 +109,8 @@ Configure via **Settings → Devices & Services → Soccer Live → Configure**:
 > Finished matches are kept locally in Home Assistant (up to 500 per
 > integration entry); no extra provider request is made. Large derived
 > attributes are excluded from Recorder history.
+> Each match also publishes `source_sections` with availability, provider and
+> update time for schedule, preview, lineup, timeline, statistics and review.
 
 ### Local archive and refresh services
 
@@ -115,6 +123,9 @@ The integration registers services under the `soccer_live` domain:
 | `soccer_live.clear_match_archive` | Permanently clear the selected local archive. |
 | `soccer_live.export_match_archive` | Return a versioned JSON-compatible archive backup as response data. |
 | `soccer_live.import_match_archive` | Replace an archive from a previous JSON export. |
+| `soccer_live.play_match_replay` | Replay the recorded lifecycle as safe simulated events, with a deterministic demo fallback. |
+| `soccer_live.clear_match_replay` | Clear locally recorded replay snapshots. |
+| `soccer_live.export_match_replay` | Return recorded replay snapshots as response data. |
 
 Every service accepts an optional `config_entry_id`; without one it applies to
 all Soccer Live entries. The Archive card supplies the correct ID
@@ -122,6 +133,20 @@ automatically for its rebuild and clear buttons.
 The complete response from `export_match_archive` can be pasted into
 `import_match_archive`; a one-entry backup also remains portable when Home
 Assistant assigned the restored integration a different config-entry ID.
+
+### Replay lab and restart-safe events
+
+Match sensors retain at most 180 compact, meaningful snapshots for the current
+fixture. The replay service emits the normal `soccer_live_*` lifecycle events
+with `simulated: true`, `replayed: true` and `provider: replay`, so automations
+and notifications can be tested before a real match. Replay never writes fake
+scores into the normal sensors.
+
+Real event fingerprints are kept in local storage for seven days. This prevents
+a Home Assistant restart or overlapping next/all/mixed sensors from announcing
+the same lineup, phase, goal or card again. Direct mobile-app notifications use
+a stable match tag and group, allowing later score updates to replace the
+existing notification instead of creating a stack.
 
 > **Shared coordinator.** Entities retain their provider-specific polling
 > intervals, while an entry-wide coordinator publishes a real `fetching`

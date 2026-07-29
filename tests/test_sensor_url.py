@@ -175,6 +175,7 @@ def test_direct_notification_uses_configured_language():
         sensor._send_notification(
             "soccer_live_goal",
             {
+                "event_id": "fixture-1",
                 "home_team": "Feyenoord",
                 "away_team": "Sparta",
                 "home_score": 1,
@@ -188,6 +189,10 @@ def test_direct_notification_uses_configured_language():
     assert calls[0][0:2] == ("notify", "mobile_app_phone")
     assert calls[0][2]["title"].startswith("⚽ Doelpunt!")
     assert calls[0][2]["message"].startswith("Onbekend")
+    assert calls[0][2]["data"] == {
+        "tag": "soccer-live-fixture-1-goals",
+        "group": "soccer-live",
+    }
 
 
 def test_direct_notification_profile_can_disable_goal_category():

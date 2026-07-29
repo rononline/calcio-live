@@ -216,11 +216,31 @@
       },
       "commentary": {
         "name": "Commentaire en direct"
+      },
+      "runtime_status": {
+        "name": "État de synchronisation"
+      },
+      "next_kickoff": {
+        "name": "Prochain coup d’envoi"
+      },
+      "api_quota_remaining": {
+        "name": "Requêtes API restantes"
       }
     },
     "calendar": {
       "match_calendar": {
         "name": "Calendrier des matchs"
+      }
+    },
+    "button": {
+      "refresh": {
+        "name": "Actualiser maintenant"
+      },
+      "rebuild_archive": {
+        "name": "Reconstruire l’archive des matchs"
+      },
+      "play_replay": {
+        "name": "Lire la rediffusion du match"
       }
     }
   }

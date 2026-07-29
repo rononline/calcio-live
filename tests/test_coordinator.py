@@ -41,3 +41,10 @@ def test_coordinator_registers_refreshes_and_unregisters_entities():
     assert entity.refreshes == 1
     remove()
     assert asyncio.run(coordinator.async_refresh()) == 0
+
+
+def test_coordinator_claims_event_only_once():
+    coordinator = coordinator_module.SoccerLiveEntryCoordinator(_Hass(), "entry")
+    assert coordinator.claim_event(("goal", "fixture-1", 1)) is True
+    assert coordinator.claim_event(("goal", "fixture-1", 1)) is False
+    assert coordinator.event_ledger_size == 1

@@ -14,6 +14,11 @@ async def async_get_config_entry_diagnostics(
     """Return diagnostics for a Soccer Live config entry."""
     entity_reg = er.async_get(hass)
     entities = er.async_entries_for_config_entry(entity_reg, entry.entry_id)
+    coordinator = (
+        hass.data.get("soccer_live", {})
+        .get(entry.entry_id, {})
+        .get("coordinator")
+    )
 
     sensors = []
     for entity_entry in entities:
@@ -77,20 +82,13 @@ async def async_get_config_entry_diagnostics(
 
     return {
         "coordinator": {
-            "is_fetching": bool(
-                hass.data.get("soccer_live", {})
-                .get(entry.entry_id, {})
-                .get("coordinator")
-                and hass.data["soccer_live"][entry.entry_id]["coordinator"].is_fetching
+            "is_fetching": bool(coordinator and coordinator.is_fetching),
+            "registered_entities": len(getattr(coordinator, "_entities", ())),
+            "replay_snapshot_count": (
+                len(coordinator.replay()) if coordinator else 0
             ),
-            "registered_entities": len(
-                getattr(
-                    hass.data.get("soccer_live", {})
-                    .get(entry.entry_id, {})
-                    .get("coordinator"),
-                    "_entities",
-                    (),
-                )
+            "persistent_event_count": (
+                coordinator.event_ledger_size if coordinator else 0
             ),
         },
         "api_football": api_football,

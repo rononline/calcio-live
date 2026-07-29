@@ -216,11 +216,31 @@
       },
       "commentary": {
         "name": "Live commentaar"
+      },
+      "runtime_status": {
+        "name": "Synchronisatiestatus"
+      },
+      "next_kickoff": {
+        "name": "Volgende aftrap"
+      },
+      "api_quota_remaining": {
+        "name": "Resterende API-aanvragen"
       }
     },
     "calendar": {
       "match_calendar": {
         "name": "Wedstrijdkalender"
+      }
+    },
+    "button": {
+      "refresh": {
+        "name": "Nu vernieuwen"
+      },
+      "rebuild_archive": {
+        "name": "Wedstrijdarchief opnieuw opbouwen"
+      },
+      "play_replay": {
+        "name": "Wedstrijdreplay afspelen"
       }
     }
   }

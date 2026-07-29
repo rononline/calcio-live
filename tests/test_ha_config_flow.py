@@ -47,6 +47,8 @@ async def test_translations_load_from_strings(hass: HomeAssistant):
     nl = await translation.async_get_translations(hass, "nl", "entity", [DOMAIN])
     assert en[f"component.{DOMAIN}.entity.sensor.team_match.name"] == "Next match"
     assert nl[f"component.{DOMAIN}.entity.sensor.team_match.name"] == "Volgende wedstrijd"
+    assert nl[f"component.{DOMAIN}.entity.sensor.runtime_status.name"] == "Synchronisatiestatus"
+    assert nl[f"component.{DOMAIN}.entity.button.play_replay.name"] == "Wedstrijdreplay afspelen"
     assert nl[f"component.{DOMAIN}.entity.calendar.match_calendar.name"] == "Wedstrijdkalender"
 
 
@@ -134,6 +136,9 @@ async def test_team_entry_wiring(hass: HomeAssistant):
     # translated entity names; the integration no longer forces custom IDs.
     assert any(eid.endswith("_next_match") for eid in entity_ids), entity_ids
     assert any(eid.endswith("_all_matches") for eid in entity_ids), entity_ids
+    assert any(eid.endswith("_sync_status") for eid in entity_ids), entity_ids
+    assert any(eid.endswith("_next_kick_off") for eid in entity_ids), entity_ids
+    assert any(eid.endswith("_play_match_replay") for eid in entity_ids), entity_ids
     assert any(eid.startswith("calendar.soccer_live_") for eid in entity_ids), entity_ids
 
     # Names come from translation_key + has_entity_name.
@@ -232,3 +237,24 @@ async def test_archive_services_round_trip_in_real_home_assistant(hass: HomeAssi
         return_response=True,
     )
     assert exported["archives"][entry.entry_id]["matches"] == []
+
+    replayed = await hass.services.async_call(
+        DOMAIN,
+        "play_match_replay",
+        {
+            "config_entry_id": entry.entry_id,
+            "demo": True,
+            "speed": 20,
+        },
+        blocking=True,
+        return_response=True,
+    )
+    assert replayed["events"] >= 5
+    replay_export = await hass.services.async_call(
+        DOMAIN,
+        "export_match_replay",
+        {"config_entry_id": entry.entry_id},
+        blocking=True,
+        return_response=True,
+    )
+    assert replay_export["replays"][entry.entry_id]["version"] == 1

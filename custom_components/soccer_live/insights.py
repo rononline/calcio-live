@@ -123,13 +123,39 @@ def match_readiness(match: dict | None) -> dict:
     }
 
 
-def annotate_completeness(matches: list[dict] | None) -> list[dict]:
+def source_sections(match: dict, provider=None, updated_at=None) -> dict:
+    """Describe availability, provider and freshness per visible card block."""
+    fields = {
+        "schedule": ("date", "date_iso", "venue", "competition_name", "league_name", "broadcasts"),
+        "preview": ("head_to_head", "prediction", "odds", "injuries_home", "injuries_away", "weather"),
+        "lineup": ("lineup_home", "lineup_away", "formation_home", "formation_away"),
+        "timeline": ("key_events", "match_details"),
+        "statistics": ("home_statistics", "away_statistics", "momentum", "shotmap"),
+        "review": ("review", "player_of_the_match", "team_of_the_match", "match_story"),
+    }
+    return {
+        section: {
+            "available": any(_present(match.get(key)) for key in keys),
+            "provider": provider,
+            "updated_at": updated_at,
+            "enriched": False,
+        }
+        for section, keys in fields.items()
+    }
+
+
+def annotate_completeness(
+    matches: list[dict] | None,
+    provider=None,
+    updated_at=None,
+) -> list[dict]:
     """Return copied match objects with a compact completeness descriptor."""
     return [
         {
             **match,
             "data_completeness": match_completeness(match),
             "match_readiness": match_readiness(match),
+            "source_sections": source_sections(match, provider, updated_at),
         }
         for match in (matches or [])
         if isinstance(match, dict)

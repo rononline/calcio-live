@@ -216,11 +216,31 @@
       },
       "commentary": {
         "name": "Comentário ao vivo"
+      },
+      "runtime_status": {
+        "name": "Estado da sincronização"
+      },
+      "next_kickoff": {
+        "name": "Próximo pontapé de saída"
+      },
+      "api_quota_remaining": {
+        "name": "Pedidos API restantes"
       }
     },
     "calendar": {
       "match_calendar": {
         "name": "Calendário de jogos"
+      }
+    },
+    "button": {
+      "refresh": {
+        "name": "Atualizar agora"
+      },
+      "rebuild_archive": {
+        "name": "Reconstruir arquivo de jogos"
+      },
+      "play_replay": {
+        "name": "Reproduzir repetição do jogo"
       }
     }
   }

@@ -216,11 +216,31 @@
       },
       "commentary": {
         "name": "Commento in diretta"
+      },
+      "runtime_status": {
+        "name": "Stato sincronizzazione"
+      },
+      "next_kickoff": {
+        "name": "Prossimo calcio d’inizio"
+      },
+      "api_quota_remaining": {
+        "name": "Richieste API rimanenti"
       }
     },
     "calendar": {
       "match_calendar": {
         "name": "Calendario partite"
+      }
+    },
+    "button": {
+      "refresh": {
+        "name": "Aggiorna ora"
+      },
+      "rebuild_archive": {
+        "name": "Ricostruisci archivio partite"
+      },
+      "play_replay": {
+        "name": "Riproduci replay partita"
       }
     }
   }

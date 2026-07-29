@@ -1,6 +1,15 @@
 # Changelog
 
-## Unreleased
+## v3.12.0 (2026-07-29)
+
+- replay lab: record compact meaningful fixture snapshots and add play, clear and response-enabled export services with a deterministic demo fallback
+- restart safety: persist event fingerprints for seven days so lineup, phase, goal and card notifications are not repeated after a Home Assistant restart
+- notifications: add stable mobile-app tags/groups so subsequent updates replace the existing match notification
+- native entities: add refresh, archive rebuild and replay buttons plus sync-status, next-kickoff and API-quota sensors
+- data contract: publish per-section provider and freshness metadata for schedule, preview, lineup, timeline, statistics and review
+- diagnostics: report persistent-event and replay-snapshot counts
+- reliability: coalesce rapid storage writes without losing the newest live snapshot
+- tests: cover replay validation, lifecycle events and demo-match completeness
 
 ## v3.11.0 (2026-07-28)
 

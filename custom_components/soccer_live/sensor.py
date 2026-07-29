@@ -216,6 +216,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
                     live_scan_interval=live_scan_interval
                 )
             ]
+            sensors.extend(_runtime_sensors(entry, hass, provider, team_name))
             async_add_entities(sensors, True)
             return
 
@@ -320,11 +321,151 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
                         )
                     )
 
+        sensors.extend(_runtime_sensors(entry, hass, provider, team_name))
         async_add_entities(sensors, True)
 
     except Exception as e:
         _LOGGER.error(f"Error during sensor setup: {e}")
         raise
+
+
+def _runtime_sensors(entry, hass, provider, team_name):
+    """Create compact entry-level sensors for dashboards and automations."""
+    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    kinds = ["runtime_status"]
+    if team_name:
+        kinds.append("next_kickoff")
+    if provider == PROVIDER_API_FOOTBALL:
+        kinds.append("api_quota_remaining")
+    return [
+        SoccerLiveRuntimeSensor(entry, coordinator, provider, kind)
+        for kind in kinds
+    ]
+
+
+class SoccerLiveRuntimeSensor(Entity):
+    """Expose useful coordinator values as native, low-churn HA entities."""
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+
+    def __init__(self, entry, coordinator, provider, kind):
+        self._entry = entry
+        self._coordinator = coordinator
+        self._provider = provider
+        self._kind = kind
+        self._coordinator_unsub = None
+        self._attr_translation_key = kind
+        self._attr_unique_id = f"{entry.entry_id}_{kind}"
+        self._attr_icon = {
+            "runtime_status": "mdi:sync",
+            "next_kickoff": "mdi:calendar-clock",
+            "api_quota_remaining": "mdi:gauge",
+        }[kind]
+        label = (
+            entry.data.get("team_name")
+            or entry.data.get("competition_code")
+            or "matches"
+        )
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, entry.entry_id)},
+            "name": f"Soccer Live · {label}",
+            "manufacturer": (
+                "API-Football"
+                if provider == PROVIDER_API_FOOTBALL
+                else "ESPN"
+            ),
+            "entry_type": "service",
+        }
+
+    async def async_added_to_hass(self):
+        self._coordinator_unsub = self._coordinator.add_listener(
+            self._coordinator_updated
+        )
+
+    async def async_will_remove_from_hass(self):
+        if self._coordinator_unsub:
+            self._coordinator_unsub()
+            self._coordinator_unsub = None
+
+    def _coordinator_updated(self):
+        if self.hass and self.entity_id:
+            self.async_write_ha_state()
+
+    def _source_entities(self):
+        return tuple(getattr(self._coordinator, "_entities", ()))
+
+    @property
+    def state(self):
+        if self._kind == "runtime_status":
+            if self._coordinator.is_fetching:
+                return "fetching"
+            statuses = [
+                entity._sync_status()
+                for entity in self._source_entities()
+                if hasattr(entity, "_sync_status")
+            ]
+            for status in (
+                "authentication_failed",
+                "rate_limited",
+                "provider_unavailable",
+                "initializing",
+            ):
+                if status in statuses:
+                    return status
+            return "ready" if statuses else "initializing"
+
+        if self._kind == "next_kickoff":
+            now = datetime.now(timezone.utc)
+            kickoffs = []
+            for entity in self._source_entities():
+                matches = getattr(entity, "_attributes", {}).get("matches") or []
+                for match in matches:
+                    if match.get("state") in ("post", "finished"):
+                        continue
+                    raw = match.get("date_iso") or match.get("date")
+                    if not raw:
+                        continue
+                    try:
+                        kickoff = datetime.fromisoformat(
+                            str(raw).replace("Z", "+00:00")
+                        )
+                        if kickoff.tzinfo is None:
+                            kickoff = kickoff.replace(tzinfo=timezone.utc)
+                        if kickoff >= now:
+                            kickoffs.append(kickoff)
+                    except (TypeError, ValueError):
+                        continue
+            return min(kickoffs).isoformat() if kickoffs else None
+
+        remaining = []
+        for entity in self._source_entities():
+            quota = getattr(entity, "_api_football_quota", {}) or {}
+            try:
+                limit = int(quota.get("requests_limit_day"))
+                current = int(quota.get("requests_current"))
+            except (TypeError, ValueError):
+                continue
+            remaining.append(max(0, limit - current))
+        return min(remaining) if remaining else None
+
+    @property
+    def extra_state_attributes(self):
+        if self._kind != "api_quota_remaining":
+            return {
+                "provider": self._provider,
+                "config_entry_id": self._entry.entry_id,
+            }
+        quotas = [
+            getattr(entity, "_api_football_quota", {})
+            for entity in self._source_entities()
+            if getattr(entity, "_api_football_quota", {})
+        ]
+        return {
+            **(quotas[0] if quotas else {}),
+            "provider": self._provider,
+            "config_entry_id": self._entry.entry_id,
+        }
 
 
 class SoccerLiveSensor(Entity):
@@ -565,6 +706,7 @@ class SoccerLiveSensor(Entity):
     @property
     def extra_state_attributes(self):
         card_defaults = self._card_defaults()
+        coordinator = self._coordinator
         return {
             **self._attributes,
             **({"card_defaults": card_defaults} if card_defaults else {}),
@@ -586,6 +728,8 @@ class SoccerLiveSensor(Entity):
             "start_date": self._filter_start_str(),
             "end_date": self._filter_end_str(),
             "sensor_type": self._sensor_type,
+            "replay_snapshot_count": len(coordinator.replay()) if coordinator else 0,
+            "persistent_event_count": coordinator.event_ledger_size if coordinator else 0,
         }
 
     @property
@@ -841,19 +985,24 @@ class SoccerLiveSensor(Entity):
             update_archive,
         )
 
-        matches = annotate_completeness(self._attributes.get("matches") or [])
+        insight_updated_at = datetime.now(timezone.utc).isoformat()
+        matches = annotate_completeness(
+            self._attributes.get("matches") or [],
+            self._provider,
+            insight_updated_at,
+        )
         self._attributes["matches"] = matches
         if self._attributes.get("next_match"):
+            annotated_next = annotate_completeness(
+                [self._attributes["next_match"]],
+                self._provider,
+                insight_updated_at,
+            )[0]
             self._attributes["next_match"] = {
                 **self._attributes["next_match"],
-                "data_completeness": (
-                    annotate_completeness([self._attributes["next_match"]])[0]
-                    ["data_completeness"]
-                ),
-                "match_readiness": (
-                    annotate_completeness([self._attributes["next_match"]])[0]
-                    ["match_readiness"]
-                ),
+                "data_completeness": annotated_next["data_completeness"],
+                "match_readiness": annotated_next["match_readiness"],
+                "source_sections": annotated_next["source_sections"],
             }
             self._attributes["match_readiness"] = self._attributes["next_match"][
                 "match_readiness"
@@ -861,7 +1010,7 @@ class SoccerLiveSensor(Entity):
         self._attributes["data_quality"] = data_quality(
             matches,
             self._provider,
-            self._last_successful_update,
+            insight_updated_at,
             self._last_error,
         )
         summary = matchday_summary(matches)
@@ -978,6 +1127,8 @@ class SoccerLiveSensor(Entity):
             .setdefault("match_sources", {})
         )
         store[self.unique_id] = matches
+        if self._coordinator:
+            self._coordinator.capture_matches(matches)
 
     def _filter_start_str(self):
         d = self._dyn_start_date or self._start_date
@@ -1029,6 +1180,12 @@ class SoccerLiveSensor(Entity):
             str((event_data or {}).get("event_id") or ""),
             json.dumps(canonical, sort_keys=True, default=str, separators=(",", ":")),
         )
+        coordinator = getattr(self, "_coordinator", None)
+        if coordinator and not coordinator.claim_event(
+            fingerprint,
+            ttl=max(ttl, 7 * 86400),
+        ):
+            return False
         previous = cache.get(fingerprint)
         if previous is not None and now - previous < ttl:
             return False
@@ -1101,7 +1258,22 @@ class SoccerLiveSensor(Entity):
             else:
                 return
             domain, service = notify_service.split(".", 1) if "." in notify_service else ("notify", notify_service)
-            await self.hass.services.async_call(domain, service, {"title": title, "message": message}, blocking=False)
+            tag_parts = [
+                "soccer-live",
+                str(event_data.get("event_id") or "match"),
+                category,
+            ]
+            tag = "-".join(re.sub(r"[^a-z0-9-]+", "-", part.lower()) for part in tag_parts).strip("-")
+            await self.hass.services.async_call(
+                domain,
+                service,
+                {
+                    "title": title,
+                    "message": message,
+                    "data": {"tag": tag, "group": "soccer-live"},
+                },
+                blocking=False,
+            )
         except Exception as e:
             _LOGGER.debug(f"Notification error: {e}")
 
