@@ -1,5 +1,9 @@
 # Changelog
 
+## v3.12.1 (2026-07-29)
+
+- reliability: measure process-local cache TTLs, provider backoffs and event throttles with a monotonic clock so DST and system-clock corrections cannot extend or shorten them
+
 ## v3.12.0 (2026-07-29)
 
 - replay lab: record compact meaningful fixture snapshots and add play, clear and response-enabled export services with a deterministic demo fallback

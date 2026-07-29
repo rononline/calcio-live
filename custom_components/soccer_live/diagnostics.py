@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from time import monotonic
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -49,15 +50,14 @@ async def async_get_config_entry_diagnostics(
             "has_live_match": any(m.get("state") == "in" for m in matches),
         }
 
-        # Cache age if available
+        # Process-local caches use monotonic timestamps so clock corrections
+        # cannot distort their TTL. Convert only the age to diagnostics output.
         cache_time = None
         for entry_cache in (SoccerLiveSensor._cache or {}).values():
             if isinstance(entry_cache, dict):
                 t = entry_cache.get("time")
-                if t and isinstance(t, datetime):
-                    now = datetime.now(t.tzinfo or timezone.utc)
-                    comparable = t if t.tzinfo else t.replace(tzinfo=timezone.utc)
-                    age = (now - comparable).total_seconds()
+                if isinstance(t, (int, float)):
+                    age = max(0, monotonic() - t)
                     if cache_time is None or age < cache_time:
                         cache_time = age
         if cache_time is not None:
@@ -70,14 +70,22 @@ async def async_get_config_entry_diagnostics(
         pause_until = getattr(SoccerLiveSensor, "_af_enrich_pause_until", None)
         stats = dict(getattr(SoccerLiveSensor, "_api_football_stats", {}) or {})
         live_odds_pause = getattr(SoccerLiveSensor, "_live_odds_pause_until", None)
+        monotonic_now = monotonic()
+
+        def _deadline_iso(deadline):
+            if not isinstance(deadline, (int, float)):
+                return None
+            remaining = max(0, deadline - monotonic_now)
+            return (datetime.now(timezone.utc) + timedelta(seconds=remaining)).isoformat()
+
         api_football = {
             "endpoint_stats": stats,
             "rate_limited_at": getattr(SoccerLiveSensor, "_api_football_rate_limited_at", None),
-            "enrichment_paused_until": pause_until.isoformat() if pause_until else None,
+            "enrichment_paused_until": _deadline_iso(pause_until),
             "endpoint_cache_entries": len(getattr(SoccerLiveSensor, "_api_football_endpoint_cache", {}) or {}),
             "live_odds_calls": (stats.get("odds/live") or {}).get("calls", 0),
             "live_odds_last_status": (stats.get("odds/live") or {}).get("last_status"),
-            "live_odds_paused_until": live_odds_pause.isoformat() if live_odds_pause else None,
+            "live_odds_paused_until": _deadline_iso(live_odds_pause),
         }
 
     return {

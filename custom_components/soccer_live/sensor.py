@@ -3,9 +3,9 @@ import json
 import logging
 import random
 import re
-import time
 import unicodedata
 from datetime import datetime, timedelta, timezone
+from time import monotonic
 from typing import ClassVar
 from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
@@ -496,8 +496,8 @@ class SoccerLiveSensor(Entity):
     _api_football_stats: ClassVar[dict] = {}
     _api_football_rate_limited_at = None
     # Rate-limit backoff: after an HTTP 429, pause new enrichment requests until
-    # this time, doubling the wait on each consecutive 429 (reset on success).
-    _af_enrich_pause_until = None
+    # this monotonic deadline, doubling the wait on each consecutive 429.
+    _af_enrich_pause_until: ClassVar[float | None] = None
     _af_backoff = 0
     # Config entries for which an API-Football reauth flow has been started, so
     # a persistent bad key doesn't spawn a new flow on every poll.
@@ -787,14 +787,14 @@ class SoccerLiveSensor(Entity):
         self._save_store_needed = False
 
         # Prune cache entries older than 5 minutes to prevent unbounded growth
-        _now = datetime.now()
+        _now = monotonic()
         SoccerLiveSensor._cache = {
             k: v for k, v in SoccerLiveSensor._cache.items()
-            if (_now - v["time"]).total_seconds() < 300
+            if _now - v["time"] < 300
         }
         _active_calendar_keys = {
             k for k, v in SoccerLiveSensor._calendar_cache.items()
-            if (_now - v["time"]).total_seconds() < 300
+            if _now - v["time"] < 300
         }
         SoccerLiveSensor._calendar_cache = {
             k: v for k, v in SoccerLiveSensor._calendar_cache.items()
@@ -816,7 +816,7 @@ class SoccerLiveSensor(Entity):
             return
         cache_key = url
         main_cache_ttl = self._main_cache_ttl()
-        if cache_key in SoccerLiveSensor._cache and (datetime.now() - SoccerLiveSensor._cache[cache_key]["time"]).total_seconds() < main_cache_ttl:
+        if cache_key in SoccerLiveSensor._cache and monotonic() - SoccerLiveSensor._cache[cache_key]["time"] < main_cache_ttl:
             try:
                 await self._process_and_apply(SoccerLiveSensor._cache[cache_key]["data"])
                 self._last_successful_update = datetime.now().isoformat()
@@ -834,7 +834,7 @@ class SoccerLiveSensor(Entity):
         _fetch_lock = SoccerLiveSensor._fetch_locks.setdefault(cache_key, asyncio.Lock())
         async with _fetch_lock:
             # Double-check cache: another sensor may have fetched while we waited for the lock
-            if cache_key in SoccerLiveSensor._cache and (datetime.now() - SoccerLiveSensor._cache[cache_key]["time"]).total_seconds() < main_cache_ttl:
+            if cache_key in SoccerLiveSensor._cache and monotonic() - SoccerLiveSensor._cache[cache_key]["time"] < main_cache_ttl:
                 try:
                     await self._process_and_apply(SoccerLiveSensor._cache[cache_key]["data"])
                     self._last_successful_update = datetime.now().isoformat()
@@ -877,7 +877,7 @@ class SoccerLiveSensor(Entity):
                             else:
                                 SoccerLiveSensor._cache[cache_key] = {
                                     "data": data,
-                                    "time": datetime.now(),
+                                    "time": monotonic(),
                                 }
                                 await self._refresh_api_football_status()
                                 self._last_successful_update = datetime.now().isoformat()
@@ -1159,7 +1159,7 @@ class SoccerLiveSensor(Entity):
 
     def _claim_bus_event(self, event_type, event_data, ttl=300):
         """Claim an event fingerprint shared by all sensors in this HA process."""
-        now = time.monotonic()
+        now = monotonic()
         cache = SoccerLiveSensor._bus_event_fingerprints
         expired = [key for key, timestamp in cache.items() if now - timestamp >= ttl]
         for key in expired:
@@ -1695,7 +1695,7 @@ class SoccerLiveSensor(Entity):
             self._attributes["club_changes"] = changes
             for change in changes:
                 fingerprint = f"{team_id}:{json.dumps(change, sort_keys=True, default=str)}"
-                now = datetime.now().timestamp()
+                now = monotonic()
                 last = SoccerLiveSensor._club_event_fingerprints.get(fingerprint, 0)
                 if now - last < 300:
                     continue
@@ -2001,7 +2001,7 @@ class SoccerLiveSensor(Entity):
     @staticmethod
     def _af_enrichment_paused():
         pause = SoccerLiveSensor._af_enrich_pause_until
-        return pause is not None and datetime.now() < pause
+        return pause is not None and monotonic() < pause
 
     @staticmethod
     def _af_is_rate_limit_message(msg):
@@ -2036,11 +2036,11 @@ class SoccerLiveSensor(Entity):
             _LOGGER.debug("API-Football still rate-limited while fetching %s (%s)", path, reason)
             return
         if self._af_is_daily_limit_message(reason):
-            self._af_note_daily_limit()
+            pause_seconds = self._af_note_daily_limit()
             _LOGGER.info(
                 "API-Football daily quota reached while fetching %s (%s) — pausing enrichment "
-                "until the next quota reset (~%s); serving cached data meanwhile",
-                path, reason, SoccerLiveSensor._af_enrich_pause_until,
+                "for %.0f s until the next quota reset; serving cached data meanwhile",
+                path, reason, pause_seconds,
             )
         else:
             self._af_note_rate_limited()
@@ -2053,38 +2053,40 @@ class SoccerLiveSensor(Entity):
     @staticmethod
     def _af_note_rate_limited():
         SoccerLiveSensor._af_backoff = min(max(60, SoccerLiveSensor._af_backoff * 2), 1800)
-        SoccerLiveSensor._af_enrich_pause_until = datetime.now() + timedelta(seconds=SoccerLiveSensor._af_backoff)
+        SoccerLiveSensor._af_enrich_pause_until = monotonic() + SoccerLiveSensor._af_backoff
         SoccerLiveSensor._api_football_rate_limited_at = datetime.now().isoformat()
 
     @staticmethod
     def _af_note_daily_limit():
         # Pause until the next UTC midnight (API-Football's daily counter reset),
-        # at least 30 min out. Uses a naive-local pause to match _af_enrichment_paused.
+        # at least 30 min out. Convert that wall-clock reset to a process-local
+        # monotonic deadline so later clock corrections cannot extend the pause.
         now_utc = datetime.now(timezone.utc)
         next_reset = (now_utc + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
         secs = max(1800, (next_reset - now_utc).total_seconds())
         # Clear the per-minute backoff so an old minute-limit doesn't carry into
         # the next day once this daily pause elapses.
         SoccerLiveSensor._af_backoff = 0
-        SoccerLiveSensor._af_enrich_pause_until = datetime.now() + timedelta(seconds=secs)
+        SoccerLiveSensor._af_enrich_pause_until = monotonic() + secs
         SoccerLiveSensor._api_football_rate_limited_at = datetime.now().isoformat()
+        return secs
 
     # Live odds (/odds/live) can be forbidden by plan or structurally empty; pause
     # the feature on its own (longer than the 429 backoff) so it doesn't keep
     # burning the daily quota on requests that never return usable odds.
-    _live_odds_pause_until = None
+    _live_odds_pause_until: ClassVar[float | None] = None
     _live_odds_misses = 0
 
     @staticmethod
     def _live_odds_available():
         p = SoccerLiveSensor._live_odds_pause_until
-        return p is None or datetime.now() >= p
+        return p is None or monotonic() >= p
 
     @staticmethod
     def _note_live_odds_result(status, has_response):
         # HTTP 403 => the plan doesn't include in-play odds: back off for hours.
         if status == 403:
-            SoccerLiveSensor._live_odds_pause_until = datetime.now() + timedelta(hours=6)
+            SoccerLiveSensor._live_odds_pause_until = monotonic() + 6 * 60 * 60
             SoccerLiveSensor._live_odds_misses = 0
             return
         # A present response (even an all-suspended market) means the feed works.
@@ -2094,7 +2096,7 @@ class SoccerLiveSensor(Entity):
         # Structurally empty for several live cycles => pause for an hour.
         SoccerLiveSensor._live_odds_misses += 1
         if SoccerLiveSensor._live_odds_misses >= 5:
-            SoccerLiveSensor._live_odds_pause_until = datetime.now() + timedelta(hours=1)
+            SoccerLiveSensor._live_odds_pause_until = monotonic() + 60 * 60
             SoccerLiveSensor._live_odds_misses = 0
 
     @staticmethod
@@ -2102,7 +2104,7 @@ class SoccerLiveSensor(Entity):
         pause = SoccerLiveSensor._af_enrich_pause_until
         # An in-flight request that started before a concurrent 429 must not
         # clear a fresh backoff — only reset once the pause window has elapsed.
-        if pause is not None and datetime.now() < pause:
+        if pause is not None and monotonic() < pause:
             return
         if SoccerLiveSensor._af_backoff or pause is not None:
             SoccerLiveSensor._af_backoff = 0
@@ -2114,7 +2116,7 @@ class SoccerLiveSensor(Entity):
         cache_key = self._api_football_cache_key(path, params or {})
         ttl = self._api_football_cache_ttl(path)
         cached = SoccerLiveSensor._api_football_endpoint_cache.get(cache_key)
-        if cached and (datetime.now() - cached["time"]).total_seconds() < ttl:
+        if cached and monotonic() - cached["time"] < ttl:
             SoccerLiveSensor._af_stat(path)["cache_hits"] += 1
             return cached["data"]
 
@@ -2126,7 +2128,7 @@ class SoccerLiveSensor(Entity):
         lock = SoccerLiveSensor._api_football_endpoint_locks.setdefault(cache_key, asyncio.Lock())
         async with lock:
             cached = SoccerLiveSensor._api_football_endpoint_cache.get(cache_key)
-            if cached and (datetime.now() - cached["time"]).total_seconds() < ttl:
+            if cached and monotonic() - cached["time"] < ttl:
                 SoccerLiveSensor._af_stat(path)["cache_hits"] += 1
                 return cached["data"]
             if self._af_enrichment_paused():
@@ -2137,7 +2139,7 @@ class SoccerLiveSensor(Entity):
             if data is not None:
                 SoccerLiveSensor._api_football_endpoint_cache[cache_key] = {
                     "data": data,
-                    "time": datetime.now(),
+                    "time": monotonic(),
                     "ttl": ttl,
                 }
             return data
@@ -2290,7 +2292,7 @@ class SoccerLiveSensor(Entity):
     def _prune_api_football_endpoint_cache(self, now):
         SoccerLiveSensor._api_football_endpoint_cache = {
             k: v for k, v in SoccerLiveSensor._api_football_endpoint_cache.items()
-            if (now - v["time"]).total_seconds() < v.get("ttl", 300)
+            if now - v["time"] < v.get("ttl", 300)
         }
         SoccerLiveSensor._api_football_endpoint_locks = {
             k: v for k, v in SoccerLiveSensor._api_football_endpoint_locks.items()
@@ -2308,20 +2310,20 @@ class SoccerLiveSensor(Entity):
         calendar_url = f"{self.base_url_2}/{self._code}/scoreboard"
         cache_key = self._code or calendar_url
         cached = SoccerLiveSensor._calendar_cache.get(cache_key)
-        if cached and (datetime.now() - cached["time"]).total_seconds() < 300:
+        if cached and monotonic() - cached["time"] < 300:
             return cached["start"], cached["end"]
 
         lock = SoccerLiveSensor._calendar_locks.setdefault(cache_key, asyncio.Lock())
         async with lock:
             cached = SoccerLiveSensor._calendar_cache.get(cache_key)
-            if cached and (datetime.now() - cached["time"]).total_seconds() < 300:
+            if cached and monotonic() - cached["time"] < 300:
                 return cached["start"], cached["end"]
 
             start, end = await self._fetch_calendar_data(calendar_url)
             SoccerLiveSensor._calendar_cache[cache_key] = {
                 "start": start,
                 "end": end,
-                "time": datetime.now(),
+                "time": monotonic(),
             }
             return start, end
 
@@ -2396,9 +2398,9 @@ class SoccerLiveSensor(Entity):
     def _log_calendar_fetch_issue(self, reason, message, *args, exc_info=False):
         """Throttle repeated calendar warnings per competition/reason."""
         key = (self._code or self._name, reason)
-        now = datetime.now()
+        now = monotonic()
         last = SoccerLiveSensor._calendar_error_logs.get(key)
-        if last and (now - last).total_seconds() < 300:
+        if last is not None and now - last < 300:
             _LOGGER.debug(message, *args, exc_info=exc_info)
             return
         SoccerLiveSensor._calendar_error_logs[key] = now

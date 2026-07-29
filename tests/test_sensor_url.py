@@ -343,7 +343,6 @@ def test_large_attributes_are_excluded_from_recorder():
 
 
 def test_rate_limit_backoff_pauses_and_resets():
-    import datetime as _dt
     SoccerLiveSensor._af_backoff = 0
     SoccerLiveSensor._af_enrich_pause_until = None
     assert SoccerLiveSensor._af_enrichment_paused() is False
@@ -367,11 +366,30 @@ def test_rate_limit_backoff_pauses_and_resets():
     assert SoccerLiveSensor._af_backoff == 1800
 
     # Once the pause window has elapsed, a success clears it.
-    SoccerLiveSensor._af_enrich_pause_until = _dt.datetime.now() - _dt.timedelta(seconds=1)
+    SoccerLiveSensor._af_enrich_pause_until = _sensor_mod.monotonic() - 1
     SoccerLiveSensor._af_note_success()
     assert SoccerLiveSensor._af_backoff == 0
     assert SoccerLiveSensor._af_enrich_pause_until is None
     assert SoccerLiveSensor._af_enrichment_paused() is False
+
+
+def test_rate_limit_pause_uses_monotonic_clock(monkeypatch):
+    clock = {"now": 1000.0}
+    monkeypatch.setattr(_sensor_mod, "monotonic", lambda: clock["now"])
+    SoccerLiveSensor._af_backoff = 0
+    SoccerLiveSensor._af_enrich_pause_until = None
+
+    SoccerLiveSensor._af_note_rate_limited()
+    assert SoccerLiveSensor._af_enrich_pause_until == 1060.0
+
+    # Only elapsed process time controls the deadline; wall-clock changes are irrelevant.
+    clock["now"] = 1059.0
+    assert SoccerLiveSensor._af_enrichment_paused() is True
+    clock["now"] = 1060.0
+    assert SoccerLiveSensor._af_enrichment_paused() is False
+
+    SoccerLiveSensor._af_enrich_pause_until = None
+    SoccerLiveSensor._af_backoff = 0
 
 
 def test_paused_enrichment_serves_cache_and_skips_network():
@@ -393,10 +411,9 @@ def test_paused_enrichment_serves_cache_and_skips_network():
         # Prime the cache with one real fetch.
         await sensor._fetch_api_football_json("odds", {"fixture": 1})
         # Now simulate a rate-limit pause and force the cache to be stale.
-        import datetime as _dt
-        SoccerLiveSensor._af_enrich_pause_until = _dt.datetime.now() + _dt.timedelta(seconds=300)
+        SoccerLiveSensor._af_enrich_pause_until = _sensor_mod.monotonic() + 300
         for entry in SoccerLiveSensor._api_football_endpoint_cache.values():
-            entry["time"] = _dt.datetime.now() - _dt.timedelta(hours=1)
+            entry["time"] = _sensor_mod.monotonic() - 3600
         return await sensor._fetch_api_football_json("odds", {"fixture": 1})
 
     result = asyncio.run(_run())
@@ -426,6 +443,37 @@ def test_api_football_stats_track_calls_and_cache_hits():
     stat = SoccerLiveSensor._api_football_stats["predictions"]
     assert stat["calls"] == 1        # only the first request hit the network
     assert stat["cache_hits"] == 1   # the second was served from cache
+
+
+def test_api_football_cache_ttl_uses_monotonic_clock(monkeypatch):
+    import asyncio
+
+    clock = {"now": 1000.0}
+    monkeypatch.setattr(_sensor_mod, "monotonic", lambda: clock["now"])
+    SoccerLiveSensor._api_football_endpoint_cache = {}
+    SoccerLiveSensor._api_football_endpoint_locks = {}
+    SoccerLiveSensor._api_football_stats = {}
+    sensor = _sensor("team_match", provider="api_football")
+    calls = {"n": 0}
+
+    async def _fake_uncached(path, params=None):
+        calls["n"] += 1
+        return {"response": [calls["n"]]}
+
+    sensor._fetch_api_football_json_uncached = _fake_uncached
+
+    async def _run():
+        first = await sensor._fetch_api_football_json("odds", {"fixture": 1})
+        clock["now"] += 3599
+        cached = await sensor._fetch_api_football_json("odds", {"fixture": 1})
+        clock["now"] += 1
+        refreshed = await sensor._fetch_api_football_json("odds", {"fixture": 1})
+        return first, cached, refreshed
+
+    first, cached, refreshed = asyncio.run(_run())
+    assert first == cached == {"response": [1]}
+    assert refreshed == {"response": [2]}
+    assert calls["n"] == 2
 
 
 def test_live_refresh_uses_configured_interval(monkeypatch):
@@ -1273,14 +1321,13 @@ def test_af_rate_limit_stragglers_do_not_double_backoff():
 
 
 def test_af_daily_limit_pauses_until_reset():
-    import datetime as _dt
     SoccerLiveSensor._af_backoff = 0
     SoccerLiveSensor._af_enrich_pause_until = None
     sensor = _sensor("team_match", provider="api_football")
     sensor._af_handle_rate_limit("predictions", "You have reached the request limit for the day")
     assert SoccerLiveSensor._af_enrichment_paused() is True
     # A daily limit pauses long (>= ~30 min) and does NOT use the per-minute backoff.
-    remaining = (SoccerLiveSensor._af_enrich_pause_until - _dt.datetime.now()).total_seconds()
+    remaining = SoccerLiveSensor._af_enrich_pause_until - _sensor_mod.monotonic()
     assert remaining >= 1800 - 5
     assert SoccerLiveSensor._af_backoff == 0
     assert SoccerLiveSensor._af_is_daily_limit_message("exceeded the limit of requests per day") is True
@@ -1298,12 +1345,13 @@ def test_af_daily_limit_ends_at_utc_midnight(monkeypatch):
             return cls._now.astimezone(tz) if tz else cls._now.replace(tzinfo=None)
 
     monkeypatch.setattr(_sensor_mod, "datetime", _Fake)
+    monkeypatch.setattr(_sensor_mod, "monotonic", lambda: 1000.0)
     SoccerLiveSensor._af_backoff = 120                 # a stale minute backoff
     SoccerLiveSensor._af_enrich_pause_until = None
     sensor = _sensor("team_match", provider="api_football")
     sensor._af_note_daily_limit()
     # Pause ends exactly at the next UTC midnight, and the minute backoff is cleared.
-    assert SoccerLiveSensor._af_enrich_pause_until == _dt.datetime(2026, 7, 21, 0, 0)
+    assert SoccerLiveSensor._af_enrich_pause_until == 1000.0 + 2 * 60 * 60
     assert SoccerLiveSensor._af_backoff == 0
     SoccerLiveSensor._af_enrich_pause_until = None
 
@@ -1318,9 +1366,10 @@ def test_af_daily_limit_clamped_to_min_30_min(monkeypatch):
             return cls._now.astimezone(tz) if tz else cls._now.replace(tzinfo=None)
 
     monkeypatch.setattr(_sensor_mod, "datetime", _Fake)
+    monkeypatch.setattr(_sensor_mod, "monotonic", lambda: 1000.0)
     SoccerLiveSensor._af_enrich_pause_until = None
     sensor = _sensor("team_match", provider="api_football")
     sensor._af_note_daily_limit()
     # Only 10 min to midnight -> clamped to a 30 min pause (00:20).
-    assert SoccerLiveSensor._af_enrich_pause_until == _dt.datetime(2026, 7, 21, 0, 20)
+    assert SoccerLiveSensor._af_enrich_pause_until == 1000.0 + 30 * 60
     SoccerLiveSensor._af_enrich_pause_until = None
