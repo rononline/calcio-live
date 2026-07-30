@@ -53,7 +53,12 @@ async def async_get_config_entry_diagnostics(
         # Process-local caches use monotonic timestamps so clock corrections
         # cannot distort their TTL. Convert only the age to diagnostics output.
         cache_time = None
-        for entry_cache in (SoccerLiveSensor._cache or {}).values():
+        runtime_cache = (
+            coordinator.main_cache
+            if coordinator is not None
+            else SoccerLiveSensor._cache
+        )
+        for entry_cache in (runtime_cache or {}).values():
             if isinstance(entry_cache, dict):
                 t = entry_cache.get("time")
                 if isinstance(t, (int, float)):
@@ -82,7 +87,18 @@ async def async_get_config_entry_diagnostics(
             "endpoint_stats": stats,
             "rate_limited_at": getattr(SoccerLiveSensor, "_api_football_rate_limited_at", None),
             "enrichment_paused_until": _deadline_iso(pause_until),
-            "endpoint_cache_entries": len(getattr(SoccerLiveSensor, "_api_football_endpoint_cache", {}) or {}),
+            "endpoint_cache_entries": len(
+                (
+                    coordinator.api_endpoint_cache
+                    if coordinator is not None
+                    else getattr(
+                        SoccerLiveSensor,
+                        "_api_football_endpoint_cache",
+                        {},
+                    )
+                )
+                or {}
+            ),
             "live_odds_calls": (stats.get("odds/live") or {}).get("calls", 0),
             "live_odds_last_status": (stats.get("odds/live") or {}).get("last_status"),
             "live_odds_paused_until": _deadline_iso(live_odds_pause),
@@ -94,6 +110,9 @@ async def async_get_config_entry_diagnostics(
             "registered_entities": len(getattr(coordinator, "_entities", ())),
             "replay_snapshot_count": (
                 len(coordinator.replay()) if coordinator else 0
+            ),
+            "restored_snapshot_count": (
+                coordinator.snapshot_count if coordinator else 0
             ),
             "persistent_event_count": (
                 coordinator.event_ledger_size if coordinator else 0

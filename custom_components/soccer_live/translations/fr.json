@@ -242,6 +242,11 @@
       "play_replay": {
         "name": "Lire la rediffusion du match"
       }
+    },
+    "event": {
+      "match_event": {
+        "name": "Événement du match"
+      }
     }
   }
 }

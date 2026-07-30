@@ -60,6 +60,39 @@ def test_matchday_prefers_live_and_limits_matches_to_same_day():
     assert result["total"] == 1
 
 
+def test_data_alerts_report_only_observable_live_gaps_and_conflicts():
+    result = insights.data_alerts([
+        _match(
+            state="in",
+            match_phase="first_half",
+            clock="20",
+            canonical_id="fixture",
+            source_conflicts=[{"field": "score"}],
+        )
+    ])
+    assert {item["code"] for item in result} == {
+        "source_conflict",
+        "live_lineup_missing",
+        "live_timeline_missing",
+    }
+
+
+def test_data_alerts_recognise_rescheduled_pair():
+    result = insights.data_alerts([
+        _match(
+            event_id="old",
+            canonical_pair_id="pair",
+            match_phase="postponed",
+        ),
+        _match(
+            event_id="new",
+            canonical_pair_id="pair",
+            date_iso="2026-08-16T12:15:00+00:00",
+        ),
+    ])
+    assert "match_rescheduled" in {item["code"] for item in result}
+
+
 def test_watchlist_matches_case_insensitively():
     club = {"squad": [{"id": 7, "name": "Calvin Stengs", "position": "Attacker"}]}
     assert insights.player_watchlist(club, "calvin stengs")[0]["id"] == 7
@@ -81,6 +114,23 @@ def test_archive_deduplicates_updates_and_is_newest_first():
     updated = insights.update_archive([old], [newer], "api_football")
     assert [item["event_id"] for item in updated] == ["2", "1"]
     assert updated[0]["provider"] == "api_football"
+
+
+def test_archive_migrates_legacy_event_id_to_canonical_identity():
+    legacy = insights.archive_snapshot(
+        _match(event_id="1", state="post", home_score=1, away_score=0),
+        "espn",
+    )
+    legacy.pop("canonical_id", None)
+    legacy.pop("canonical_pair_id", None)
+    refreshed = {
+        **_match(event_id="1", state="post", home_score=1, away_score=0),
+        "canonical_id": "canonical-fixture",
+        "canonical_pair_id": "canonical-pair",
+    }
+    updated = insights.update_archive([legacy], [refreshed], "espn")
+    assert len(updated) == 1
+    assert updated[0]["canonical_id"] == "canonical-fixture"
 
 
 def test_archive_summary_supports_seasons_and_team_statistics():

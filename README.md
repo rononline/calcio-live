@@ -97,15 +97,17 @@ Configure via **Settings → Devices & Services → Soccer Live → Configure**:
 
 > **Native helpers.** Every entry also creates a **Sync status** sensor and
 > native **Refresh now**, **Rebuild match archive** and **Play match replay**
-> buttons. Team entries add a **Next kick-off** sensor; API-Football entries add
-> an **API requests remaining** sensor. These compact entities are convenient
-> automation triggers without templating large match attributes.
+> buttons, plus a **Match event** entity. Team entries add a **Next kick-off**
+> sensor; API-Football entries add an **API requests remaining** sensor. These
+> compact entities are convenient automation triggers without templating large
+> match attributes or manually entering event-bus names.
 
 > **Card contract.** Sensors publish `integration_version`, `data_schema_version` and `recommended_card_types` (the `card_type` slugs that suit the sensor), so the card editor can recommend the right card for a selected entity and warn when the integration is outdated.
 
 > **Insights and local history.** Match sensors publish a provider-neutral
 > `data_completeness` and `match_readiness` object per match, plus
-> `data_quality`, `matchday`, `match_archive` and `match_archive_summary`.
+> `data_quality`, actionable `data_alerts`, `matchday`, `match_archive` and
+> `match_archive_summary`.
 > Finished matches are kept locally in Home Assistant (up to 500 per
 > integration entry); no extra provider request is made. Large derived
 > attributes are excluded from Recorder history.
@@ -148,10 +150,13 @@ the same lineup, phase, goal or card again. Direct mobile-app notifications use
 a stable match tag and group, allowing later score updates to replace the
 existing notification instead of creating a stack.
 
-> **Shared coordinator.** Entities retain their provider-specific polling
-> intervals, while an entry-wide coordinator publishes a real `fetching`
-> transition, tracks the entry's entities and handles manual refreshes. Existing
-> entity IDs, provider caches and event semantics are unchanged.
+> **Shared coordinator and restart recovery.** Entities retain their
+> provider-specific polling intervals, while an entry-wide coordinator
+> publishes a real `fetching` transition, tracks the entry's entities, owns
+> entry-scoped request deduplication and handles manual refreshes. It stores a
+> bounded last-known snapshot for up to seven days, so cards and calendars can
+> recover immediately after a restart while the first provider request runs.
+> Existing entity IDs and event semantics are unchanged.
 
 ---
 
@@ -543,6 +548,15 @@ Each config entry also creates a **calendar entity** (`calendar.soccer_live_<tea
 Example automation blueprints are available in [`blueprints/automation`](blueprints/automation):
 goal, yellow card, red card, substitution, match started, full time (final score)
 and a configurable kick-off reminder (choose how many minutes before kick-off).
+The **Soccer Live – iOS Live Activity** blueprint starts and updates one
+Companion App Live Activity from the same events, filters it to your selected
+team, keeps the score/clock current and clears the final result after a
+configurable delay. It requires Home Assistant Core 2026.7 or newer, iOS 17.2
+or newer and a Companion App TestFlight build with Live Activities enabled.
+
+Every entry also exposes these lifecycle changes through its native **Match
+event** entity. This is the easiest option in Home Assistant's visual automation
+editor; the event bus remains available for existing YAML automations.
 
 ---
 
@@ -576,6 +590,14 @@ These attributes are guaranteed to be present when available. Card developers ca
 | `clock` | string | Match clock (live) |
 | `league_info` | list | Competition metadata: `name`, `abbreviation`, `logo_href`, `startDate`, `endDate` |
 | `home_statistics` / `away_statistics` | dict | Per-team stats; includes `expectedGoals` (xG) when the provider supplies it |
+| `canonical_id` | string | Stable provider-neutral identity for this fixture and UTC match day |
+| `canonical_pair_id` | string | Stable provider-neutral team/competition/season pairing, also across a reschedule |
+| `provider_event_id` | string\|null | Original provider fixture ID retained for detail requests |
+
+At sensor level, `data_alerts` contains only observable issues, such as a
+provider error, conflicting sources, stale live data, an absent live
+lineup/timeline or a postponed/rescheduled fixture. Optional data that a
+provider does not support is deliberately not reported as an error.
 
 #### API-Football pre-match enrichment (next upcoming match only)
 

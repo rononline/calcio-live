@@ -242,6 +242,11 @@
       "play_replay": {
         "name": "Wedstrijdreplay afspelen"
       }
+    },
+    "event": {
+      "match_event": {
+        "name": "Wedstrijdgebeurtenis"
+      }
     }
   }
 }

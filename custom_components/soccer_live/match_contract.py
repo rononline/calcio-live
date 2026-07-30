@@ -27,7 +27,24 @@ def match_phase(match):
 
 
 def annotate_match(match):
-    return {**(match or {}), "match_phase": match_phase(match)}
+    try:
+        from .identity import annotate_identity
+    except ImportError:
+        # Keep this pure helper directly importable in focused tests without
+        # importing the Home Assistant integration package.
+        import importlib.util
+        from pathlib import Path
+
+        path = Path(__file__).with_name("identity.py")
+        spec = importlib.util.spec_from_file_location("soccer_live_identity", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        annotate_identity = module.annotate_identity
+
+    return {
+        **annotate_identity(match),
+        "match_phase": match_phase(match),
+    }
 
 
 def current_match(matches):

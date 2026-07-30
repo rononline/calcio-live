@@ -477,7 +477,7 @@ class SoccerLiveSensor(Entity):
         "schedule_live_matches", "schedule_upcoming_matches", "schedule_recent_matches",
         "standings_groups", "scorers", "assists", "articles", "rounds",
         "head_to_head", "league_info", "club", "club_changes", "card_defaults",
-        "data_quality", "matchday", "match_readiness", "match_archive",
+        "data_quality", "data_alerts", "matchday", "match_readiness", "match_archive",
         "match_archive_summary", "player_watchlist",
         "last_event", "last_goal_event", "last_card_event",
         "last_match_started_event", "last_match_finished_event",
@@ -621,6 +621,15 @@ class SoccerLiveSensor(Entity):
         matches = self._attributes.get("matches", []) or []
         return any(m.get("state") in ("in", "live") for m in matches)
 
+    def _runtime_dict(self, coordinator_name, fallback):
+        """Return entry-scoped coordinator state, with a standalone fallback."""
+        coordinator = getattr(self, "_coordinator", None)
+        if coordinator is not None:
+            value = getattr(coordinator, coordinator_name, None)
+            if value is not None:
+                return value
+        return fallback
+
     def _main_cache_ttl(self):
         """Return cache TTL for the main provider request."""
         if self._is_live():
@@ -651,6 +660,16 @@ class SoccerLiveSensor(Entity):
             self._coordinator_unsub = self._coordinator.add_listener(
                 self._coordinator_updated
             )
+            snapshot = self._coordinator.snapshot(self.unique_id)
+            if snapshot and isinstance(snapshot.get("attributes"), dict):
+                self._state = snapshot.get("state")
+                self._attributes = {
+                    **snapshot["attributes"],
+                    "snapshot_restored": True,
+                    "snapshot_captured_at": snapshot.get("captured_at"),
+                }
+                self._last_successful_update = snapshot.get("captured_at")
+                self._publish_matches(self._attributes.get("matches") or [])
         await self._load_prematch_cache()
         await self._load_club_cache()
         await self._load_match_archive()
@@ -788,26 +807,35 @@ class SoccerLiveSensor(Entity):
 
         # Prune cache entries older than 5 minutes to prevent unbounded growth
         _now = monotonic()
-        SoccerLiveSensor._cache = {
-            k: v for k, v in SoccerLiveSensor._cache.items()
+        main_cache = self._runtime_dict("main_cache", SoccerLiveSensor._cache)
+        calendar_cache = self._runtime_dict(
+            "calendar_cache", SoccerLiveSensor._calendar_cache
+        )
+        fetch_locks = self._runtime_dict(
+            "fetch_locks", SoccerLiveSensor._fetch_locks
+        )
+        calendar_locks = self._runtime_dict(
+            "calendar_locks", SoccerLiveSensor._calendar_locks
+        )
+        fresh_main = {
+            k: v for k, v in main_cache.items()
             if _now - v["time"] < 300
         }
+        main_cache.clear()
+        main_cache.update(fresh_main)
         _active_calendar_keys = {
-            k for k, v in SoccerLiveSensor._calendar_cache.items()
+            k for k, v in calendar_cache.items()
             if _now - v["time"] < 300
         }
-        SoccerLiveSensor._calendar_cache = {
-            k: v for k, v in SoccerLiveSensor._calendar_cache.items()
-            if k in _active_calendar_keys
-        }
-        SoccerLiveSensor._calendar_locks = {
-            k: v for k, v in SoccerLiveSensor._calendar_locks.items()
-            if k in _active_calendar_keys
-        }
-        SoccerLiveSensor._fetch_locks = {
-            k: v for k, v in SoccerLiveSensor._fetch_locks.items()
-            if k in SoccerLiveSensor._cache or v.locked()
-        }
+        for key in tuple(calendar_cache):
+            if key not in _active_calendar_keys:
+                calendar_cache.pop(key, None)
+        for key in tuple(calendar_locks):
+            if key not in _active_calendar_keys:
+                calendar_locks.pop(key, None)
+        for key, lock in tuple(fetch_locks.items()):
+            if key not in main_cache and not lock.locked():
+                fetch_locks.pop(key, None)
         self._prune_api_football_endpoint_cache(_now)
 
         # Use the request URL as cache key so sensors sharing the same provider endpoint share one fetch
@@ -816,9 +844,9 @@ class SoccerLiveSensor(Entity):
             return
         cache_key = url
         main_cache_ttl = self._main_cache_ttl()
-        if cache_key in SoccerLiveSensor._cache and monotonic() - SoccerLiveSensor._cache[cache_key]["time"] < main_cache_ttl:
+        if cache_key in main_cache and monotonic() - main_cache[cache_key]["time"] < main_cache_ttl:
             try:
-                await self._process_and_apply(SoccerLiveSensor._cache[cache_key]["data"])
+                await self._process_and_apply(main_cache[cache_key]["data"])
                 self._last_successful_update = datetime.now().isoformat()
                 self._last_error = None
             except Exception as proc_err:
@@ -831,12 +859,12 @@ class SoccerLiveSensor(Entity):
         if self._scorers_unavailable:
             return
 
-        _fetch_lock = SoccerLiveSensor._fetch_locks.setdefault(cache_key, asyncio.Lock())
+        _fetch_lock = fetch_locks.setdefault(cache_key, asyncio.Lock())
         async with _fetch_lock:
             # Double-check cache: another sensor may have fetched while we waited for the lock
-            if cache_key in SoccerLiveSensor._cache and monotonic() - SoccerLiveSensor._cache[cache_key]["time"] < main_cache_ttl:
+            if cache_key in main_cache and monotonic() - main_cache[cache_key]["time"] < main_cache_ttl:
                 try:
-                    await self._process_and_apply(SoccerLiveSensor._cache[cache_key]["data"])
+                    await self._process_and_apply(main_cache[cache_key]["data"])
                     self._last_successful_update = datetime.now().isoformat()
                     self._last_error = None
                 except Exception as proc_err:
@@ -875,7 +903,7 @@ class SoccerLiveSensor(Entity):
                                 self._last_error = str(proc_err)
                                 _LOGGER.error(f"Error processing data for {self._name}: {proc_err}")
                             else:
-                                SoccerLiveSensor._cache[cache_key] = {
+                                main_cache[cache_key] = {
                                     "data": data,
                                     "time": monotonic(),
                                 }
@@ -958,6 +986,12 @@ class SoccerLiveSensor(Entity):
         self._fire_new_lineup_events(previous_attrs, self._attributes)
         await self._flush_pending_events()
         self._publish_matches(self._attributes.get("matches") or [])
+        if self._coordinator:
+            self._coordinator.publish_snapshot(
+                self.unique_id,
+                self._state,
+                self._attributes,
+            )
 
     async def _load_match_archive(self):
         """Load the compact per-entry finished-match archive once."""
@@ -979,6 +1013,7 @@ class SoccerLiveSensor(Entity):
         from .insights import (
             annotate_completeness,
             archive_summary,
+            data_alerts,
             data_quality,
             matchday_summary,
             player_watchlist,
@@ -1011,6 +1046,10 @@ class SoccerLiveSensor(Entity):
             matches,
             self._provider,
             insight_updated_at,
+            self._last_error,
+        )
+        self._attributes["data_alerts"] = data_alerts(
+            matches,
             self._last_error,
         )
         summary = matchday_summary(matches)
@@ -1105,6 +1144,7 @@ class SoccerLiveSensor(Entity):
         for match in newly_available_lineups(previous_attrs, current_attrs):
             event_data = {
                 "entity_id": self.entity_id,
+                "config_entry_id": self._config_entry_id,
                 "team_id": self._team_id,
                 "event_id": match.get("event_id"),
                 "home_team": match.get("home_team"),
@@ -1148,6 +1188,7 @@ class SoccerLiveSensor(Entity):
         fire_bus = self._sensor_type != "team_match"
         now_iso = datetime.now().isoformat()
         for event_type, event_data in self._pending_events:
+            event_data.setdefault("config_entry_id", self._config_entry_id)
             self._store_last_event_attributes(event_type, event_data, now_iso)
             if fire_bus and self._claim_bus_event(event_type, event_data):
                 self.hass.bus.fire(event_type, event_data)
@@ -2115,7 +2156,15 @@ class SoccerLiveSensor(Entity):
             return None
         cache_key = self._api_football_cache_key(path, params or {})
         ttl = self._api_football_cache_ttl(path)
-        cached = SoccerLiveSensor._api_football_endpoint_cache.get(cache_key)
+        endpoint_cache = self._runtime_dict(
+            "api_endpoint_cache",
+            SoccerLiveSensor._api_football_endpoint_cache,
+        )
+        endpoint_locks = self._runtime_dict(
+            "api_endpoint_locks",
+            SoccerLiveSensor._api_football_endpoint_locks,
+        )
+        cached = endpoint_cache.get(cache_key)
         if cached and monotonic() - cached["time"] < ttl:
             SoccerLiveSensor._af_stat(path)["cache_hits"] += 1
             return cached["data"]
@@ -2125,9 +2174,9 @@ class SoccerLiveSensor(Entity):
             # (even if stale) so sections don't disappear.
             return cached["data"] if cached else None
 
-        lock = SoccerLiveSensor._api_football_endpoint_locks.setdefault(cache_key, asyncio.Lock())
+        lock = endpoint_locks.setdefault(cache_key, asyncio.Lock())
         async with lock:
-            cached = SoccerLiveSensor._api_football_endpoint_cache.get(cache_key)
+            cached = endpoint_cache.get(cache_key)
             if cached and monotonic() - cached["time"] < ttl:
                 SoccerLiveSensor._af_stat(path)["cache_hits"] += 1
                 return cached["data"]
@@ -2137,7 +2186,7 @@ class SoccerLiveSensor(Entity):
             SoccerLiveSensor._af_stat(path)["calls"] += 1
             data = await self._fetch_api_football_json_uncached(path, params or {})
             if data is not None:
-                SoccerLiveSensor._api_football_endpoint_cache[cache_key] = {
+                endpoint_cache[cache_key] = {
                     "data": data,
                     "time": monotonic(),
                     "ttl": ttl,
@@ -2290,14 +2339,23 @@ class SoccerLiveSensor(Entity):
         return 300
 
     def _prune_api_football_endpoint_cache(self, now):
-        SoccerLiveSensor._api_football_endpoint_cache = {
-            k: v for k, v in SoccerLiveSensor._api_football_endpoint_cache.items()
+        endpoint_cache = self._runtime_dict(
+            "api_endpoint_cache",
+            SoccerLiveSensor._api_football_endpoint_cache,
+        )
+        endpoint_locks = self._runtime_dict(
+            "api_endpoint_locks",
+            SoccerLiveSensor._api_football_endpoint_locks,
+        )
+        fresh = {
+            k: v for k, v in endpoint_cache.items()
             if now - v["time"] < v.get("ttl", 300)
         }
-        SoccerLiveSensor._api_football_endpoint_locks = {
-            k: v for k, v in SoccerLiveSensor._api_football_endpoint_locks.items()
-            if k in SoccerLiveSensor._api_football_endpoint_cache or v.locked()
-        }
+        endpoint_cache.clear()
+        endpoint_cache.update(fresh)
+        for key, lock in tuple(endpoint_locks.items()):
+            if key not in endpoint_cache and not lock.locked():
+                endpoint_locks.pop(key, None)
     
     
     async def _get_calendar_data(self):
@@ -2309,18 +2367,24 @@ class SoccerLiveSensor(Entity):
 
         calendar_url = f"{self.base_url_2}/{self._code}/scoreboard"
         cache_key = self._code or calendar_url
-        cached = SoccerLiveSensor._calendar_cache.get(cache_key)
+        calendar_cache = self._runtime_dict(
+            "calendar_cache", SoccerLiveSensor._calendar_cache
+        )
+        calendar_locks = self._runtime_dict(
+            "calendar_locks", SoccerLiveSensor._calendar_locks
+        )
+        cached = calendar_cache.get(cache_key)
         if cached and monotonic() - cached["time"] < 300:
             return cached["start"], cached["end"]
 
-        lock = SoccerLiveSensor._calendar_locks.setdefault(cache_key, asyncio.Lock())
+        lock = calendar_locks.setdefault(cache_key, asyncio.Lock())
         async with lock:
-            cached = SoccerLiveSensor._calendar_cache.get(cache_key)
+            cached = calendar_cache.get(cache_key)
             if cached and monotonic() - cached["time"] < 300:
                 return cached["start"], cached["end"]
 
             start, end = await self._fetch_calendar_data(calendar_url)
-            SoccerLiveSensor._calendar_cache[cache_key] = {
+            calendar_cache[cache_key] = {
                 "start": start,
                 "end": end,
                 "time": monotonic(),

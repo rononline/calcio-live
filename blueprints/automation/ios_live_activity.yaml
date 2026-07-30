@@ -1,0 +1,187 @@
+blueprint:
+  name: Soccer Live – iOS Live Activity
+  description: >
+    Starts and updates a Companion App Live Activity for one followed team.
+    Requires an iPhone with a Companion App build that supports Live Activities.
+    Existing Soccer Live bus events remain the trigger source.
+  domain: automation
+  homeassistant:
+    min_version: 2026.7.0
+  input:
+    match_entity:
+      name: Soccer Live match sensor
+      description: Sensor containing current_match or next_match.
+      selector:
+        entity:
+          domain: sensor
+          integration: soccer_live
+    notify_service:
+      name: iPhone notify service
+      description: For example notify.mobile_app_iphone.
+      selector:
+        text:
+    team_name:
+      name: Team name
+      description: Used to filter Soccer Live events when no team ID is supplied.
+      default: ""
+      selector:
+        text:
+    team_id:
+      name: Team ID
+      description: Optional provider team ID for exact event filtering.
+      default: ""
+      selector:
+        text:
+    activity_tag:
+      name: Notification tag
+      default: soccer_live_match
+      selector:
+        text:
+    accent_color:
+      name: Accent colour
+      default: [108, 99, 255]
+      selector:
+        color_rgb:
+    background_color:
+      name: Background colour
+      default: [22, 24, 33]
+      selector:
+        color_rgb:
+    clear_after:
+      name: Clear after full time
+      description: Minutes to keep the final score visible.
+      default: 15
+      selector:
+        number:
+          min: 1
+          max: 120
+          unit_of_measurement: min
+
+mode: parallel
+max: 5
+max_exceeded: silent
+
+trigger:
+  - trigger: event
+    event_type: soccer_live_match_started
+    id: start
+  - trigger: event
+    event_type:
+      - soccer_live_goal
+      - soccer_live_yellow_card
+      - soccer_live_red_card
+      - soccer_live_substitution
+      - soccer_live_halftime
+      - soccer_live_second_half
+    id: update
+  - trigger: event
+    event_type:
+      - soccer_live_match_finished
+      - soccer_live_match_cancelled
+      - soccer_live_match_postponed
+    id: finish
+  - trigger: time_pattern
+    minutes: "/5"
+    id: heartbeat
+
+variables:
+  match_entity: !input match_entity
+  notify_service: !input notify_service
+  configured_team: !input team_name
+  configured_team_id: !input team_id
+  activity_tag: !input activity_tag
+  accent_rgb: !input accent_color
+  background_rgb: !input background_color
+  clear_after: !input clear_after
+  event_data: >
+    {{ trigger.event.data if trigger.platform == 'event' else {} }}
+  match: >
+    {% set current = state_attr(match_entity, 'current_match') %}
+    {{ current if current else (state_attr(match_entity, 'next_match') or {}) }}
+  relevant: >
+    {% if trigger.platform != 'event' %}
+      {{ match.state | default('') in ['in', 'live']
+         or match.match_phase | default('') in
+            ['first_half', 'halftime', 'second_half', 'extra_time', 'penalties'] }}
+    {% elif event_data.config_entry_id | default('') | length
+          and state_attr(match_entity, 'config_entry_id') | default('', true) | length %}
+      {{ event_data.config_entry_id
+         == state_attr(match_entity, 'config_entry_id') }}
+    {% elif configured_team_id | string | length %}
+      {{ (event_data.team_id | default('') | string)
+         == (configured_team_id | string) }}
+    {% elif configured_team | length %}
+      {{ configured_team | lower in (event_data.home_team | default('') | lower)
+         or configured_team | lower in (event_data.away_team | default('') | lower) }}
+    {% else %}
+      true
+    {% endif %}
+  home_team: >
+    {{ event_data.home_team | default(match.home_team | default('Home'), true) }}
+  away_team: >
+    {{ event_data.away_team | default(match.away_team | default('Away'), true) }}
+  home_score: >
+    {{ event_data.home_score | default(match.home_score | default(0), true) }}
+  away_score: >
+    {{ event_data.away_score | default(match.away_score | default(0), true) }}
+  clock: >
+    {{ event_data.minute
+       | default(event_data.clock
+       | default(match.clock | default(''), true), true) }}
+  minute: >
+    {% set raw = clock | string %}
+    {{ [([raw.split('+')[0] | int(0), 0] | max), 120] | min }}
+  phase_text: >
+    {% if trigger.id == 'finish' %}
+      {{ 'FT' if trigger.event.event_type == 'soccer_live_match_finished'
+         else 'Uitgesteld' if trigger.event.event_type == 'soccer_live_match_postponed'
+         else 'Afgelast' }}
+    {% elif trigger.platform == 'event'
+          and trigger.event.event_type == 'soccer_live_halftime' %}
+      Rust
+    {% elif clock | string | length %}
+      {{ clock }}′
+    {% else %}
+      Live
+    {% endif %}
+  accent_hex: >
+    #{{ '%02x%02x%02x' | format(accent_rgb[0], accent_rgb[1], accent_rgb[2]) }}
+  background_hex: >
+    #{{ '%02x%02x%02x'
+       | format(background_rgb[0], background_rgb[1], background_rgb[2]) }}
+
+conditions:
+  - condition: template
+    value_template: "{{ relevant }}"
+
+action:
+  - action: "{{ notify_service }}"
+    data:
+      title: "{{ configured_team | default('Soccer Live', true) }} live"
+      message: "{{ home_team }} {{ home_score }}–{{ away_score }} {{ away_team }}"
+      data:
+        tag: "{{ activity_tag }}"
+        live_update: true
+        critical_text: "{{ phase_text }}"
+        progress: "{{ 120 if trigger.id == 'finish' else minute | int(0) }}"
+        progress_max: 120
+        notification_icon: >-
+          {{ 'mdi:flag-checkered' if trigger.id == 'finish' else 'mdi:soccer' }}
+        notification_icon_color: "{{ accent_hex }}"
+        progress_bar_color: "{{ accent_hex }}"
+        background_color: "{{ background_hex }}"
+        text_color: "#FFFFFF"
+        silent: "{{ trigger.id not in ['start', 'finish'] }}"
+        alert_once: true
+        sticky: true
+  - if:
+      - condition: template
+        value_template: "{{ trigger.id == 'finish' }}"
+    then:
+      - delay:
+          minutes: "{{ clear_after | int(15) }}"
+      - action: "{{ notify_service }}"
+        data:
+          message: clear_notification
+          data:
+            tag: "{{ activity_tag }}"

@@ -50,6 +50,7 @@ async def test_translations_load_from_strings(hass: HomeAssistant):
     assert nl[f"component.{DOMAIN}.entity.sensor.runtime_status.name"] == "Synchronisatiestatus"
     assert nl[f"component.{DOMAIN}.entity.button.play_replay.name"] == "Wedstrijdreplay afspelen"
     assert nl[f"component.{DOMAIN}.entity.calendar.match_calendar.name"] == "Wedstrijdkalender"
+    assert nl[f"component.{DOMAIN}.entity.event.match_event.name"] == "Wedstrijdgebeurtenis"
 
 
 async def test_user_flow_espn_goes_to_follow_without_a_key(hass: HomeAssistant):
@@ -139,6 +140,7 @@ async def test_team_entry_wiring(hass: HomeAssistant):
     assert any(eid.endswith("_sync_status") for eid in entity_ids), entity_ids
     assert any(eid.endswith("_next_kick_off") for eid in entity_ids), entity_ids
     assert any(eid.endswith("_play_match_replay") for eid in entity_ids), entity_ids
+    assert any(eid.endswith("_match_event") for eid in entity_ids), entity_ids
     assert any(eid.startswith("calendar.soccer_live_") for eid in entity_ids), entity_ids
 
     # Names come from translation_key + has_entity_name.

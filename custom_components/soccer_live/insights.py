@@ -200,6 +200,96 @@ def data_quality(matches, provider, last_successful_update=None, last_error=None
     }
 
 
+def data_alerts(
+    matches: list[dict] | None,
+    last_error=None,
+    now: datetime | None = None,
+) -> list[dict]:
+    """Return actionable, provider-neutral data warnings.
+
+    Alerts describe only observable inconsistencies. Missing optional provider
+    capabilities are intentionally not warnings.
+    """
+    now = now or datetime.now(timezone.utc)
+    alerts = []
+    seen = set()
+
+    def add(code, severity="warning", match=None, **details):
+        event_id = (match or {}).get("event_id")
+        key = (code, str(event_id or ""), tuple(sorted(details.items())))
+        if key in seen:
+            return
+        seen.add(key)
+        alerts.append({
+            "code": code,
+            "severity": severity,
+            "event_id": event_id,
+            "canonical_id": (match or {}).get("canonical_id"),
+            **details,
+        })
+
+    if last_error:
+        add("provider_error", "error")
+
+    matches = [match for match in (matches or []) if isinstance(match, dict)]
+    pair_dates: dict[str, list[dict]] = {}
+    for match in matches:
+        phase = str(match.get("match_phase") or "")
+        state = str(match.get("state") or "")
+        if phase in {"postponed", "cancelled"}:
+            add(f"match_{phase}", "warning", match)
+        conflicts = match.get("source_conflicts") or []
+        if conflicts:
+            add("source_conflict", "warning", match, fields=len(conflicts))
+        if state in {"in", "live"}:
+            clock = str(match.get("clock") or "")
+            minute_match = re.search(r"\d+", clock)
+            minute = int(minute_match.group()) if minute_match else 0
+            if minute >= 1 and not (
+                match.get("lineup_home") or match.get("lineup_away")
+            ):
+                add("live_lineup_missing", "info", match)
+            if minute >= 15 and not (
+                match.get("key_events") or match.get("match_details")
+            ):
+                add("live_timeline_missing", "info", match)
+            sections = match.get("source_sections") or {}
+            updated_values = [
+                section.get("updated_at")
+                for section in sections.values()
+                if isinstance(section, dict) and section.get("updated_at")
+            ]
+            parsed = []
+            for value in updated_values:
+                try:
+                    stamp = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+                    if stamp.tzinfo is None:
+                        stamp = stamp.replace(tzinfo=timezone.utc)
+                    parsed.append(stamp.astimezone(timezone.utc))
+                except ValueError:
+                    continue
+            if parsed and (now - max(parsed)).total_seconds() > 5 * 60:
+                add("live_data_stale", "warning", match)
+        pair_id = str(match.get("canonical_pair_id") or "")
+        if pair_id:
+            pair_dates.setdefault(pair_id, []).append(match)
+
+    for related in pair_dates.values():
+        dates = {
+            str(item.get("date_iso") or item.get("date") or "")[:10]
+            for item in related
+            if item.get("date_iso") or item.get("date")
+        }
+        phases = {str(item.get("match_phase") or "") for item in related}
+        if len(dates) > 1 and phases & {"postponed", "cancelled"}:
+            current = next(
+                (item for item in related if item.get("state") == "pre"),
+                related[0],
+            )
+            add("match_rescheduled", "info", current, dates=len(dates))
+    return alerts
+
+
 def matchday_summary(matches: list[dict] | None) -> dict | None:
     """Summarise the most relevant calendar day represented by the payload."""
     matches = [match for match in (matches or []) if isinstance(match, dict)]
@@ -256,7 +346,8 @@ def archive_snapshot(match: dict, provider: str) -> dict:
     snapshot = {
         key: match.get(key)
         for key in (
-            "event_id", "date", "date_iso", "competition_name", "league_name",
+            "event_id", "canonical_id", "canonical_pair_id", "provider_event_id",
+            "date", "date_iso", "competition_name", "league_name",
             "home_team", "away_team", "home_logo", "away_logo", "home_score",
             "away_score", "status", "venue", "season_info", "round",
             "home_id", "away_id", "is_friendly",
@@ -398,16 +489,32 @@ def archive_summary(matches: list[dict] | None, team_name: str | None = None) ->
 def update_archive(existing: list[dict] | None, matches: list[dict] | None, provider: str, limit=500) -> list[dict]:
     """Merge newly finished matches into an archive, newest first."""
     by_id = {
-        str(item.get("event_id") or f"{item.get('date_iso')}|{item.get('home_team')}|{item.get('away_team')}"): item
+        str(
+            item.get("canonical_id")
+            or item.get("event_id")
+            or f"{item.get('date_iso')}|{item.get('home_team')}|{item.get('away_team')}"
+        ): item
         for item in (existing or [])
     }
     for match in matches or []:
         if match.get("state") != "post":
             continue
         snapshot = archive_snapshot(match, provider)
-        key = str(snapshot.get("event_id") or f"{snapshot.get('date_iso')}|{snapshot.get('home_team')}|{snapshot.get('away_team')}")
-        if key in by_id:
-            snapshot["archived_at"] = by_id[key].get("archived_at", snapshot["archived_at"])
+        key = str(
+            snapshot.get("canonical_id")
+            or snapshot.get("event_id")
+            or f"{snapshot.get('date_iso')}|{snapshot.get('home_team')}|{snapshot.get('away_team')}"
+        )
+        # Migrate archives written before canonical IDs without duplicating the
+        # same provider fixture on its first schema-v5 update.
+        legacy_key = str(snapshot.get("event_id") or "")
+        previous = by_id.get(key)
+        if previous is None and legacy_key and legacy_key != key:
+            previous = by_id.pop(legacy_key, None)
+        if previous is not None:
+            snapshot["archived_at"] = previous.get(
+                "archived_at", snapshot["archived_at"]
+            )
         by_id[key] = snapshot
     return sorted(
         by_id.values(),

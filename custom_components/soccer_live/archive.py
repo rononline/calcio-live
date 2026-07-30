@@ -10,7 +10,8 @@ ARCHIVE_LIMIT = 500
 def archive_key(item: dict) -> str:
     """Return a provider-independent archive identity."""
     return str(
-        item.get("event_id")
+        item.get("canonical_id")
+        or item.get("event_id")
         or "|".join(
             str(item.get(key) or "")
             for key in ("date_iso", "home_team", "away_team")

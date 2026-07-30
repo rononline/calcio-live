@@ -48,3 +48,22 @@ def test_coordinator_claims_event_only_once():
     assert coordinator.claim_event(("goal", "fixture-1", 1)) is True
     assert coordinator.claim_event(("goal", "fixture-1", 1)) is False
     assert coordinator.event_ledger_size == 1
+
+
+def test_coordinator_keeps_entry_scoped_snapshot_and_request_state():
+    coordinator = coordinator_module.SoccerLiveEntryCoordinator(_Hass(), "entry")
+    coordinator.publish_snapshot(
+        "sensor-key",
+        "Feyenoord 1–0 Sparta",
+        {
+            "matches": [{"event_id": str(index)} for index in range(200)],
+            "match_archive": [{"event_id": "old"}],
+        },
+    )
+    snapshot = coordinator.snapshot("sensor-key")
+    assert snapshot["state"] == "Feyenoord 1–0 Sparta"
+    assert len(snapshot["attributes"]["matches"]) == 150
+    assert "match_archive" not in snapshot["attributes"]
+    assert coordinator.snapshot_count == 1
+    assert coordinator.main_cache == {}
+    assert coordinator.api_endpoint_cache == {}

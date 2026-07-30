@@ -242,6 +242,11 @@
       "play_replay": {
         "name": "Reproducir repetición del partido"
       }
+    },
+    "event": {
+      "match_event": {
+        "name": "Evento del partido"
+      }
     }
   }
 }

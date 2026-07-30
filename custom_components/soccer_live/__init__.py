@@ -15,7 +15,7 @@ from .const import DOMAIN
 from .coordinator import SoccerLiveEntryCoordinator
 from .simulator import EVENT_TYPES, simulated_event
 
-PLATFORMS = ["sensor", "calendar", "button"]
+PLATFORMS = ["sensor", "calendar", "button", "event"]
 
 
 def _coordinators(hass, requested=None):
@@ -225,6 +225,13 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
     await hass.config_entries.async_reload(entry.entry_id)
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    coordinator = (
+        hass.data.get(DOMAIN, {})
+        .get(entry.entry_id, {})
+        .get("coordinator")
+    )
+    if coordinator:
+        await coordinator.async_shutdown()
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
         hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)

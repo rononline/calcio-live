@@ -13,6 +13,19 @@ import hashlib
 import json
 import time
 from collections.abc import Callable
+from datetime import datetime, timezone
+
+_SNAPSHOT_MAX_AGE = 7 * 86400
+_SNAPSHOT_EXCLUDED = {
+    "club_changes",
+    "last_card_event",
+    "last_event",
+    "last_goal_event",
+    "last_match_finished_event",
+    "last_match_started_event",
+    "match_archive",
+    "match_archive_summary",
+}
 
 
 class SoccerLiveEntryCoordinator:
@@ -29,10 +42,22 @@ class SoccerLiveEntryCoordinator:
         self._replay_snapshots: list[dict] = []
         self._ledger_store = None
         self._replay_store = None
+        self._snapshot_store = None
         self._save_ledger_task = None
         self._save_replay_task = None
+        self._save_snapshot_task = None
         self._ledger_dirty = False
         self._replay_dirty = False
+        self._snapshot_dirty = False
+        self._snapshots: dict[str, dict] = {}
+        # Entry-scoped request state. Sensors keep their independent cadence,
+        # while identical endpoint work is deduplicated here per config entry.
+        self.main_cache: dict = {}
+        self.fetch_locks: dict = {}
+        self.api_endpoint_cache: dict = {}
+        self.api_endpoint_locks: dict = {}
+        self.calendar_cache: dict = {}
+        self.calendar_locks: dict = {}
 
     async def async_initialize(self):
         """Load persistent event claims and recorded replay snapshots."""
@@ -45,6 +70,9 @@ class SoccerLiveEntryCoordinator:
         )
         self._replay_store = Store(
             self.hass, 1, f"soccer_live_{self.entry_id}_match_replay"
+        )
+        self._snapshot_store = Store(
+            self.hass, 1, f"soccer_live_{self.entry_id}_last_snapshot"
         )
         ledger = await self._ledger_store.async_load()
         now = time.time()
@@ -60,6 +88,91 @@ class SoccerLiveEntryCoordinator:
                     self._event_ledger[str(key)] = parsed
         replay = await self._replay_store.async_load()
         self._replay_snapshots = validate_replay(replay or {})
+        stored_snapshots = await self._snapshot_store.async_load()
+        self._snapshots = {}
+        for key, snapshot in (stored_snapshots or {}).get("entities", {}).items():
+            if not isinstance(snapshot, dict):
+                continue
+            captured_at = snapshot.get("captured_at")
+            try:
+                captured = datetime.fromisoformat(
+                    str(captured_at).replace("Z", "+00:00")
+                )
+                if captured.tzinfo is None:
+                    captured = captured.replace(tzinfo=timezone.utc)
+                age = datetime.now(timezone.utc) - captured.astimezone(timezone.utc)
+            except (TypeError, ValueError):
+                continue
+            if age.total_seconds() <= _SNAPSHOT_MAX_AGE:
+                self._snapshots[str(key)] = snapshot
+
+    @staticmethod
+    def _snapshot_attributes(attributes) -> dict:
+        """Return a JSON-safe, bounded copy of useful entity attributes."""
+        source = {
+            key: value
+            for key, value in (attributes or {}).items()
+            if key not in _SNAPSHOT_EXCLUDED
+        }
+        # A provider can occasionally return thousands of fixtures. Last-known
+        # state is for immediate recovery, not a second archive.
+        for key in ("matches", "previous_matches", "upcoming_matches"):
+            if isinstance(source.get(key), list):
+                source[key] = source[key][:150]
+        try:
+            return json.loads(json.dumps(source, default=str))
+        except (TypeError, ValueError):
+            return {}
+
+    def publish_snapshot(self, key: str, state, attributes) -> None:
+        """Persist the latest normalised entity snapshot for restart recovery."""
+        if not key or not attributes:
+            return
+        self._snapshots[str(key)] = {
+            "captured_at": datetime.now(timezone.utc).isoformat(),
+            "state": state,
+            "attributes": self._snapshot_attributes(attributes),
+        }
+        if len(self._snapshots) > 30:
+            newest = sorted(
+                self._snapshots.items(),
+                key=lambda item: str(item[1].get("captured_at") or ""),
+                reverse=True,
+            )[:30]
+            self._snapshots = dict(newest)
+        self._snapshot_dirty = True
+        if self._snapshot_store is None:
+            return
+        if self._save_snapshot_task and not self._save_snapshot_task.done():
+            return
+        self._save_snapshot_task = self.hass.async_create_task(
+            self._async_save_snapshots()
+        )
+
+    async def _async_save_snapshots(self):
+        while self._snapshot_dirty:
+            self._snapshot_dirty = False
+            await self._snapshot_store.async_save(
+                {"version": 1, "entities": dict(self._snapshots)}
+            )
+
+    def snapshot(self, key: str) -> dict | None:
+        snapshot = self._snapshots.get(str(key))
+        return dict(snapshot) if isinstance(snapshot, dict) else None
+
+    @property
+    def snapshot_count(self) -> int:
+        return len(self._snapshots)
+
+    async def async_shutdown(self):
+        """Flush coalesced storage tasks before an entry unload."""
+        for task in (
+            self._save_ledger_task,
+            self._save_replay_task,
+            self._save_snapshot_task,
+        ):
+            if task and not task.done():
+                await task
 
     def register_entity(self, entity) -> Callable:
         self._entities.add(entity)

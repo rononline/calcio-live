@@ -1,5 +1,15 @@
 # Changelog
 
+## v3.13.0 (2026-07-30)
+
+- coordinator: keep request caches and locks scoped to one config entry while preserving each sensor's proven polling cadence
+- restart recovery: persist bounded last-known sensor snapshots for seven days and restore them immediately while the first refresh runs
+- native events: add a Home Assistant Event entity per entry for automation-editor-friendly match lifecycle triggers
+- data contract: add provider-neutral canonical fixture/pair IDs and actionable `data_alerts`; bump the schema to version 5
+- notifications: add a reusable iOS Companion App Live Activity blueprint with team filtering, score updates and automatic cleanup
+- diagnostics: report restored snapshot counts alongside existing request and replay information
+- tests: cover cross-provider fixture identity, reschedules, data alerts and coordinator snapshot bounds
+
 ## v3.12.1 (2026-07-29)
 
 - reliability: measure process-local cache TTLs, provider backoffs and event throttles with a monotonic clock so DST and system-clock corrections cannot extend or shorten them
