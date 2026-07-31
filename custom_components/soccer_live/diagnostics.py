@@ -117,6 +117,9 @@ async def async_get_config_entry_diagnostics(
             "persistent_event_count": (
                 coordinator.event_ledger_size if coordinator else 0
             ),
+            "standings_history_count": (
+                coordinator.standings_history_count if coordinator else 0
+            ),
         },
         "api_football": api_football,
         "config_entry": {

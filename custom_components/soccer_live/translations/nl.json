@@ -171,7 +171,7 @@
           "notify_match_status": "Meldingen bij einde, uitstel en afgelasting",
           "quiet_hours_start": "Stille uren beginnen (UU:MM; leeg = uit)",
           "quiet_hours_end": "Stille uren eindigen (UU:MM; leeg = uit)",
-          "player_watchlist": "Spelersvolglijst (namen gescheiden door komma's)"
+          "player_watchlist": "Spelersvolglijst voor kaartdata en gebeurtenissen (namen gescheiden door komma's)"
         }
       }
     },

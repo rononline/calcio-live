@@ -1,5 +1,15 @@
 # Changelog
 
+## v3.14.0 (2026-07-31)
+
+- competition race: persist up to 200 changed standings snapshots per standings sensor and publish provider-neutral gaps, remaining matches and maximum points
+- player watchlist: emit native `soccer_live_watchlist_event` events for watched-player goals, cards, substitutions, lineup roles, injuries and transfers
+- notifications: add a reusable watched-player notification blueprint
+- archive insights: add home/away splits, monthly and season reports, common opponents and biggest wins/losses
+- data contract: publish `standings_history` and `competition_race`, recommend the Race card and bump the schema to version 6
+- diagnostics: report the number of persisted standings snapshots
+- tests: cover standings deduplication, race calculations, watchlist matching and richer archive summaries
+
 ## v3.13.0 (2026-07-30)
 
 - coordinator: keep request caches and locks scoped to one config entry while preserving each sensor's proven polling cadence

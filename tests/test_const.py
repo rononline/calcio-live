@@ -115,7 +115,7 @@ def test_compute_sync_status_ready_and_priorities():
 
 def test_recommended_card_types():
     assert recommended_card_types("team_match")[:3] == ["team", "countdown", "match-center"]
-    assert recommended_card_types("standings") == ["standings", "mini-standings"]
+    assert recommended_card_types("standings") == ["standings", "mini-standings", "race"]
     assert recommended_card_types("news") == ["news"]
     # Unknown / calendar-like types have no recommendation.
     assert recommended_card_types("unknown") == []

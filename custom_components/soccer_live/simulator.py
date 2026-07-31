@@ -12,6 +12,7 @@ EVENT_TYPES = {
     "second_half": ("soccer_live_second_half", "second_half"),
     "match_finished": ("soccer_live_match_finished", "finished"),
     "lineup_available": ("soccer_live_lineup_available", "scheduled"),
+    "watchlist": ("soccer_live_watchlist_event", None),
     "postponed": ("soccer_live_match_postponed", "postponed"),
     "cancelled": ("soccer_live_match_cancelled", "cancelled"),
 }

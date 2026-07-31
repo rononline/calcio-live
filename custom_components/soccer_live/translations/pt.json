@@ -171,7 +171,7 @@
           "notify_match_status": "Notificar fim, adiamentos e cancelamentos",
           "quiet_hours_start": "Início das horas silenciosas (HH:MM; vazio = desligado)",
           "quiet_hours_end": "Fim das horas silenciosas (HH:MM; vazio = desligado)",
-          "player_watchlist": "Jogadores seguidos (nomes separados por vírgulas)"
+          "player_watchlist": "Jogadores seguidos para dados do cartão e eventos (nomes separados por vírgulas)"
         }
       }
     },

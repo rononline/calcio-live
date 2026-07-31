@@ -99,6 +99,49 @@ def test_watchlist_matches_case_insensitively():
     assert insights.player_watchlist(club, "") == []
 
 
+def test_watchlist_event_matches_players_across_provider_shapes():
+    result = insights.watchlist_event(
+        {"athletes": ["Other", "Calvin Stengs"], "minute": 8},
+        "calvin stengs, Quinten Timber",
+    )
+    assert result["player"] == "Calvin Stengs"
+    assert result["watchlist"] is True
+    assert insights.watchlist_event({"player": "Other"}, "Calvin Stengs") is None
+
+
+def _standings(points=10):
+    return {
+        "season": "2026/27",
+        "league_name": "Eredivisie",
+        "standings_groups": [{
+            "name": "Eredivisie",
+            "standings": [
+                {"rank": 1, "team_id": 1, "team_name": "Ajax", "points": points + 2, "games_played": 4},
+                {"rank": 2, "team_id": 2, "team_name": "Feyenoord", "points": points, "games_played": 4},
+                {"rank": 3, "team_id": 3, "team_name": "PSV", "points": points - 1, "games_played": 4},
+            ],
+        }],
+    }
+
+
+def test_standings_history_only_appends_sporting_changes():
+    history = insights.update_standings_history([], _standings(), "2026-08-01T10:00:00+00:00")
+    unchanged = insights.update_standings_history(history, _standings(), "2026-08-01T11:00:00+00:00")
+    changed = insights.update_standings_history(unchanged, _standings(13), "2026-08-02T10:00:00+00:00")
+    assert len(history) == 1
+    assert unchanged == history
+    assert len(changed) == 2
+
+
+def test_competition_race_exposes_gaps_and_maximum_points():
+    result = insights.competition_race(_standings())
+    feyenoord = result["groups"][0]["rows"][1]
+    assert feyenoord["gap_to_leader"] == 2
+    assert feyenoord["gap_to_above"] == 2
+    assert feyenoord["remaining"] == 0
+    assert feyenoord["maximum_points"] == 10
+
+
 def test_archive_deduplicates_updates_and_is_newest_first():
     old = insights.archive_snapshot(
         _match(event_id="1", state="post", home_score=1, away_score=0),
@@ -163,3 +206,6 @@ def test_archive_summary_supports_seasons_and_team_statistics():
     assert result["statistics"]["drawn"] == 1
     assert result["statistics"]["goals_for"] == 2
     assert result["statistics"]["clean_sheets"] == 1
+    assert result["away"]["matches"] == 2
+    assert result["common_opponents"][0]["name"] == "Sparta"
+    assert result["biggest_win"]["score"] == "2-1"

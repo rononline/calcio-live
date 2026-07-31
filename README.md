@@ -89,7 +89,7 @@ Configure via **Settings → Devices & Services → Soccer Live → Configure**:
 | `max_matches` | `0` (unlimited) | Limit the number of matches stored per sensor (5 / 10 / 15 / 20 / 30). Useful to reduce state size on large sensors. |
 | `notify_goals`, `notify_cards`, `notify_match_status` | `true` | Choose which direct push-notification categories are enabled. |
 | `quiet_hours_start` / `quiet_hours_end` | empty | Optional local quiet window in `HH:MM` format, including windows across midnight. |
-| `player_watchlist` | empty | Comma-separated exact player names to expose in `player_watchlist` for the Club card. |
+| `player_watchlist` | empty | Comma-separated exact player names to expose in the Club card and monitor through `soccer_live_watchlist_event`. |
 
 > **API key expired or revoked?** When API-Football rejects the key, the sensors report `api_status: authentication_failed` and Home Assistant automatically prompts you to re-enter it (a repair/notification appears — no need to delete the integration). You can also change it any time via the option above.
 
@@ -113,6 +113,9 @@ Configure via **Settings → Devices & Services → Soccer Live → Configure**:
 > attributes are excluded from Recorder history.
 > Each match also publishes `source_sections` with availability, provider and
 > update time for schedule, preview, lineup, timeline, statistics and review.
+> Each standings sensor additionally keeps up to 200 changed table snapshots in
+> `standings_history`; `competition_race` contains points gaps, remaining
+> matches and maximum attainable points. Both stay out of Recorder.
 
 ### Local archive and refresh services
 
@@ -540,6 +543,7 @@ Each config entry also creates a **calendar entity** (`calendar.soccer_live_<tea
 | `soccer_live_substitution` | Substitution | `player`, `minute`, `team`, `home_team`, `away_team`, `league_name` |
 | `soccer_live_match_finished` | Full time | `home_score`, `away_score`, `goal_scorers`, `goal_scorers_str`, `league_name` |
 | `soccer_live_lineup_available` | A fixture publishes its lineup for the first time | `event_id`, `home_team`, `away_team`, `home_players`, `away_players` |
+| `soccer_live_watchlist_event` | A configured watched player appears in a match, lineup or club change | `player`, `activity`, `team`, `source_event` |
 | `soccer_live_club_change` | A daily club snapshot changes | `type`, `team_id`, `player`/`name`, optional `delta` |
 | `soccer_live_transfer_added` | A new transfer appears | `team_id`, `player`, `direction` |
 | `soccer_live_injury_added` / `soccer_live_player_available` | A player becomes unavailable/available | `team_id`, `player` |
@@ -548,6 +552,8 @@ Each config entry also creates a **calendar entity** (`calendar.soccer_live_<tea
 Example automation blueprints are available in [`blueprints/automation`](blueprints/automation):
 goal, yellow card, red card, substitution, match started, full time (final score)
 and a configurable kick-off reminder (choose how many minutes before kick-off).
+The player-watchlist blueprint turns `soccer_live_watchlist_event` into grouped
+mobile notifications for goals, cards, lineup roles, injuries and transfers.
 The **Soccer Live – iOS Live Activity** blueprint starts and updates one
 Companion App Live Activity from the same events, filters it to your selected
 team, keeps the score/clock current and clears the final result after a
@@ -686,6 +692,14 @@ Available after kick-off when `enable_summary_enrichment` is on:
 ### Schedule summary attributes
 
 `schedule_live_matches`, `schedule_upcoming_matches` and `schedule_recent_matches` contain compact match objects with: `event_id`, `date`, `state`, `clock`, team names/abbreviations/logos/colors, scores, `venue`, `league_name`, `league_logo`, `season_info`, and `broadcasts`.
+
+### Standings trajectory attributes
+
+Schema-v6 standings sensors publish `standings_history` only when the sporting
+table changes. Each compact snapshot contains `captured_at`, season, league and
+groups with rank, points, games played and goal difference. `competition_race`
+adds per-team `remaining`, `maximum_points`, `gap_to_leader` and
+`gap_to_above`.
 
 ### Automation attributes
 

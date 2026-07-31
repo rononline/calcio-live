@@ -1,0 +1,7 @@
+target-version = "py311"
+
+[lint]
+# CI uses Ruff as the fast syntax/undefined-name gate. Broader style and
+# datetime modernization are handled separately so legacy provider parsers do
+# not make unrelated feature releases fail.
+select = ["E9", "F63", "F7", "F82"]

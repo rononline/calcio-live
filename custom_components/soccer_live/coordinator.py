@@ -43,13 +43,17 @@ class SoccerLiveEntryCoordinator:
         self._ledger_store = None
         self._replay_store = None
         self._snapshot_store = None
+        self._standings_store = None
         self._save_ledger_task = None
         self._save_replay_task = None
         self._save_snapshot_task = None
+        self._save_standings_task = None
         self._ledger_dirty = False
         self._replay_dirty = False
         self._snapshot_dirty = False
+        self._standings_dirty = False
         self._snapshots: dict[str, dict] = {}
+        self._standings_histories: dict[str, list[dict]] = {}
         # Entry-scoped request state. Sensors keep their independent cadence,
         # while identical endpoint work is deduplicated here per config entry.
         self.main_cache: dict = {}
@@ -73,6 +77,9 @@ class SoccerLiveEntryCoordinator:
         )
         self._snapshot_store = Store(
             self.hass, 1, f"soccer_live_{self.entry_id}_last_snapshot"
+        )
+        self._standings_store = Store(
+            self.hass, 1, f"soccer_live_{self.entry_id}_standings_history"
         )
         ledger = await self._ledger_store.async_load()
         now = time.time()
@@ -105,6 +112,15 @@ class SoccerLiveEntryCoordinator:
                 continue
             if age.total_seconds() <= _SNAPSHOT_MAX_AGE:
                 self._snapshots[str(key)] = snapshot
+        stored_standings = await self._standings_store.async_load()
+        histories = (stored_standings or {}).get("histories", {})
+        self._standings_histories = {
+            str(key): [
+                item for item in history[-200:] if isinstance(item, dict)
+            ]
+            for key, history in histories.items()
+            if isinstance(history, list)
+        }
 
     @staticmethod
     def _snapshot_attributes(attributes) -> dict:
@@ -170,9 +186,56 @@ class SoccerLiveEntryCoordinator:
             self._save_ledger_task,
             self._save_replay_task,
             self._save_snapshot_task,
+            self._save_standings_task,
         ):
             if task and not task.done():
                 await task
+
+    def update_standings(self, key: str, attributes: dict) -> list[dict]:
+        """Persist a bounded table trajectory for one standings entity."""
+        try:
+            from .insights import update_standings_history
+        except ImportError:  # focused tests load this file without its package
+            import importlib.util
+            from pathlib import Path
+
+            path = Path(__file__).with_name("insights.py")
+            spec = importlib.util.spec_from_file_location(
+                "soccer_live_insights", path
+            )
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            update_standings_history = module.update_standings_history
+
+        key = str(key)
+        current = self._standings_histories.get(key, [])
+        updated = update_standings_history(current, attributes)
+        if updated == current:
+            return list(updated)
+        self._standings_histories[key] = updated
+        self._standings_dirty = True
+        if self._standings_store is not None and (
+            self._save_standings_task is None or self._save_standings_task.done()
+        ):
+            self._save_standings_task = self.hass.async_create_task(
+                self._async_save_standings()
+            )
+        return list(updated)
+
+    async def _async_save_standings(self):
+        while self._standings_dirty:
+            self._standings_dirty = False
+            await self._standings_store.async_save({
+                "version": 2,
+                "histories": {
+                    key: list(history)
+                    for key, history in self._standings_histories.items()
+                },
+            })
+
+    @property
+    def standings_history_count(self) -> int:
+        return sum(len(history) for history in self._standings_histories.values())
 
     def register_entity(self, entity) -> Callable:
         self._entities.add(entity)

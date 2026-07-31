@@ -22,7 +22,7 @@ def _read_manifest_version():
 # integration, and detect breaking attribute-shape changes.
 INTEGRATION_VERSION = _read_manifest_version()
 # Bump when the published attribute shape changes in a way a card must handle.
-DATA_SCHEMA_VERSION = 5
+DATA_SCHEMA_VERSION = 6
 CONF_COMPETITION_CODE = "competition_code"
 CONF_PROVIDER = "provider"
 CONF_API_FOOTBALL_KEY = "api_football_key"
@@ -69,7 +69,7 @@ RECOMMENDED_CARD_TYPES = {
     "team_matches_mixed": ["team-competitions", "matches", "ticker", "team-form", "matchday", "archive"],
     "match_day": ["matches", "ticker", "matchday"],
     "all_matches_today": ["matches", "ticker", "matchday"],
-    "standings": ["standings", "mini-standings"],
+    "standings": ["standings", "mini-standings", "race"],
     "top_scorers": ["scorers"],
     "bracket": ["bracket"],
     "news": ["news"],

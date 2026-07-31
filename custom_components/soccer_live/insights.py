@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections import Counter
 from datetime import datetime, timezone
 
 
@@ -341,6 +342,171 @@ def player_watchlist(club: dict | None, names: str | list[str] | None) -> list[d
     return results
 
 
+def watched_player_names(names: str | list[str] | None) -> set[str]:
+    """Return normalized configured player names for event matching."""
+    if isinstance(names, str):
+        names = names.split(",")
+    return {
+        str(name).strip().casefold()
+        for name in (names or [])
+        if str(name).strip()
+    }
+
+
+def watchlist_event(event_data: dict | None, names: str | list[str] | None) -> dict | None:
+    """Describe a match event when it concerns a configured watched player."""
+    wanted = watched_player_names(names)
+    if not wanted:
+        return None
+    event_data = event_data or {}
+    candidates = [
+        event_data.get("player"),
+        event_data.get("athlete"),
+        event_data.get("player_name"),
+        *((event_data.get("athletes") or []) if isinstance(event_data.get("athletes"), list) else []),
+    ]
+    player = next(
+        (
+            str(candidate).strip()
+            for candidate in candidates
+            if str(candidate or "").strip().casefold() in wanted
+        ),
+        None,
+    )
+    if not player:
+        return None
+    return {
+        **event_data,
+        "player": player,
+        "watchlist": True,
+    }
+
+
+def _standing_groups(attributes: dict | None) -> list[dict]:
+    return [
+        group for group in (attributes or {}).get("standings_groups", [])
+        if isinstance(group, dict) and isinstance(group.get("standings"), list)
+    ]
+
+
+def standings_snapshot(
+    attributes: dict | None,
+    captured_at: str | None = None,
+) -> dict | None:
+    """Return a compact provider-neutral league-table snapshot."""
+    attributes = attributes or {}
+    groups = []
+    for group in _standing_groups(attributes):
+        rows = []
+        for row in group["standings"]:
+            if not isinstance(row, dict) or not row.get("team_name"):
+                continue
+            rows.append({
+                key: row.get(key)
+                for key in (
+                    "rank", "team_id", "team_name", "team_logo", "points",
+                    "games_played", "wins", "draws", "losses",
+                    "goals_for", "goals_against", "goal_difference",
+                    "zone_label", "zone_abbrev",
+                )
+                if row.get(key) not in (None, "")
+            })
+        if rows:
+            groups.append({"name": group.get("name") or "Standings", "standings": rows})
+    if not groups:
+        return None
+    return {
+        "captured_at": captured_at or datetime.now(timezone.utc).isoformat(),
+        "season": attributes.get("season"),
+        "league_name": attributes.get("league_name"),
+        "groups": groups,
+    }
+
+
+def update_standings_history(
+    history: list[dict] | None,
+    attributes: dict | None,
+    captured_at: str | None = None,
+    limit: int = 200,
+) -> list[dict]:
+    """Append a table snapshot only when its sporting content changed."""
+    snapshot = standings_snapshot(attributes, captured_at)
+    current = [item for item in (history or []) if isinstance(item, dict)]
+    if not snapshot:
+        return current[-limit:]
+
+    def fingerprint(item):
+        return [
+            [
+                (
+                    row.get("team_id") or row.get("team_name"),
+                    row.get("rank"),
+                    row.get("points"),
+                    row.get("games_played"),
+                    row.get("goal_difference"),
+                )
+                for row in group.get("standings", [])
+            ]
+            for group in item.get("groups", [])
+        ]
+
+    if current and fingerprint(current[-1]) == fingerprint(snapshot):
+        return current[-limit:]
+    return (current + [snapshot])[-limit:]
+
+
+def competition_race(attributes: dict | None) -> dict | None:
+    """Summarize gaps and attainable ranges for every table row."""
+    groups = _standing_groups(attributes)
+    if not groups:
+        return None
+    result_groups = []
+    for group in groups:
+        rows = group.get("standings") or []
+        numeric = []
+        for index, row in enumerate(rows):
+            try:
+                points = int(row.get("points"))
+                played = int(row.get("games_played"))
+            except (TypeError, ValueError):
+                continue
+            numeric.append((index, row, points, played))
+        if not numeric:
+            continue
+        leader_points = max(item[2] for item in numeric)
+        max_played = max(item[3] for item in numeric)
+        total_matches = max(2 * (len(rows) - 1), max_played)
+        race_rows = []
+        for position, row, points, played in numeric:
+            remaining = max(0, total_matches - played)
+            above_points = numeric[position - 1][2] if position > 0 and position - 1 < len(numeric) else points
+            race_rows.append({
+                "rank": row.get("rank", position + 1),
+                "team_id": row.get("team_id"),
+                "team_name": row.get("team_name"),
+                "team_logo": row.get("team_logo"),
+                "points": points,
+                "games_played": played,
+                "remaining": remaining,
+                "maximum_points": points + remaining * 3,
+                "gap_to_leader": max(0, leader_points - points),
+                "gap_to_above": max(0, above_points - points),
+                "zone_label": row.get("zone_label") or row.get("zone_abbrev"),
+            })
+        result_groups.append({
+            "name": group.get("name") or "Standings",
+            "total_matches": total_matches,
+            "rows": race_rows,
+        })
+    if not result_groups:
+        return None
+    return {
+        "season": (attributes or {}).get("season"),
+        "league_name": (attributes or {}).get("league_name"),
+        "groups": result_groups,
+    }
+
+
 def archive_snapshot(match: dict, provider: str) -> dict:
     """Create a bounded, recorder-friendly historical match record."""
     snapshot = {
@@ -478,11 +644,63 @@ def archive_summary(matches: list[dict] | None, team_name: str | None = None) ->
         for match in matches
         if match.get("competition_name") or match.get("league_name")
     })
+    results = [
+        (match, _tracked_result(match, team_name))
+        for match in matches
+    ]
+    results = [(match, result) for match, result in results if result is not None]
+    monthly: dict[str, list[dict]] = {}
+    opponents = Counter()
+    home = []
+    away = []
+    biggest_win = None
+    biggest_loss = None
+    tracked = str(team_name or "").casefold()
+    for match, (own, other) in results:
+        raw_date = str(match.get("date_iso") or match.get("date") or "")
+        month_match = re.search(r"((?:19|20)\d{2}-\d{2})", raw_date)
+        if month_match:
+            monthly.setdefault(month_match.group(1), []).append(match)
+        home_name = str(match.get("home_team") or "")
+        away_name = str(match.get("away_team") or "")
+        is_away = bool(tracked and tracked in away_name.casefold())
+        opponent = home_name if is_away else away_name
+        if opponent:
+            opponents[opponent] += 1
+        (away if is_away else home).append(match)
+        margin = own - other
+        candidate = {
+            "date": match.get("date_iso") or match.get("date"),
+            "opponent": opponent,
+            "score": f"{own}-{other}",
+            "margin": abs(margin),
+        }
+        if margin > 0 and (biggest_win is None or margin > biggest_win["margin"]):
+            biggest_win = candidate
+        if margin < 0 and (biggest_loss is None or -margin > biggest_loss["margin"]):
+            biggest_loss = candidate
+    seasons_report = [
+        {"season": season, **archive_statistics(matches, team_name, season=season)}
+        for season in seasons[:10]
+    ]
     return {
         "count": len(matches),
         "seasons": seasons,
         "competitions": competitions,
         "statistics": archive_statistics(matches, team_name),
+        "home": archive_statistics(home, team_name),
+        "away": archive_statistics(away, team_name),
+        "monthly": [
+            {"month": month, **archive_statistics(items, team_name)}
+            for month, items in sorted(monthly.items())[-18:]
+        ],
+        "season_reports": seasons_report,
+        "common_opponents": [
+            {"name": name, "matches": count}
+            for name, count in opponents.most_common(10)
+        ],
+        "biggest_win": biggest_win,
+        "biggest_loss": biggest_loss,
     }
 
 

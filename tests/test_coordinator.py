@@ -67,3 +67,24 @@ def test_coordinator_keeps_entry_scoped_snapshot_and_request_state():
     assert coordinator.snapshot_count == 1
     assert coordinator.main_cache == {}
     assert coordinator.api_endpoint_cache == {}
+
+
+def test_coordinator_keeps_bounded_changed_standings_history():
+    coordinator = coordinator_module.SoccerLiveEntryCoordinator(_Hass(), "entry")
+    attrs = {
+        "standings_groups": [{
+            "name": "League",
+            "standings": [
+                {"rank": 1, "team_name": "A", "points": 3, "games_played": 1},
+                {"rank": 2, "team_name": "B", "points": 0, "games_played": 1},
+            ],
+        }],
+    }
+    assert len(coordinator.update_standings("league-a", attrs)) == 1
+    assert len(coordinator.update_standings("league-a", attrs)) == 1
+    attrs["standings_groups"][0]["standings"][0]["points"] = 6
+    assert len(coordinator.update_standings("league-a", attrs)) == 2
+    assert len(coordinator.update_standings("league-b", attrs)) == 1
+    assert len(coordinator.update_standings("league-a", attrs)) == 2
+    assert len(coordinator._standings_histories) == 2
+    assert coordinator.standings_history_count == 3

@@ -1,0 +1,55 @@
+blueprint:
+  name: Soccer Live - Player watchlist notification
+  description: Send a notification for goals, cards, substitutions, lineup roles, injuries or transfers involving a configured watched player.
+  domain: automation
+  input:
+    notify_service:
+      name: Notify service
+      description: "Example: notify.mobile_app_iphone"
+      selector:
+        text:
+    team_name:
+      name: Team filter
+      description: Optional team name. Leave empty to receive every Soccer Live watchlist event.
+      default: ""
+      selector:
+        text:
+    title:
+      name: Notification title
+      default: "Player update"
+      selector:
+        text:
+
+trigger:
+  - platform: event
+    event_type: soccer_live_watchlist_event
+
+condition:
+  - condition: template
+    value_template: >-
+      {% set wanted = team_name | lower | trim %}
+      {% set actual = trigger.event.data.team | default('', true) | lower %}
+      {{ not wanted or wanted in actual }}
+
+variables:
+  team_name: !input team_name
+
+action:
+  - service: !input notify_service
+    data:
+      title: !input title
+      message: >-
+        {% set event = trigger.event.data %}
+        {{ event.player | default('Player', true) }} ·
+        {{ event.activity | default(event.source_event, true) }}
+        {% if event.minute is defined %} · {{ event.minute }}'{% endif %}
+        {% if event.home_team is defined and event.away_team is defined %}
+          · {{ event.home_team }} – {{ event.away_team }}
+        {% endif %}
+      data:
+        tag: >-
+          soccer-live-watchlist-{{ trigger.event.data.player | default('player', true) | slugify }}
+        group: soccer-live-watchlist
+
+mode: queued
+max: 20

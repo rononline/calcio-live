@@ -171,7 +171,7 @@
           "notify_match_status": "Notifications de fin, report et annulation",
           "quiet_hours_start": "Début des heures silencieuses (HH:MM ; vide = désactivé)",
           "quiet_hours_end": "Fin des heures silencieuses (HH:MM ; vide = désactivé)",
-          "player_watchlist": "Joueurs suivis (noms séparés par des virgules)"
+          "player_watchlist": "Joueurs suivis pour les données de carte et les événements (noms séparés par des virgules)"
         }
       }
     },

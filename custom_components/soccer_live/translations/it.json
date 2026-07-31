@@ -171,7 +171,7 @@
           "notify_match_status": "Notifiche per fine, rinvio e annullamento",
           "quiet_hours_start": "Inizio ore silenziose (HH:MM; vuoto = disattivato)",
           "quiet_hours_end": "Fine ore silenziose (HH:MM; vuoto = disattivato)",
-          "player_watchlist": "Giocatori seguiti (nomi separati da virgole)"
+          "player_watchlist": "Giocatori seguiti per dati della scheda ed eventi (nomi separati da virgole)"
         }
       }
     },

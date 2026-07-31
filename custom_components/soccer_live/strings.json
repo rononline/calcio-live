@@ -171,7 +171,7 @@
           "notify_match_status": "Notify for full time, postponements and cancellations",
           "quiet_hours_start": "Quiet hours start (HH:MM; blank = disabled)",
           "quiet_hours_end": "Quiet hours end (HH:MM; blank = disabled)",
-          "player_watchlist": "Player watchlist (comma-separated names)"
+          "player_watchlist": "Player watchlist for card data and events (comma-separated names)"
         }
       }
     },

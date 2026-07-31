@@ -59,6 +59,7 @@ def test_every_simulated_event_is_actually_emitted_by_the_integration():
         "soccer_live_match_started", "soccer_live_match_finished",
         "soccer_live_goal", "soccer_live_yellow_card", "soccer_live_red_card",
         "soccer_live_substitution", "soccer_live_lineup_available",
+        "soccer_live_watchlist_event",
     }
     emitted = state_and_detail | set(_load("match_contract").PHASE_EVENTS.values())
     for sim_type, (bus_event, _phase) in MODULE.EVENT_TYPES.items():

@@ -478,7 +478,8 @@ class SoccerLiveSensor(Entity):
         "standings_groups", "scorers", "assists", "articles", "rounds",
         "head_to_head", "league_info", "club", "club_changes", "card_defaults",
         "data_quality", "data_alerts", "matchday", "match_readiness", "match_archive",
-        "match_archive_summary", "player_watchlist",
+        "match_archive_summary", "player_watchlist", "standings_history",
+        "competition_race",
         "last_event", "last_goal_event", "last_card_event",
         "last_match_started_event", "last_match_finished_event",
     })
@@ -1013,6 +1014,7 @@ class SoccerLiveSensor(Entity):
         from .insights import (
             annotate_completeness,
             archive_summary,
+            competition_race,
             data_alerts,
             data_quality,
             matchday_summary,
@@ -1055,6 +1057,16 @@ class SoccerLiveSensor(Entity):
         summary = matchday_summary(matches)
         if summary:
             self._attributes["matchday"] = summary
+        race = competition_race(self._attributes)
+        if race:
+            self._attributes["competition_race"] = race
+            if self._coordinator:
+                history = self._coordinator.update_standings(
+                    self.unique_id or self.entity_id,
+                    self._attributes,
+                )
+                if history:
+                    self._attributes["standings_history"] = history
 
         entry = self.hass.config_entries.async_get_entry(self._config_entry_id)
         options = entry.options if entry else {}
@@ -1141,6 +1153,12 @@ class SoccerLiveSensor(Entity):
 
     def _fire_new_lineup_events(self, previous_attrs, current_attrs):
         from .club_changes import newly_available_lineups
+        from .insights import watched_player_names
+
+        entry = self.hass.config_entries.async_get_entry(self._config_entry_id)
+        watched = watched_player_names(
+            (entry.options if entry else {}).get("player_watchlist", "")
+        )
         for match in newly_available_lineups(previous_attrs, current_attrs):
             event_data = {
                 "entity_id": self.entity_id,
@@ -1154,6 +1172,32 @@ class SoccerLiveSensor(Entity):
             }
             if self._claim_bus_event("soccer_live_lineup_available", event_data):
                 self.hass.bus.async_fire("soccer_live_lineup_available", event_data)
+            for side, players in (
+                ("home", match.get("lineup_home") or []),
+                ("away", match.get("lineup_away") or []),
+            ):
+                for item in players:
+                    name = str(item.get("name") or item.get("player") or "").strip()
+                    if name.casefold() not in watched:
+                        continue
+                    role = (
+                        "substitute"
+                        if item.get("substitute") or item.get("bench")
+                        else "starter"
+                    )
+                    watched_data = {
+                        **event_data,
+                        "player": name,
+                        "team": match.get(f"{side}_team"),
+                        "activity": role,
+                        "watchlist": True,
+                    }
+                    if self._claim_bus_event(
+                        "soccer_live_watchlist_event", watched_data, ttl=7 * 86400
+                    ):
+                        self.hass.bus.async_fire(
+                            "soccer_live_watchlist_event", watched_data
+                        )
 
     def _publish_matches(self, matches):
         """Publish this sensor's match list to a shared per-entry store so other
@@ -1193,10 +1237,31 @@ class SoccerLiveSensor(Entity):
             if fire_bus and self._claim_bus_event(event_type, event_data):
                 self.hass.bus.fire(event_type, event_data)
                 await self._send_notification(event_type, event_data)
+                await self._fire_watchlist_event(event_type, event_data)
         self._pending_events = []
         if self._save_store_needed:
             self._save_store_needed = False
             await self._save_match_finished_store()
+
+    async def _fire_watchlist_event(self, event_type, event_data):
+        """Emit one normalized event for match actions by watched players."""
+        from .insights import watchlist_event
+
+        entry = self.hass.config_entries.async_get_entry(self._config_entry_id)
+        watched = (entry.options if entry else {}).get("player_watchlist", "")
+        payload = watchlist_event(event_data, watched)
+        if not payload:
+            return
+        activity = event_type.removeprefix("soccer_live_")
+        payload.update({
+            "activity": activity,
+            "source_event": event_type,
+            "config_entry_id": self._config_entry_id,
+        })
+        if self._claim_bus_event(
+            "soccer_live_watchlist_event", payload, ttl=7 * 86400
+        ):
+            self.hass.bus.async_fire("soccer_live_watchlist_event", payload)
 
     def _claim_bus_event(self, event_type, event_data, ttl=300):
         """Claim an event fingerprint shared by all sensors in this HA process."""
@@ -1741,9 +1806,17 @@ class SoccerLiveSensor(Entity):
                 if now - last < 300:
                     continue
                 SoccerLiveSensor._club_event_fingerprints[fingerprint] = now
-                event_data = {"entity_id": self.entity_id, "team_id": team_id, **change}
+                event_data = {
+                    "entity_id": self.entity_id,
+                    "config_entry_id": self._config_entry_id,
+                    "team_id": team_id,
+                    **change,
+                }
                 self.hass.bus.async_fire("soccer_live_club_change", event_data)
                 self.hass.bus.async_fire(f"soccer_live_{change['type']}", event_data)
+                await self._fire_watchlist_event(
+                    f"soccer_live_{change['type']}", event_data
+                )
             self._store_club(team_id, club)
 
     _club_cache: ClassVar[dict] = {}

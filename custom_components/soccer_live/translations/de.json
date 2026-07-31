@@ -171,7 +171,7 @@
           "notify_match_status": "Benachrichtigungen bei Abpfiff, Verschiebung und Absage",
           "quiet_hours_start": "Ruhezeit beginnt (HH:MM; leer = aus)",
           "quiet_hours_end": "Ruhezeit endet (HH:MM; leer = aus)",
-          "player_watchlist": "Spieler-Beobachtungsliste (Namen durch Kommas getrennt)"
+          "player_watchlist": "Spieler-Beobachtungsliste für Kartendaten und Ereignisse (Namen durch Kommas getrennt)"
         }
       }
     },
