@@ -142,6 +142,24 @@ def test_competition_race_exposes_gaps_and_maximum_points():
     assert feyenoord["maximum_points"] == 10
 
 
+def test_competition_race_uses_actual_schedule_and_games_in_hand():
+    standings = _standings()
+    standings["standings_groups"][0]["standings"][1]["games_played"] = 3
+    fixtures = [
+        _match(home_id=2, away_id=1, home_team="Feyenoord", away_team="Ajax"),
+        _match(event_id="2", home_id=2, away_id=3, home_team="Feyenoord", away_team="PSV"),
+        _match(event_id="old", state="post", home_id=2, away_id=1,
+               home_team="Feyenoord", away_team="Ajax", home_score=3, away_score=1),
+    ]
+    result = insights.competition_race(standings, fixtures)
+    feyenoord = result["groups"][0]["rows"][1]
+    assert result["groups"][0]["remaining_source"] == "fixtures"
+    assert feyenoord["remaining"] == 2
+    assert feyenoord["games_in_hand"] == 1
+    assert feyenoord["projected_points"] == 16
+    assert feyenoord["next_match_scenarios"] == {"win": 1, "draw": 2, "loss": 2}
+
+
 def test_archive_deduplicates_updates_and_is_newest_first():
     old = insights.archive_snapshot(
         _match(event_id="1", state="post", home_score=1, away_score=0),

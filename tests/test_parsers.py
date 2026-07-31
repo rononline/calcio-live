@@ -28,6 +28,7 @@ process_league_data = _scoreboard.process_league_data
 process_news_data = _scoreboard.process_news_data
 process_scorers_data = _scoreboard.process_scorers_data
 process_api_football_fixture_data = _api_football.process_fixture_data
+process_api_football_bracket_data = _api_football.process_bracket_data
 process_api_football_head_to_head = _api_football.process_head_to_head_data
 process_api_football_standings_data = _api_football.process_standings_data
 process_api_football_scorers_data = _api_football.process_scorers_data
@@ -239,6 +240,37 @@ class TestScoreboardParser:
 
 
 class TestApiFootballParser:
+    def test_fixture_rounds_are_derived_into_bracket(self):
+        data = {"response": [{
+            "fixture": {"id": 1, "date": "2026-05-20T19:00:00+00:00", "status": {"short": "FT"}},
+            "league": {"name": "Champions League", "logo": "ucl.png", "round": "Final"},
+            "teams": {"home": {"name": "Feyenoord", "logo": "f.png"}, "away": {"name": "Inter", "logo": "i.png"}},
+            "goals": {"home": 2, "away": 1},
+        }]}
+        result = process_api_football_bracket_data(data)
+        assert result["rounds"][0]["name"] == "Final"
+        assert result["rounds"][0]["ties"][0]["winner_team"] == "Feyenoord"
+        assert result["league_logo"] == "ucl.png"
+
+    def test_two_legged_fixture_round_is_combined_with_aggregate(self):
+        def leg(fixture_id, date, home, away, home_score, away_score):
+            return {
+                "fixture": {"id": fixture_id, "date": date, "status": {"short": "FT"}},
+                "league": {"name": "Champions League", "round": "Semi-finals"},
+                "teams": {"home": home, "away": away},
+                "goals": {"home": home_score, "away": away_score},
+            }
+        feyenoord = {"id": 1, "name": "Feyenoord", "logo": "f.png"}
+        inter = {"id": 2, "name": "Inter", "logo": "i.png"}
+        result = process_api_football_bracket_data({"response": [
+            leg(1, "2026-05-01T19:00:00+00:00", feyenoord, inter, 2, 0),
+            leg(2, "2026-05-08T19:00:00+00:00", inter, feyenoord, 1, 1),
+        ]})
+        tie = result["rounds"][0]["ties"][0]
+        assert "single" not in tie
+        assert tie["aggregate"] == "3-1"
+        assert tie["winner_team"] == "Feyenoord"
+
     def test_fixture_response_maps_to_match_model(self):
         data = {
             "response": [{

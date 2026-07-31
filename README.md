@@ -95,7 +95,7 @@ Configure via **Settings → Devices & Services → Soccer Live → Configure**:
 
 > **Sync status.** Each sensor also publishes a `sync_status` attribute — `initializing`, `fetching`, `ready`, `rate_limited`, `authentication_failed` or `provider_unavailable` — so a card can show concrete text (e.g. "fetching matches for the first time") during the first update instead of an empty card that looks like a misconfiguration.
 
-> **Native helpers.** Every entry also creates a **Sync status** sensor and
+> **Native helpers.** Every entry also creates **Sync status** and **Setup status** sensors and
 > native **Refresh now**, **Rebuild match archive** and **Play match replay**
 > buttons, plus a **Match event** entity. Team entries add a **Next kick-off**
 > sensor; API-Football entries add an **API requests remaining** sensor. These
@@ -114,8 +114,9 @@ Configure via **Settings → Devices & Services → Soccer Live → Configure**:
 > Each match also publishes `source_sections` with availability, provider and
 > update time for schedule, preview, lineup, timeline, statistics and review.
 > Each standings sensor additionally keeps up to 200 changed table snapshots in
-> `standings_history`; `competition_race` contains points gaps, remaining
-> matches and maximum attainable points. Both stay out of Recorder.
+> `standings_history`; `competition_race` contains points gaps, actual remaining
+> fixtures when available, games in hand, projections, result scenarios and
+> maximum attainable points. Both stay out of Recorder.
 
 ### Local archive and refresh services
 
@@ -138,6 +139,9 @@ automatically for its rebuild and clear buttons.
 The complete response from `export_match_archive` can be pasted into
 `import_match_archive`; a one-entry backup also remains portable when Home
 Assistant assigned the restored integration a different config-entry ID.
+The public [`soccer_live.archive.v1`](docs/archive-contract-v1.md) contract also
+accepts common Dutch `datum`/`thuis`/`uit`/`uitslag` fields from feyod or a
+personal MySQL sensor.
 
 ### Replay lab and restart-safe events
 
@@ -173,9 +177,12 @@ Current API-Football support:
 - `all_matches_today`
 - `standings`
 - `top_scorers`
+- Knockout brackets derived from fixture rounds for supported cup competitions
 - Optional match enrichment for `team_match`, `team_matches` and `team_matches_mixed` via fixture events, statistics, lineups and head-to-head history
 
-API-Football news and knockout brackets are not supported yet. News and bracket sensors remain ESPN-only.
+API-Football news is not supported. Bracket sensors are derived from the
+fixtures endpoint for known cup IDs; unsupported or regular competitions do not
+get an invented bracket.
 
 The integration caches API-Football calls to reduce quota use:
 - Main fixture/standings/scorers responses are shared by URL for up to 60 seconds. While a match is live, this cache follows `live_scan_interval` when that value is lower than 60 seconds.
@@ -522,7 +529,7 @@ mode: queued
 **Health/debug attributes**:
 `api_status`, `last_successful_update`, `last_error`, `request_count`, `last_request_time`, `sensor_type`, `start_date`, `end_date`, `provider`, `provider_capabilities`, `api_football_season`, `api_football_quota`
 
-**Provider capabilities**: the `provider_capabilities` attribute lists what the selected provider can supply, so cards and automations can adapt. ESPN: `fixtures`, `scores`, `standings`, `top_scorers`, `news`, `brackets`, `lineups`, `statistics`, `head_to_head`. API-Football also adds `top_assists`, `predictions`, `odds`, `injuries` and `xg` (but not `news`/`brackets`).
+**Provider capabilities**: the `provider_capabilities` attribute lists what the selected provider can supply, so cards and automations can adapt. ESPN: `fixtures`, `scores`, `standings`, `top_scorers`, `news`, `brackets`, `lineups`, `statistics`, `head_to_head`. API-Football also adds derived `brackets`, `top_assists`, `predictions`, `odds`, `injuries` and `xg` (but not `news`).
 
 ---
 

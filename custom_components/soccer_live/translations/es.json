@@ -172,6 +172,9 @@
           "quiet_hours_start": "Inicio de horas silenciosas (HH:MM; vacío = desactivado)",
           "quiet_hours_end": "Fin de horas silenciosas (HH:MM; vacío = desactivado)",
           "player_watchlist": "Seguimiento de jugadores para datos de tarjetas y eventos (nombres separados por comas)"
+          ,"club_name_override": "Sustituir nombre del club (vacío = proveedor)"
+          ,"club_coach_override": "Sustituir entrenador principal (vacío = proveedor)"
+          ,"club_venue_override": "Sustituir estadio (vacío = proveedor)"
         }
       }
     },
@@ -219,6 +222,9 @@
       },
       "runtime_status": {
         "name": "Estado de sincronización"
+      },
+      "setup_status": {
+        "name": "Estado de configuración"
       },
       "next_kickoff": {
         "name": "Próximo inicio"

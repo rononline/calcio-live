@@ -4,6 +4,7 @@ import logging
 import random
 import re
 import unicodedata
+from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from time import monotonic
 from typing import ClassVar
@@ -60,6 +61,8 @@ _SINGLE_FIXTURE_EVENT_TYPES = {
 _NOTIFICATION_TEXT = {
     "en": {
         "goal": "Goal!",
+        "goal_cancelled": "Goal cancelled",
+        "fixture_changed": "Fixture changed",
         "yellow_card": "Yellow card",
         "red_card": "Red card",
         "full_time": "Full time",
@@ -69,6 +72,8 @@ _NOTIFICATION_TEXT = {
     },
     "nl": {
         "goal": "Doelpunt!",
+        "goal_cancelled": "Doelpunt afgekeurd",
+        "fixture_changed": "Wedstrijd gewijzigd",
         "yellow_card": "Gele kaart",
         "red_card": "Rode kaart",
         "full_time": "Einde wedstrijd",
@@ -78,6 +83,8 @@ _NOTIFICATION_TEXT = {
     },
     "de": {
         "goal": "Tor!",
+        "goal_cancelled": "Tor aberkannt",
+        "fixture_changed": "Spiel geändert",
         "yellow_card": "Gelbe Karte",
         "red_card": "Rote Karte",
         "full_time": "Abpfiff",
@@ -87,6 +94,8 @@ _NOTIFICATION_TEXT = {
     },
     "fr": {
         "goal": "But !",
+        "goal_cancelled": "But annulé",
+        "fixture_changed": "Match modifié",
         "yellow_card": "Carton jaune",
         "red_card": "Carton rouge",
         "full_time": "Fin du match",
@@ -96,6 +105,8 @@ _NOTIFICATION_TEXT = {
     },
     "es": {
         "goal": "¡Gol!",
+        "goal_cancelled": "Gol anulado",
+        "fixture_changed": "Partido modificado",
         "yellow_card": "Tarjeta amarilla",
         "red_card": "Tarjeta roja",
         "full_time": "Final del partido",
@@ -105,6 +116,8 @@ _NOTIFICATION_TEXT = {
     },
     "it": {
         "goal": "Gol!",
+        "goal_cancelled": "Gol annullato",
+        "fixture_changed": "Partita modificata",
         "yellow_card": "Cartellino giallo",
         "red_card": "Cartellino rosso",
         "full_time": "Fine partita",
@@ -114,6 +127,8 @@ _NOTIFICATION_TEXT = {
     },
     "pt": {
         "goal": "Golo!",
+        "goal_cancelled": "Golo anulado",
+        "fixture_changed": "Jogo alterado",
         "yellow_card": "Cartão amarelo",
         "red_card": "Cartão vermelho",
         "full_time": "Fim do jogo",
@@ -143,6 +158,12 @@ KNOCKOUT_LEAGUES = {
     "esp.copa_del_rey",
     "ger.dfb_pokal",
     "fra.coupe_de_france",
+}
+
+# API-Football league IDs for widely used cup competitions. Their fixtures
+# endpoint contains round labels from which Soccer Live derives a bracket.
+API_FOOTBALL_KNOCKOUT_LEAGUES = {
+    "1", "2", "3", "4", "45", "48", "66", "81", "90", "137", "143", "848",
 }
 
 
@@ -309,7 +330,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
                     )
                 )
                 # Auto-add bracket sensor for knockout competitions
-                if competition_code in KNOCKOUT_LEAGUES:
+                if competition_code in KNOCKOUT_LEAGUES or (
+                    provider == PROVIDER_API_FOOTBALL
+                    and str(competition_code) in API_FOOTBALL_KNOCKOUT_LEAGUES
+                ):
                     sensors.append(
                         SoccerLiveSensor(
                             hass, f"soccerlive_bracket_{competition_name}", competition_code, "bracket",
@@ -332,7 +356,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 def _runtime_sensors(entry, hass, provider, team_name):
     """Create compact entry-level sensors for dashboards and automations."""
     coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
-    kinds = ["runtime_status"]
+    kinds = ["runtime_status", "setup_status"]
     if team_name:
         kinds.append("next_kickoff")
     if provider == PROVIDER_API_FOOTBALL:
@@ -359,6 +383,7 @@ class SoccerLiveRuntimeSensor(Entity):
         self._attr_unique_id = f"{entry.entry_id}_{kind}"
         self._attr_icon = {
             "runtime_status": "mdi:sync",
+            "setup_status": "mdi:check-decagram-outline",
             "next_kickoff": "mdi:calendar-clock",
             "api_quota_remaining": "mdi:gauge",
         }[kind]
@@ -397,6 +422,17 @@ class SoccerLiveRuntimeSensor(Entity):
 
     @property
     def state(self):
+        if self._kind == "setup_status":
+            if not self._source_entities():
+                return "initializing"
+            if any(getattr(entity, "_auth_failed", False) for entity in self._source_entities()):
+                return "action_required"
+            if not any((getattr(entity, "_attributes", {}) or {}).get("matches")
+                       or (getattr(entity, "_attributes", {}) or {}).get("standings")
+                       or (getattr(entity, "_attributes", {}) or {}).get("club")
+                       for entity in self._source_entities()):
+                return "waiting_for_data"
+            return "ready"
         if self._kind == "runtime_status":
             if self._coordinator.is_fetching:
                 return "fetching"
@@ -451,6 +487,16 @@ class SoccerLiveRuntimeSensor(Entity):
 
     @property
     def extra_state_attributes(self):
+        if self._kind == "setup_status":
+            entities = self._source_entities()
+            return {
+                "provider": self._provider,
+                "configured_entities": len(entities),
+                "entities_with_data": sum(bool(getattr(entity, "_attributes", {})) for entity in entities),
+                "summary_enrichment": self._entry.options.get("enable_summary_enrichment", True),
+                "club_data": self._entry.options.get("enable_club_data", True),
+                "config_entry_id": self._entry.entry_id,
+            }
         if self._kind != "api_quota_remaining":
             return {
                 "provider": self._provider,
@@ -984,6 +1030,8 @@ class SoccerLiveSensor(Entity):
         await self._enrich_club_data()
         await self._enrich_api_football_assists()
         await self._apply_insights()
+        from .fixture_changes import fixture_changes
+        self._pending_events.extend(fixture_changes(previous_attrs, self._attributes))
         self._fire_new_lineup_events(previous_attrs, self._attributes)
         await self._flush_pending_events()
         self._publish_matches(self._attributes.get("matches") or [])
@@ -1057,7 +1105,15 @@ class SoccerLiveSensor(Entity):
         summary = matchday_summary(matches)
         if summary:
             self._attributes["matchday"] = summary
-        race = competition_race(self._attributes)
+        fixtures = list(matches)
+        entry_data = self.hass.data.get(DOMAIN, {}).get(self._config_entry_id, {})
+        for source_matches in entry_data.get("match_sources", {}).values():
+            fixtures.extend(source_matches or [])
+        deduplicated_fixtures = {
+            str(match.get("canonical_id") or match.get("event_id") or id(match)): match
+            for match in fixtures
+        }
+        race = competition_race(self._attributes, list(deduplicated_fixtures.values()))
         if race:
             self._attributes["competition_race"] = race
             if self._coordinator:
@@ -1311,7 +1367,7 @@ class SoccerLiveSensor(Entity):
         self._attributes["last_event_timestamp"] = timestamp
         self._attributes["last_event"] = payload
 
-        if event_type == "soccer_live_goal":
+        if event_type in ("soccer_live_goal", "soccer_live_goal_cancelled"):
             self._attributes["last_goal_event"] = payload
         elif event_type in ("soccer_live_yellow_card", "soccer_live_red_card"):
             self._attributes["last_card_event"] = payload
@@ -1329,7 +1385,7 @@ class SoccerLiveSensor(Entity):
             if not notify_service:
                 return
             category = (
-                "goals" if event_type == "soccer_live_goal"
+                "goals" if event_type in ("soccer_live_goal", "soccer_live_goal_cancelled")
                 else "cards" if event_type in ("soccer_live_yellow_card", "soccer_live_red_card")
                 else "status"
             )
@@ -1346,6 +1402,9 @@ class SoccerLiveSensor(Entity):
             if event_type == "soccer_live_goal":
                 title = f"⚽ {text['goal']} {event_data.get('home_team','')} {event_data.get('home_score','')} - {event_data.get('away_score','')} {event_data.get('away_team','')}"
                 message = f"{event_data.get('player') or text['unknown']} · {event_data.get('minute','')}"
+            elif event_type == "soccer_live_goal_cancelled":
+                title = f"↩️ {text['goal_cancelled']} {event_data.get('home_team','')} {event_data.get('home_score','')} - {event_data.get('away_score','')} {event_data.get('away_team','')}"
+                message = event_data.get("team") or event_data.get("league_name", "")
             elif event_type == "soccer_live_yellow_card":
                 title = f"🟨 {text['yellow_card']} · {event_data.get('home_team','')} vs {event_data.get('away_team','')}"
                 message = f"{event_data.get('player') or text['unknown']} · {event_data.get('minute','')}"
@@ -1361,6 +1420,17 @@ class SoccerLiveSensor(Entity):
             elif event_type == "soccer_live_match_cancelled":
                 title = f"❌ {text['cancelled']} · {event_data.get('home_team','')} vs {event_data.get('away_team','')}"
                 message = event_data.get('league_name','')
+            elif event_type in {
+                "soccer_live_kickoff_changed",
+                "soccer_live_venue_changed",
+                "soccer_live_opponent_changed",
+            }:
+                title = f"🔄 {text['fixture_changed']} · {event_data.get('home_team','')} vs {event_data.get('away_team','')}"
+                message = (
+                    event_data.get("date")
+                    or event_data.get("venue")
+                    or event_data.get("league_name", "")
+                )
             else:
                 return
             domain, service = notify_service.split(".", 1) if "." in notify_service else ("notify", notify_service)
@@ -1546,6 +1616,9 @@ class SoccerLiveSensor(Entity):
 
         if self._sensor_type == "top_scorers" and self._code:
             return f"{self.api_football_base_url}/players/topscorers?{urlencode({'league': self._code, 'season': season})}"
+
+        if self._sensor_type == "bracket" and self._code:
+            return f"{self.api_football_base_url}/fixtures?{urlencode({'league': self._code, 'season': season})}"
 
         self._last_error = f"{self._sensor_type} is not supported by API-Football provider yet"
         return None
@@ -1758,7 +1831,7 @@ class SoccerLiveSensor(Entity):
         # avoiding four API requests after every restart.
         cached = self._get_cached_club(team_id)
         if cached is not None:
-            self._attributes["club"] = cached
+            self._attributes["club"] = self._apply_club_overrides(cached)
             return
 
         from .parsers.api_football import (
@@ -1797,7 +1870,7 @@ class SoccerLiveSensor(Entity):
         if club:
             from .club_changes import diff_club
             changes = diff_club(previous_club, club)
-            self._attributes["club"] = club
+            self._attributes["club"] = self._apply_club_overrides(club)
             self._attributes["club_changes"] = changes
             for change in changes:
                 fingerprint = f"{team_id}:{json.dumps(change, sort_keys=True, default=str)}"
@@ -1818,6 +1891,42 @@ class SoccerLiveSensor(Entity):
                     f"soccer_live_{change['type']}", event_data
                 )
             self._store_club(team_id, club)
+
+    def _apply_club_overrides(self, provider_club):
+        """Apply optional display overrides while retaining provider provenance."""
+        club = deepcopy(provider_club or {})
+        entry = self.hass.config_entries.async_get_entry(self._config_entry_id)
+        options = entry.options if entry else {}
+        profile = club.setdefault("profile", {})
+        fields = {
+            "profile.name": (profile, "name", "club_name_override"),
+            "coach": (club, "coach", "club_coach_override"),
+            "profile.venue": (profile, "venue", "club_venue_override"),
+        }
+        sources = {}
+        conflicts = []
+        for field, (container, key, option_key) in fields.items():
+            provider_value = container.get(key)
+            override = str(options.get(option_key) or "").strip()
+            active = bool(override)
+            if active:
+                container[key] = override
+            sources[field] = {
+                "provider": "manual" if active else "api_football",
+                "provider_value": provider_value,
+                "value": container.get(key),
+                "overridden": active,
+            }
+            if active and provider_value and str(provider_value) != override:
+                conflicts.append({
+                    "field": field,
+                    "selected": override,
+                    "provider": "api_football",
+                    "provider_value": provider_value,
+                })
+        club["field_sources"] = sources
+        club["source_conflicts"] = conflicts
+        return club
 
     _club_cache: ClassVar[dict] = {}
     _club_store = None
@@ -2596,6 +2705,15 @@ class SoccerLiveSensor(Entity):
                     self._dispatch_goal_event(match.get("home_team", "N/A"), match.get("away_team", "N/A"), goals_scored, home_score, away_score, match, goal_scorers, events)
                     dispatched.update(home_strings)
                     dispatched.add(synthetic_key)
+            if home_score < prev_home:
+                self._dispatch_goal_cancelled_event(
+                    match, "home", prev_home - home_score, prev_home, prev_away, events
+                )
+                dispatched.difference_update({
+                    key for key in dispatched
+                    if str(key).startswith("h_") and str(key)[2:].isdigit()
+                    and int(str(key)[2:]) > home_score
+                })
             if away_score > prev_away:
                 goals_scored = away_score - prev_away
                 away_strings = self._pick_goal_strings(curr_details, dispatched, away_abbrev, goals_scored)
@@ -2605,9 +2723,40 @@ class SoccerLiveSensor(Entity):
                     self._dispatch_goal_event(match.get("away_team", "N/A"), match.get("home_team", "N/A"), goals_scored, home_score, away_score, match, goal_scorers, events)
                     dispatched.update(away_strings)
                     dispatched.add(synthetic_key)
+            if away_score < prev_away:
+                self._dispatch_goal_cancelled_event(
+                    match, "away", prev_away - away_score, prev_home, prev_away, events
+                )
+                dispatched.difference_update({
+                    key for key in dispatched
+                    if str(key).startswith("a_") and str(key)[2:].isdigit()
+                    and int(str(key)[2:]) > away_score
+                })
             self._previous_scores[match_id]["home"] = home_score
             self._previous_scores[match_id]["away"] = away_score
             self._previous_scores[match_id]["match_details"] = curr_details.copy()
+
+    def _dispatch_goal_cancelled_event(
+        self, match, side, removed, previous_home, previous_away, events
+    ):
+        """Collect a score-correction event, commonly caused by VAR."""
+        team = match.get(f"{side}_team", "N/A")
+        events.append(("soccer_live_goal_cancelled", {
+            "event_id": match.get("event_id"),
+            "team": team,
+            "goals_removed": removed,
+            "reason": "score_correction",
+            "home_team": match.get("home_team", "N/A"),
+            "away_team": match.get("away_team", "N/A"),
+            "previous_home_score": previous_home,
+            "previous_away_score": previous_away,
+            "home_score": match.get("home_score", 0),
+            "away_score": match.get("away_score", 0),
+            "clock": match.get("clock", "N/A"),
+            "league_name": match.get("league_name", "N/A"),
+            "competition_code": self._code,
+            "sensor_name": self._name,
+        }))
 
     @staticmethod
     def _is_scored_goal_detail(d):
@@ -2668,6 +2817,7 @@ class SoccerLiveSensor(Entity):
             players = [g.get("player") if isinstance(g, dict) else g for g in (goal_scorers or [])]
 
             event_data = {
+                "event_id": match.get("event_id"),
                 "team": scoring_team,
                 "opponent": opponent_team,
                 "goals_scored": goals_count,
@@ -3123,6 +3273,26 @@ class SoccerLiveSensor(Entity):
         from .parsers.scoreboard import process_match_data, process_news_data
         if self._provider == PROVIDER_API_FOOTBALL:
             from .parsers.api_football import process_fixture_data
+
+            if self._sensor_type == "bracket":
+                from .parsers.api_football import (
+                    process_bracket_data as process_api_bracket,
+                )
+                bracket = process_api_bracket(data)
+                rounds = bracket.get("rounds", [])
+                state = (
+                    f"{rounds[-1].get('name')} ({rounds[-1].get('size')} teams)"
+                    if rounds else "Bracket unavailable"
+                )
+                return {
+                    "state": state,
+                    "attributes": {
+                        **bracket,
+                        "competition_code": self._code,
+                        "provider": PROVIDER_API_FOOTBALL,
+                    },
+                    "events": events,
+                }
 
             if self._sensor_type == "standings":
                 from .parsers.api_football import process_standings_data

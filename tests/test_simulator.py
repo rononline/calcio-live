@@ -58,6 +58,8 @@ def test_every_simulated_event_is_actually_emitted_by_the_integration():
     state_and_detail = {
         "soccer_live_match_started", "soccer_live_match_finished",
         "soccer_live_goal", "soccer_live_yellow_card", "soccer_live_red_card",
+        "soccer_live_goal_cancelled", "soccer_live_kickoff_changed",
+        "soccer_live_venue_changed", "soccer_live_opponent_changed",
         "soccer_live_substitution", "soccer_live_lineup_available",
         "soccer_live_watchlist_event",
     }

@@ -455,8 +455,10 @@ def update_standings_history(
     return (current + [snapshot])[-limit:]
 
 
-def competition_race(attributes: dict | None) -> dict | None:
-    """Summarize gaps and attainable ranges for every table row."""
+def competition_race(
+    attributes: dict | None, fixtures: list[dict] | None = None
+) -> dict | None:
+    """Summarize a table race, preferring the actual remaining schedule."""
     groups = _standing_groups(attributes)
     if not groups:
         return None
@@ -476,10 +478,64 @@ def competition_race(attributes: dict | None) -> dict | None:
         leader_points = max(item[2] for item in numeric)
         max_played = max(item[3] for item in numeric)
         total_matches = max(2 * (len(rows) - 1), max_played)
+        remaining_by_id: dict[str, int] = {}
+        remaining_by_name: dict[str, int] = {}
+        form_points: dict[str, list[int]] = {}
+        relevant_fixtures = []
+        league_name = str((attributes or {}).get("league_name") or "").lower()
+        for match in fixtures or []:
+            match_league = str(
+                match.get("league_name") or match.get("competition_name") or ""
+            ).lower()
+            if league_name and match_league and match_league != league_name:
+                continue
+            relevant_fixtures.append(match)
+            home_id = str(match.get("home_id") or "")
+            away_id = str(match.get("away_id") or "")
+            home_name = str(match.get("home_team") or "").strip().lower()
+            away_name = str(match.get("away_team") or "").strip().lower()
+            if match.get("state") == "pre":
+                if home_id:
+                    remaining_by_id[home_id] = remaining_by_id.get(home_id, 0) + 1
+                if away_id:
+                    remaining_by_id[away_id] = remaining_by_id.get(away_id, 0) + 1
+                if home_name:
+                    remaining_by_name[home_name] = remaining_by_name.get(home_name, 0) + 1
+                if away_name:
+                    remaining_by_name[away_name] = remaining_by_name.get(away_name, 0) + 1
+            elif match.get("state") == "post":
+                try:
+                    home_score = int(match.get("home_score"))
+                    away_score = int(match.get("away_score"))
+                except (TypeError, ValueError):
+                    continue
+                home_points = 3 if home_score > away_score else 1 if home_score == away_score else 0
+                away_points = 3 if away_score > home_score else 1 if home_score == away_score else 0
+                for key, points in ((home_id or home_name, home_points), (away_id or away_name, away_points)):
+                    if key:
+                        form_points.setdefault(key, []).append(points)
+        has_schedule = bool(relevant_fixtures and (remaining_by_id or remaining_by_name))
         race_rows = []
         for position, row, points, played in numeric:
-            remaining = max(0, total_matches - played)
+            team_id = str(row.get("team_id") or "")
+            team_name = str(row.get("team_name") or "").strip().lower()
+            theoretical_remaining = max(0, total_matches - played)
+            remaining = (
+                remaining_by_id.get(team_id, remaining_by_name.get(team_name, 0))
+                if has_schedule
+                else theoretical_remaining
+            )
+            recent = (form_points.get(team_id) or form_points.get(team_name) or [])[-5:]
+            projected_points = points
+            if recent and remaining:
+                projected_points += round((sum(recent) / len(recent)) * remaining)
             above_points = numeric[position - 1][2] if position > 0 and position - 1 < len(numeric) else points
+            scenario_points = {"win": points + 3, "draw": points + 1, "loss": points}
+            scenario_rank = {
+                outcome: 1 + sum(1 for _, other, other_points, _ in numeric
+                    if other is not row and other_points > value)
+                for outcome, value in scenario_points.items()
+            }
             race_rows.append({
                 "rank": row.get("rank", position + 1),
                 "team_id": row.get("team_id"),
@@ -488,7 +544,10 @@ def competition_race(attributes: dict | None) -> dict | None:
                 "points": points,
                 "games_played": played,
                 "remaining": remaining,
+                "games_in_hand": max(0, max_played - played),
                 "maximum_points": points + remaining * 3,
+                "projected_points": projected_points,
+                "next_match_scenarios": scenario_rank,
                 "gap_to_leader": max(0, leader_points - points),
                 "gap_to_above": max(0, above_points - points),
                 "zone_label": row.get("zone_label") or row.get("zone_abbrev"),
@@ -496,6 +555,7 @@ def competition_race(attributes: dict | None) -> dict | None:
         result_groups.append({
             "name": group.get("name") or "Standings",
             "total_matches": total_matches,
+            "remaining_source": "fixtures" if has_schedule else "table_format",
             "rows": race_rows,
         })
     if not result_groups:

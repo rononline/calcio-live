@@ -68,6 +68,7 @@ trigger:
   - trigger: event
     event_type:
       - soccer_live_goal
+      - soccer_live_goal_cancelled
       - soccer_live_yellow_card
       - soccer_live_red_card
       - soccer_live_substitution

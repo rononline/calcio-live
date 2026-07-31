@@ -132,6 +132,131 @@ def _as_int(value):
         return 0
 
 
+def process_bracket_data(data):
+    """Derive the card's provider-neutral knockout bracket from fixtures."""
+    round_aliases = {
+        "round of 64": "Round of 64",
+        "round of 32": "Round of 32",
+        "round of 16": "Round of 16",
+        "eighth-finals": "Round of 16",
+        "quarter-finals": "Quarterfinals",
+        "quarterfinals": "Quarterfinals",
+        "semi-finals": "Semifinals",
+        "semifinals": "Semifinals",
+        "3rd place final": "Third Place",
+        "final": "Final",
+    }
+    groups = {}
+    league_name = ""
+    league_logo = ""
+    for item in (data or {}).get("response", []) or []:
+        fixture = _as_dict(item.get("fixture"))
+        league = _as_dict(item.get("league"))
+        raw_round = str(league.get("round") or "").strip()
+        lowered = raw_round.lower()
+        round_name = next(
+            (canonical for token, canonical in round_aliases.items() if token in lowered),
+            None,
+        )
+        if not round_name:
+            continue
+        league_name = league.get("name") or league_name
+        league_logo = league.get("logo") or league_logo
+        teams = _as_dict(item.get("teams"))
+        goals = _as_dict(item.get("goals"))
+        home = _as_dict(teams.get("home"))
+        away = _as_dict(teams.get("away"))
+        status = _as_dict(fixture.get("status"))
+        state = _status_state(status.get("short"))
+        home_score = goals.get("home")
+        away_score = goals.get("away")
+        winner = home.get("name") if home.get("winner") is True else (
+            away.get("name") if away.get("winner") is True else None
+        )
+        if state == "post" and home_score is not None and away_score is not None:
+            if not winner and int(home_score) > int(away_score):
+                winner = home.get("name")
+            elif not winner and int(away_score) > int(home_score):
+                winner = away.get("name")
+        tie = {
+            "team_a": {"name": home.get("name", ""), "logo": home.get("logo", ""), "abbrev": ""},
+            "team_b": {"name": away.get("name", ""), "logo": away.get("logo", ""), "abbrev": ""},
+            "single": {
+                "home_team": home.get("name", ""),
+                "home_score": home_score,
+                "away_team": away.get("name", ""),
+                "away_score": away_score,
+                "date": fixture.get("date", ""),
+                "state": state,
+            },
+            "leg1": None,
+            "leg2": None,
+            "first_leg_date": fixture.get("date", ""),
+            "winner_team": winner,
+            "aggregate": None,
+            "tied": state == "post" and home_score == away_score,
+            "completed": state == "post",
+        }
+        pair_key = frozenset((
+            str(home.get("id") or home.get("name")),
+            str(away.get("id") or away.get("name")),
+        ))
+        round_ties = groups.setdefault(round_name, {})
+        previous = round_ties.get(pair_key)
+        if previous is None:
+            round_ties[pair_key] = tie
+        elif previous.get("single"):
+            previous["leg1"] = previous.pop("single")
+            previous["leg2"] = tie["single"]
+            scores = {
+                previous["team_a"]["name"]: 0,
+                previous["team_b"]["name"]: 0,
+            }
+            complete = True
+            for leg in (previous["leg1"], previous["leg2"]):
+                if (
+                    leg.get("state") != "post"
+                    or leg.get("home_score") is None
+                    or leg.get("away_score") is None
+                ):
+                    complete = False
+                    continue
+                scores[leg["home_team"]] = (
+                    scores.get(leg["home_team"], 0) + int(leg["home_score"])
+                )
+                scores[leg["away_team"]] = (
+                    scores.get(leg["away_team"], 0) + int(leg["away_score"])
+                )
+            previous["completed"] = complete
+            if complete:
+                team_a = previous["team_a"]["name"]
+                team_b = previous["team_b"]["name"]
+                a_score, b_score = scores.get(team_a, 0), scores.get(team_b, 0)
+                previous["aggregate"] = f"{a_score}-{b_score}"
+                previous["winner_team"] = (
+                    team_a if a_score > b_score
+                    else team_b if b_score > a_score
+                    else tie.get("winner_team")
+                )
+                previous["tied"] = a_score == b_score
+
+    order = ["Round of 64", "Round of 32", "Round of 16", "Quarterfinals", "Semifinals", "Third Place", "Final"]
+    rounds = []
+    for name in order:
+        ties = sorted(
+            groups.get(name, {}).values(),
+            key=lambda tie: tie.get("first_leg_date") or "",
+        )
+        if ties:
+            rounds.append({"name": name, "size": len(ties) * 2, "ties": ties})
+    return {
+        "rounds": rounds,
+        "ties_count": sum(len(group["ties"]) for group in rounds),
+        "league_name": league_name,
+        "league_logo": league_logo,
+    }
+
+
 def _minute(time_info):
     """Return (elapsed, extra) from an API-Football time object.
 

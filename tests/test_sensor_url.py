@@ -117,6 +117,54 @@ def _sensor(sensor_type, code="ned.1", team_name=None, team_id="1234", provider=
     return sensor
 
 
+def test_score_correction_emits_cancelled_goal_and_allows_reaward():
+    sensor = _sensor("team_match")
+    base = {
+        "event_id": "fixture-var",
+        "state": "in",
+        "home_team": "Feyenoord",
+        "away_team": "Sparta",
+        "home_abbrev": "FEY",
+        "away_abbrev": "SPA",
+        "away_score": 0,
+        "match_details": [],
+    }
+    events = []
+    sensor._detect_and_dispatch_goals([{**base, "home_score": 0}], events)
+    sensor._detect_and_dispatch_goals([{**base, "home_score": 1}], events)
+    sensor._detect_and_dispatch_goals([{**base, "home_score": 0}], events)
+    sensor._detect_and_dispatch_goals([{**base, "home_score": 1}], events)
+
+    assert [event[0] for event in events] == [
+        "soccer_live_goal",
+        "soccer_live_goal_cancelled",
+        "soccer_live_goal",
+    ]
+    assert events[1][1]["previous_home_score"] == 1
+    assert events[1][1]["home_score"] == 0
+
+
+def test_club_overrides_keep_provider_provenance_and_conflicts():
+    sensor = _sensor("team_match", provider="api_football")
+    entry = types.SimpleNamespace(options={
+        "club_coach_override": "Giovanni van Bronckhorst",
+        "club_venue_override": "De Kuip",
+    })
+    sensor.hass = types.SimpleNamespace(config_entries=types.SimpleNamespace(
+        async_get_entry=lambda _entry_id: entry,
+    ))
+    result = sensor._apply_club_overrides({
+        "profile": {"name": "Feyenoord", "venue": "Stadion Feijenoord"},
+        "coach": "Robin van Persie",
+    })
+    assert result["coach"] == "Giovanni van Bronckhorst"
+    assert result["field_sources"]["coach"]["provider_value"] == "Robin van Persie"
+    assert result["field_sources"]["coach"]["overridden"] is True
+    assert {item["field"] for item in result["source_conflicts"]} == {
+        "coach", "profile.venue",
+    }
+
+
 def test_bus_events_are_deduplicated_across_sensors_in_one_entry():
     SoccerLiveSensor._bus_event_fingerprints = {}
     first = _sensor("team_matches")

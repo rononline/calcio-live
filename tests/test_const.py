@@ -63,9 +63,9 @@ def test_espn_capabilities():
 def test_api_football_capabilities():
     for cap in ("predictions", "odds", "live_odds", "injuries", "top_assists", "xg", "club"):
         assert provider_supports(PROVIDER_API_FOOTBALL, cap) is True
-    # API-Football has no news/brackets in Soccer Live.
+    # API-Football has no news; brackets are derived from fixture rounds.
     assert provider_supports(PROVIDER_API_FOOTBALL, "news") is False
-    assert provider_supports(PROVIDER_API_FOOTBALL, "brackets") is False
+    assert provider_supports(PROVIDER_API_FOOTBALL, "brackets") is True
 
 
 def test_club_and_live_odds_are_api_football_only():

@@ -22,7 +22,7 @@ def _read_manifest_version():
 # integration, and detect breaking attribute-shape changes.
 INTEGRATION_VERSION = _read_manifest_version()
 # Bump when the published attribute shape changes in a way a card must handle.
-DATA_SCHEMA_VERSION = 6
+DATA_SCHEMA_VERSION = 7
 CONF_COMPETITION_CODE = "competition_code"
 CONF_PROVIDER = "provider"
 CONF_API_FOOTBALL_KEY = "api_football_key"
@@ -43,7 +43,7 @@ PROVIDER_CAPABILITIES = {
     ),
     PROVIDER_API_FOOTBALL: (
         "fixtures", "scores", "standings", "top_scorers", "top_assists",
-        "lineups", "statistics", "head_to_head",
+        "brackets", "lineups", "statistics", "head_to_head",
         "predictions", "odds", "live_odds", "injuries", "xg", "club",
     ),
 }

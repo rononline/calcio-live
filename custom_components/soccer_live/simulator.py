@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 EVENT_TYPES = {
     "match_started": ("soccer_live_match_started", "first_half"),
     "goal": ("soccer_live_goal", None),
+    "goal_cancelled": ("soccer_live_goal_cancelled", None),
     "yellow_card": ("soccer_live_yellow_card", None),
     "red_card": ("soccer_live_red_card", None),
     "substitution": ("soccer_live_substitution", None),
@@ -15,6 +16,9 @@ EVENT_TYPES = {
     "watchlist": ("soccer_live_watchlist_event", None),
     "postponed": ("soccer_live_match_postponed", "postponed"),
     "cancelled": ("soccer_live_match_cancelled", "cancelled"),
+    "kickoff_changed": ("soccer_live_kickoff_changed", "scheduled"),
+    "venue_changed": ("soccer_live_venue_changed", "scheduled"),
+    "opponent_changed": ("soccer_live_opponent_changed", "scheduled"),
 }
 
 

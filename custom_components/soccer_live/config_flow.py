@@ -636,6 +636,9 @@ class SoccerLiveOptionsFlow(config_entries.OptionsFlow):
         quiet_hours_start = self.config_entry.options.get("quiet_hours_start", "")
         quiet_hours_end = self.config_entry.options.get("quiet_hours_end", "")
         player_watchlist = self.config_entry.options.get("player_watchlist", "")
+        club_name_override = self.config_entry.options.get("club_name_override", "")
+        club_coach_override = self.config_entry.options.get("club_coach_override", "")
+        club_venue_override = self.config_entry.options.get("club_venue_override", "")
         enable_summary_enrichment = self.config_entry.options.get("enable_summary_enrichment", True)
         enable_club_data = self.config_entry.options.get("enable_club_data", True)
         enable_live_odds = self.config_entry.options.get("enable_live_odds", False)
@@ -670,6 +673,9 @@ class SoccerLiveOptionsFlow(config_entries.OptionsFlow):
         # Club enrichment (profile/coach/squad/transfers) is API-Football only.
         if supports_club:
             schema[vol.Optional("enable_club_data", default=enable_club_data)] = bool
+            schema[vol.Optional("club_name_override", default=club_name_override)] = str
+            schema[vol.Optional("club_coach_override", default=club_coach_override)] = str
+            schema[vol.Optional("club_venue_override", default=club_venue_override)] = str
         # Live in-play odds (API-Football) — off by default because it polls often.
         if supports_live_odds:
             schema[vol.Optional("enable_live_odds", default=enable_live_odds)] = bool

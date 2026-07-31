@@ -1,5 +1,17 @@
 # Changelog
 
+## v3.15.0 (2026-07-31)
+
+- live corrections: emit `soccer_live_goal_cancelled` when a provider lowers a live score and allow a corrected goal to be awarded again
+- fixture monitoring: emit kick-off, venue and opponent change events and add a reusable notification blueprint
+- club provenance: add optional name, coach and venue overrides while retaining provider values and explicit conflicts
+- competition race v2: use known remaining fixtures, games in hand, recent-form projections and next-result rank scenarios
+- data contract: bump the published schema to version 7 for race v2 and club field provenance
+- archive interoperability: publish the `soccer_live.archive.v1` contract and normalize common feyod/MySQL Dutch fields during import
+- first-install diagnostics: add a native Setup status sensor per entry
+- API-Football: derive knockout brackets from fixture round metadata, including two-legged aggregate ties for supported cup IDs
+- tests: cover fixture changes, score corrections, archive aliases, race projections and API-Football brackets
+
 ## v3.14.0 (2026-07-31)
 
 - competition race: persist up to 200 changed standings snapshots per standings sensor and publish provider-neutral gaps, remaining matches and maximum points

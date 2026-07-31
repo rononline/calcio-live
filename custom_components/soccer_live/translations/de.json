@@ -172,6 +172,9 @@
           "quiet_hours_start": "Ruhezeit beginnt (HH:MM; leer = aus)",
           "quiet_hours_end": "Ruhezeit endet (HH:MM; leer = aus)",
           "player_watchlist": "Spieler-Beobachtungsliste für Kartendaten und Ereignisse (Namen durch Kommas getrennt)"
+          ,"club_name_override": "Vereinsname überschreiben (leer = Anbieterwert)"
+          ,"club_coach_override": "Cheftrainer überschreiben (leer = Anbieterwert)"
+          ,"club_venue_override": "Stadion überschreiben (leer = Anbieterwert)"
         }
       }
     },
@@ -219,6 +222,9 @@
       },
       "runtime_status": {
         "name": "Synchronisierungsstatus"
+      },
+      "setup_status": {
+        "name": "Einrichtungsstatus"
       },
       "next_kickoff": {
         "name": "Nächster Anstoß"

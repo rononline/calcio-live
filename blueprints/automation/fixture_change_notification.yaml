@@ -1,0 +1,54 @@
+blueprint:
+  name: Soccer Live - Fixture change notification
+  description: Replace one grouped mobile notification when a kick-off, venue or opponent changes.
+  domain: automation
+  input:
+    notify_service:
+      name: Notify service
+      description: "Example: notify.mobile_app_iphone"
+      selector:
+        text:
+    team_name:
+      name: Team filter
+      description: Optional team name; leave empty for every fixture change.
+      default: ""
+      selector:
+        text:
+
+trigger:
+  - platform: event
+    event_type:
+      - soccer_live_kickoff_changed
+      - soccer_live_venue_changed
+      - soccer_live_opponent_changed
+
+variables:
+  team_name: !input team_name
+  event: "{{ trigger.event.data }}"
+
+condition:
+  - condition: template
+    value_template: >-
+      {% set wanted = team_name | lower | trim %}
+      {{ not wanted
+         or wanted in (event.home_team | default('', true) | lower)
+         or wanted in (event.away_team | default('', true) | lower) }}
+
+action:
+  - service: !input notify_service
+    data:
+      title: "Wedstrijd gewijzigd · {{ event.home_team }} – {{ event.away_team }}"
+      message: >-
+        {% if trigger.event.event_type == 'soccer_live_kickoff_changed' %}
+          Nieuwe aftrap: {{ event.date }} (was {{ event.previous_date }})
+        {% elif trigger.event.event_type == 'soccer_live_venue_changed' %}
+          Nieuwe locatie: {{ event.venue }} (was {{ event.previous_venue }})
+        {% else %}
+          Nieuwe wedstrijd: {{ event.home_team }} – {{ event.away_team }}
+        {% endif %}
+      data:
+        tag: "soccer-live-fixture-{{ event.event_id | default('match', true) }}"
+        group: soccer-live-fixtures
+
+mode: queued
+max: 20

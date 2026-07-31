@@ -172,6 +172,9 @@
           "quiet_hours_start": "Stille uren beginnen (UU:MM; leeg = uit)",
           "quiet_hours_end": "Stille uren eindigen (UU:MM; leeg = uit)",
           "player_watchlist": "Spelersvolglijst voor kaartdata en gebeurtenissen (namen gescheiden door komma's)"
+          ,"club_name_override": "Clubnaam overschrijven (leeg = providerwaarde)"
+          ,"club_coach_override": "Hoofdtrainer overschrijven (leeg = providerwaarde)"
+          ,"club_venue_override": "Stadion overschrijven (leeg = providerwaarde)"
         }
       }
     },
@@ -219,6 +222,9 @@
       },
       "runtime_status": {
         "name": "Synchronisatiestatus"
+      },
+      "setup_status": {
+        "name": "Installatiestatus"
       },
       "next_kickoff": {
         "name": "Volgende aftrap"
