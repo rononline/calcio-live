@@ -1,0 +1,47 @@
+blueprint:
+  name: Soccer Live - Competition milestone notification
+  description: Notify once when a team mathematically wins the title, secures European football or becomes safe from relegation.
+  domain: automation
+  input:
+    notify_service:
+      name: Notify service
+      description: "Example: notify.mobile_app_iphone"
+      selector:
+        text:
+    team_name:
+      name: Team filter
+      description: Optional team name; leave empty for every competition milestone.
+      default: ""
+      selector:
+        text:
+
+trigger:
+  - platform: event
+    event_type: soccer_live_race_milestone
+
+variables:
+  team_name: !input team_name
+  event: "{{ trigger.event.data }}"
+
+condition:
+  - condition: template
+    value_template: >-
+      {% set wanted = team_name | lower | trim %}
+      {{ not wanted or wanted in (event.team | default('', true) | lower) }}
+
+action:
+  - service: !input notify_service
+    data:
+      title: >-
+        {% if event.milestone == 'title_clinched' %}🏆 Kampioen
+        {% elif event.milestone == 'europe_secured' %}🌍 Europees voetbal
+        {% else %}✅ Handhaving veiliggesteld{% endif %}
+      message: >-
+        {{ event.team }} · {{ event.league_name | default('Competitie', true) }}
+        · #{{ event.rank }} · {{ event.points }} punten
+      data:
+        tag: "soccer-live-race-{{ event.team | default('team', true) | slugify }}-{{ event.milestone }}"
+        group: soccer-live-race
+
+mode: queued
+max: 20

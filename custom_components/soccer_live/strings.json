@@ -141,6 +141,10 @@
     "rate_limited": {
       "title": "Soccer Live is being rate limited",
       "description": "The provider is temporarily limiting requests. Soccer Live will retry automatically with backoff; reduce optional enrichment or wait for the quota to recover."
+    },
+    "season_stale": {
+      "title": "Soccer Live season needs attention",
+      "description": "Upcoming fixtures belong to a newer season. Set API-Football season to automatic (0), or update the monitoring period."
     }
   },
   "options": {
@@ -155,6 +159,9 @@
           "end_date": "End date (YYYY-MM-DD)",
           "recent_match_hours": "Keep finished match visible for (hours)",
           "enable_summary_enrichment": "Fetch lineup, key events and H2H (summary enrichment)",
+          "enable_unified_enrichment": "Combine matching fixtures from other Soccer Live entries",
+          "archive_sync_url": "External archive JSON URL (optional)",
+          "archive_sync_interval": "External archive sync interval (hours)",
           "card_appearance": "Shared card appearance (dark/light/HA)",
           "card_palette": "Shared card palette",
           "card_compact": "Shared compact mode for cards",
@@ -232,6 +239,12 @@
       "api_quota_remaining": {
         "name": "API requests remaining"
       }
+    },
+    "binary_sensor": {
+      "match_live": { "name": "Match live" },
+      "match_today": { "name": "Match today" },
+      "lineup_available": { "name": "Lineup available" },
+      "data_degraded": { "name": "Data degraded" }
     },
     "calendar": {
       "match_calendar": {

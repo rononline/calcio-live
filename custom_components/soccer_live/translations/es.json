@@ -141,6 +141,10 @@
     "rate_limited": {
       "title": "Soccer Live está limitado",
       "description": "El proveedor limita temporalmente las solicitudes. Soccer Live reintentará automáticamente; reduce el enriquecimiento opcional si es necesario."
+    },
+    "season_stale": {
+      "title": "La temporada de Soccer Live requiere atención",
+      "description": "Los próximos partidos pertenecen a una temporada más reciente. Usa la temporada automática (0) o actualiza el período."
     }
   },
   "options": {
@@ -155,6 +159,9 @@
           "end_date": "Fecha de fin (AAAA-MM-DD)",
           "recent_match_hours": "Mantener partido finalizado visible (horas)",
           "enable_summary_enrichment": "Obtener alineaciones, eventos y H2H",
+          "enable_unified_enrichment": "Combinar partidos coincidentes de otras entradas de Soccer Live",
+          "archive_sync_url": "URL JSON de archivo externo (opcional)",
+          "archive_sync_interval": "Intervalo de sincronización del archivo (horas)",
           "card_appearance": "Apariencia compartida de tarjetas (oscuro/claro/HA)",
           "card_palette": "Paleta compartida de tarjetas",
           "card_compact": "Modo compacto compartido",
@@ -232,6 +239,12 @@
       "api_quota_remaining": {
         "name": "Solicitudes API restantes"
       }
+    },
+    "binary_sensor": {
+      "match_live": { "name": "Partido en directo" },
+      "match_today": { "name": "Partido hoy" },
+      "lineup_available": { "name": "Alineación disponible" },
+      "data_degraded": { "name": "Calidad de datos reducida" }
     },
     "calendar": {
       "match_calendar": {

@@ -141,6 +141,10 @@
     "rate_limited": {
       "title": "Soccer Live wird begrenzt",
       "description": "Der Anbieter begrenzt Anfragen vorübergehend. Soccer Live versucht es automatisch erneut; optionale Anreicherungen können reduziert werden."
+    },
+    "season_stale": {
+      "title": "Soccer-Live-Saison erfordert Aufmerksamkeit",
+      "description": "Kommende Spiele gehören zu einer neueren Saison. Verwende die automatische Saison (0) oder aktualisiere den Zeitraum."
     }
   },
   "options": {
@@ -155,6 +159,9 @@
           "end_date": "Enddatum (JJJJ-MM-TT)",
           "recent_match_hours": "Beendetes Spiel sichtbar halten (Stunden)",
           "enable_summary_enrichment": "Aufstellung, Events und H2H abrufen",
+          "enable_unified_enrichment": "Passende Spiele aus anderen Soccer-Live-Einträgen kombinieren",
+          "archive_sync_url": "Externe Archiv-JSON-URL (optional)",
+          "archive_sync_interval": "Synchronisationsintervall des externen Archivs (Stunden)",
           "card_appearance": "Gemeinsames Karten-Erscheinungsbild (dunkel/hell/HA)",
           "card_palette": "Gemeinsame Kartenpalette",
           "card_compact": "Gemeinsamer Kompaktmodus für Karten",
@@ -232,6 +239,12 @@
       "api_quota_remaining": {
         "name": "Verbleibende API-Anfragen"
       }
+    },
+    "binary_sensor": {
+      "match_live": { "name": "Spiel läuft" },
+      "match_today": { "name": "Spiel heute" },
+      "lineup_available": { "name": "Aufstellung verfügbar" },
+      "data_degraded": { "name": "Datenqualität eingeschränkt" }
     },
     "calendar": {
       "match_calendar": {

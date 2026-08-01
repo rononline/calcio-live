@@ -124,6 +124,21 @@ export_match_archive:
         config_entry:
           integration: soccer_live
 
+sync_match_archive:
+  name: Sync match archive
+  description: Merges a remote soccer_live.archive.v1 or supported legacy JSON archive into the selected local archive.
+  fields:
+    config_entry_id:
+      name: Config entry ID
+      selector:
+        config_entry:
+          integration: soccer_live
+    url:
+      name: Archive URL
+      description: Optional HTTP(S) URL. Leave empty to use the URL configured in the integration options.
+      selector:
+        text:
+
 play_match_replay:
   name: Play match replay
   description: Replays the recorded match snapshots as safe simulated Home Assistant events. Uses a built-in full-match demo when no recording is available.

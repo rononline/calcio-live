@@ -132,7 +132,7 @@ def source_sections(match: dict, provider=None, updated_at=None) -> dict:
         "lineup": ("lineup_home", "lineup_away", "formation_home", "formation_away"),
         "timeline": ("key_events", "match_details"),
         "statistics": ("home_statistics", "away_statistics", "momentum", "shotmap"),
-        "review": ("review", "player_of_the_match", "team_of_the_match", "match_story"),
+        "review": ("review", "player_of_the_match", "team_of_the_match", "match_story", "match_summary"),
     }
     return {
         section: {
@@ -552,6 +552,50 @@ def competition_race(
                 "gap_to_above": max(0, above_points - points),
                 "zone_label": row.get("zone_label") or row.get("zone_abbrev"),
             })
+        # Mathematical milestones use maximum points, not projections, so
+        # dashboards and automations may safely treat them as facts.
+        for race_row in race_rows:
+            other_maximum = [
+                item["maximum_points"] for item in race_rows if item is not race_row
+            ]
+            target = max(other_maximum, default=race_row["points"])
+            race_row["magic_points_title"] = max(
+                0, target - race_row["points"] + 1
+            )
+            race_row["title_clinched"] = bool(
+                other_maximum and race_row["points"] > target
+            )
+            race_row["title_possible"] = (
+                race_row["maximum_points"] >= leader_points
+            )
+
+        relegation_positions = [
+            index for index, item in enumerate(race_rows)
+            if "releg" in str(item.get("zone_label") or "").casefold()
+        ]
+        if relegation_positions:
+            boundary = min(relegation_positions)
+            below = race_rows[boundary:]
+            for race_row in race_rows[:boundary]:
+                race_row["relegation_safe"] = race_row["points"] > max(
+                    (item["maximum_points"] for item in below), default=0
+                )
+
+        european_positions = [
+            index for index, item in enumerate(race_rows)
+            if any(
+                word in str(item.get("zone_label") or "").casefold()
+                for word in ("champions", "europa", "conference", "europe")
+            )
+        ]
+        if european_positions:
+            cutoff = max(european_positions)
+            outsiders = race_rows[cutoff + 1:]
+            for race_row in race_rows[:cutoff + 1]:
+                race_row["europe_secured"] = bool(outsiders) and (
+                    race_row["points"]
+                    > max(item["maximum_points"] for item in outsiders)
+                )
         result_groups.append({
             "name": group.get("name") or "Standings",
             "total_matches": total_matches,

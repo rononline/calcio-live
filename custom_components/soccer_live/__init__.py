@@ -15,7 +15,7 @@ from .const import DOMAIN
 from .coordinator import SoccerLiveEntryCoordinator
 from .simulator import EVENT_TYPES, simulated_event
 
-PLATFORMS = ["sensor", "calendar", "button", "event"]
+PLATFORMS = ["sensor", "binary_sensor", "calendar", "button", "event"]
 
 
 def _coordinators(hass, requested=None):
@@ -98,6 +98,18 @@ def _register_services(hass: HomeAssistant) -> None:
                 for coordinator in selected
             }
         }
+
+    async def async_sync_archive(call):
+        total = 0
+        for coordinator in _coordinators(hass, call.data.get("config_entry_id")):
+            url = call.data.get("url")
+            if not url:
+                entry = hass.config_entries.async_get_entry(coordinator.entry_id)
+                url = (entry.options if entry else {}).get("archive_sync_url")
+            if not url:
+                raise vol.Invalid("No archive sync URL configured")
+            total += await coordinator.async_sync_archive_url(url)
+        return {"matches": total}
 
     async def async_play_match_replay(call):
         total = 0
@@ -183,6 +195,16 @@ def _register_services(hass: HomeAssistant) -> None:
     )
     hass.services.async_register(
         DOMAIN,
+        "sync_match_archive",
+        async_sync_archive,
+        schema=vol.Schema({
+            **entry_schema,
+            vol.Optional("url"): str,
+        }),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN,
         "play_match_replay",
         async_play_match_replay,
         schema=vol.Schema({
@@ -216,6 +238,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     _register_services(hass)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    archive_url = str(entry.options.get("archive_sync_url") or "").strip()
+    if archive_url:
+        from datetime import timedelta
+        from homeassistant.helpers.event import async_track_time_interval
+
+        interval = max(1, int(entry.options.get("archive_sync_interval", 24)))
+
+        async def _sync_archive(_now=None):
+            try:
+                await coordinator.async_sync_archive_url(archive_url)
+            except Exception:
+                # Status/error are already published by the coordinator; a
+                # temporary remote outage must never unload Soccer Live.
+                pass
+
+        entry.async_on_unload(
+            async_track_time_interval(hass, _sync_archive, timedelta(hours=interval))
+        )
+        hass.async_create_task(_sync_archive())
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
     return True
@@ -243,6 +284,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 "rebuild_match_archive",
                 "import_match_archive",
                 "export_match_archive",
+                "sync_match_archive",
                 "play_match_replay",
                 "clear_match_replay",
                 "export_match_replay",

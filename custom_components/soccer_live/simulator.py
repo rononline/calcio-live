@@ -19,6 +19,7 @@ EVENT_TYPES = {
     "kickoff_changed": ("soccer_live_kickoff_changed", "scheduled"),
     "venue_changed": ("soccer_live_venue_changed", "scheduled"),
     "opponent_changed": ("soccer_live_opponent_changed", "scheduled"),
+    "race_milestone": ("soccer_live_race_milestone", None),
 }
 
 

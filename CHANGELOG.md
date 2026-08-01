@@ -1,5 +1,17 @@
 # Changelog
 
+## v3.16.0 (2026-08-01)
+
+- native automations: add Match live, Match today, Lineup available and Data degraded binary sensors per config entry
+- unified enrichment: optionally fill missing rich fields from matching fixtures in other Soccer Live entries while preserving the primary schedule and scores
+- source diagnostics: publish a reasoned capability matrix and expose it through the Setup status sensor
+- season rollover: publish transition state and create a Home Assistant Repair issue when an explicit season is stale
+- competition race: add mathematical title, European qualification and relegation-safety facts plus a native milestone event and notification blueprint
+- match review: publish a compact provider-neutral structured summary for finished fixtures
+- archives: optionally synchronize `soccer_live.archive.v1` or supported legacy JSON from an HTTP(S) URL on a configurable interval
+- data contract: bump the published schema to version 8 and document all new optional fields
+- tests: cover source merging, match-state flags, capability reasons, season rollover, structured summaries and race milestones
+
 ## v3.15.0 (2026-07-31)
 
 - live corrections: emit `soccer_live_goal_cancelled` when a provider lowers a live score and allow a corrected goal to be awarded again

@@ -141,6 +141,10 @@
     "rate_limited": {
       "title": "Soccer Live è soggetto a limiti",
       "description": "Il provider limita temporaneamente le richieste. Soccer Live riproverà automaticamente; riduci gli arricchimenti facoltativi se necessario."
+    },
+    "season_stale": {
+      "title": "La stagione Soccer Live richiede attenzione",
+      "description": "Le prossime partite appartengono a una stagione più recente. Usa la stagione automatica (0) o aggiorna il periodo."
     }
   },
   "options": {
@@ -155,6 +159,9 @@
           "end_date": "Data di fine (YYYY-MM-DD)",
           "recent_match_hours": "Tieni visibile la partita finita per (ore)",
           "enable_summary_enrichment": "Recupera formazioni, eventi e H2H",
+          "enable_unified_enrichment": "Combina le partite corrispondenti di altre voci Soccer Live",
+          "archive_sync_url": "URL JSON archivio esterno (opzionale)",
+          "archive_sync_interval": "Intervallo sincronizzazione archivio (ore)",
           "card_appearance": "Aspetto condiviso delle schede (scuro/chiaro/HA)",
           "card_palette": "Palette condivisa delle schede",
           "card_compact": "Modalità compatta condivisa",
@@ -232,6 +239,12 @@
       "api_quota_remaining": {
         "name": "Richieste API rimanenti"
       }
+    },
+    "binary_sensor": {
+      "match_live": { "name": "Partita in diretta" },
+      "match_today": { "name": "Partita oggi" },
+      "lineup_available": { "name": "Formazione disponibile" },
+      "data_degraded": { "name": "Qualità dati ridotta" }
     },
     "calendar": {
       "match_calendar": {

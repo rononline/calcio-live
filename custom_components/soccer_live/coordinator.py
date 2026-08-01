@@ -62,6 +62,9 @@ class SoccerLiveEntryCoordinator:
         self.api_endpoint_locks: dict = {}
         self.calendar_cache: dict = {}
         self.calendar_locks: dict = {}
+        self.archive_sync_status = "disabled"
+        self.archive_sync_last_update = None
+        self.archive_sync_last_error = None
 
     async def async_initialize(self):
         """Load persistent event claims and recorded replay snapshots."""
@@ -245,6 +248,11 @@ class SoccerLiveEntryCoordinator:
 
         return remove
 
+    @property
+    def entities(self):
+        """Registered source entities, exposed read-only to derived platforms."""
+        return tuple(self._entities)
+
     def add_listener(self, listener: Callable) -> Callable:
         self._listeners.add(listener)
 
@@ -411,6 +419,43 @@ class SoccerLiveEntryCoordinator:
                 await replace(matches)
                 updated += 1
         return updated
+
+    async def async_sync_archive_url(self, url: str):
+        """Merge a remote soccer_live.archive.v1/legacy JSON document."""
+        from urllib.parse import urlparse
+
+        parsed = urlparse(str(url or "").strip())
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("Archive sync URL must use http or https")
+        self.archive_sync_status = "fetching"
+        self.archive_sync_last_error = None
+        self._notify()
+        try:
+            import aiohttp
+            from homeassistant.helpers.aiohttp_client import async_get_clientsession
+
+            session = async_get_clientsession(self.hass)
+            async with session.get(
+                parsed.geturl(), timeout=aiohttp.ClientTimeout(total=30)
+            ) as response:
+                response.raise_for_status()
+                if response.content_length and response.content_length > 5_000_000:
+                    raise ValueError("Archive response exceeds 5 MB")
+                payload = await response.json(content_type=None)
+            from .archive import validate_archive
+
+            remote = validate_archive(payload)
+            merged = validate_archive([*self.archive(), *remote])
+            await self.async_replace_archive(merged)
+            self.archive_sync_status = "ready"
+            self.archive_sync_last_update = datetime.now(timezone.utc).isoformat()
+            self._notify()
+            return len(remote)
+        except Exception as err:
+            self.archive_sync_status = "error"
+            self.archive_sync_last_error = str(err)
+            self._notify()
+            raise
 
     async def async_rebuild_archive(self):
         """Rebuild the archive from the richest currently published match list."""

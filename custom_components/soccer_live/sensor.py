@@ -372,6 +372,7 @@ class SoccerLiveRuntimeSensor(Entity):
 
     _attr_has_entity_name = True
     _attr_should_poll = False
+    _unrecorded_attributes = frozenset({"capability_matrix"})
 
     def __init__(self, entry, coordinator, provider, kind):
         self._entry = entry
@@ -489,12 +490,26 @@ class SoccerLiveRuntimeSensor(Entity):
     def extra_state_attributes(self):
         if self._kind == "setup_status":
             entities = self._source_entities()
+            matrices = [
+                (getattr(entity, "_attributes", {}) or {}).get("capability_matrix", {})
+                for entity in entities
+            ]
+            capabilities = {}
+            for matrix in matrices:
+                for key, value in matrix.items():
+                    if key not in capabilities or value.get("available"):
+                        capabilities[key] = value
             return {
                 "provider": self._provider,
                 "configured_entities": len(entities),
                 "entities_with_data": sum(bool(getattr(entity, "_attributes", {})) for entity in entities),
                 "summary_enrichment": self._entry.options.get("enable_summary_enrichment", True),
                 "club_data": self._entry.options.get("enable_club_data", True),
+                "unified_enrichment": self._entry.options.get("enable_unified_enrichment", False),
+                "capability_matrix": capabilities,
+                "archive_sync_status": self._coordinator.archive_sync_status,
+                "archive_sync_last_update": self._coordinator.archive_sync_last_update,
+                "archive_sync_last_error": self._coordinator.archive_sync_last_error,
                 "config_entry_id": self._entry.entry_id,
             }
         if self._kind != "api_quota_remaining":
@@ -525,7 +540,8 @@ class SoccerLiveSensor(Entity):
         "head_to_head", "league_info", "club", "club_changes", "card_defaults",
         "data_quality", "data_alerts", "matchday", "match_readiness", "match_archive",
         "match_archive_summary", "player_watchlist", "standings_history",
-        "competition_race",
+        "competition_race", "capability_matrix", "season_transition",
+        "unified_enrichment", "match_summary",
         "last_event", "last_goal_event", "last_card_event",
         "last_match_started_event", "last_match_finished_event",
     })
@@ -637,6 +653,7 @@ class SoccerLiveSensor(Entity):
         # Set when API-Football rejects the key (HTTP 401/403 or an errors.token
         # body); surfaces a clear status and triggers a reauth flow.
         self._auth_failed = False
+        self._previous_race_milestones = set()
 
         # Events collected during executor-thread processing, fired on event loop
         self._pending_events: list = []
@@ -1069,6 +1086,49 @@ class SoccerLiveSensor(Entity):
             player_watchlist,
             update_archive,
         )
+        from .derived import capability_matrix, match_summary, season_transition
+
+        entry = self.hass.config_entries.async_get_entry(self._config_entry_id)
+        options = entry.options if entry else {}
+        primary_matches = self._attributes.get("matches") or []
+        if options.get("enable_unified_enrichment") and primary_matches:
+            from .derived import merge_match_sources
+
+            sources = []
+            for entry_id, runtime in self.hass.data.get(DOMAIN, {}).items():
+                if entry_id == self._config_entry_id or not isinstance(runtime, dict):
+                    continue
+                sources.extend(runtime.get("match_sources", {}).values())
+            primary_matches, provenance = merge_match_sources(
+                primary_matches, sources
+            )
+            self._attributes["matches"] = primary_matches
+            self._attributes["unified_enrichment"] = provenance
+            next_match = self._attributes.get("next_match")
+            if next_match:
+                match_ids = {
+                    next_match.get("canonical_id"),
+                    next_match.get("canonical_pair_id"),
+                }
+                enriched_next = next((
+                    item for item in primary_matches
+                    if match_ids.intersection({
+                        item.get("canonical_id"), item.get("canonical_pair_id")
+                    })
+                ), None)
+                if enriched_next:
+                    self._attributes["next_match"] = enriched_next
+
+        primary_matches = [
+            {
+                **match,
+                **({"match_summary": summary} if (
+                    summary := match_summary(match, self._team_name)
+                ) else {}),
+            }
+            for match in primary_matches
+        ]
+        self._attributes["matches"] = primary_matches
 
         insight_updated_at = datetime.now(timezone.utc).isoformat()
         matches = annotate_completeness(
@@ -1102,6 +1162,37 @@ class SoccerLiveSensor(Entity):
             matches,
             self._last_error,
         )
+        capabilities = list(PROVIDER_CAPABILITIES.get(self._provider, ()))
+        if options.get("enable_unified_enrichment"):
+            for runtime in self.hass.data.get(DOMAIN, {}).values():
+                if not isinstance(runtime, dict):
+                    continue
+                coordinator = runtime.get("coordinator")
+                for entity in getattr(coordinator, "entities", ()):
+                    capabilities.extend(PROVIDER_CAPABILITIES.get(
+                        getattr(entity, "_provider", None), ()
+                    ))
+        self._attributes["season_transition"] = season_transition(
+            self._attributes, matches, self._api_football_season
+        )
+        self._attributes["capability_matrix"] = capability_matrix(
+            matches, capabilities, self._last_error
+        )
+        next_match = self._attributes.get("next_match")
+        if next_match:
+            identity = next_match.get("canonical_id") or next_match.get("event_id")
+            summarized_next = next((item for item in matches if identity in {
+                item.get("canonical_id"), item.get("event_id")
+            }), None)
+            if summarized_next:
+                self._attributes["next_match"] = summarized_next
+        finished_summary = next((
+            item.get("match_summary")
+            for item in reversed(matches)
+            if item.get("match_summary")
+        ), None)
+        if finished_summary:
+            self._attributes["match_summary"] = finished_summary
         summary = matchday_summary(matches)
         if summary:
             self._attributes["matchday"] = summary
@@ -1116,6 +1207,7 @@ class SoccerLiveSensor(Entity):
         race = competition_race(self._attributes, list(deduplicated_fixtures.values()))
         if race:
             self._attributes["competition_race"] = race
+            self._queue_race_milestones(race)
             if self._coordinator:
                 history = self._coordinator.update_standings(
                     self.unique_id or self.entity_id,
@@ -1124,8 +1216,6 @@ class SoccerLiveSensor(Entity):
                 if history:
                     self._attributes["standings_history"] = history
 
-        entry = self.hass.config_entries.async_get_entry(self._config_entry_id)
-        options = entry.options if entry else {}
         watchlist = player_watchlist(
             self._attributes.get("club"),
             options.get("player_watchlist", ""),
@@ -1150,6 +1240,33 @@ class SoccerLiveSensor(Entity):
             if store is not None:
                 store.async_delay_save(lambda: {"matches": archive}, 60)
         self._update_repairs()
+
+    def _queue_race_milestones(self, race):
+        """Emit each mathematical competition milestone once per runtime."""
+        current = set()
+        for group in race.get("groups", []):
+            for row in group.get("rows", []):
+                team = row.get("team_id") or row.get("team_name")
+                for key in (
+                    "title_clinched", "europe_secured", "relegation_safe"
+                ):
+                    if not row.get(key):
+                        continue
+                    marker = (str(team), key)
+                    current.add(marker)
+                    if marker not in self._previous_race_milestones:
+                        self._pending_events.append((
+                            "soccer_live_race_milestone",
+                            {
+                                "team_id": row.get("team_id"),
+                                "team": row.get("team_name"),
+                                "milestone": key,
+                                "rank": row.get("rank"),
+                                "points": row.get("points"),
+                                "league_name": race.get("league_name"),
+                            },
+                        ))
+        self._previous_race_milestones = current
 
     async def async_replace_archive(self, matches):
         """Replace this entry's archive after a management service call."""
@@ -1182,6 +1299,7 @@ class SoccerLiveSensor(Entity):
         entry_id = self._config_entry_id or "default"
         auth_issue = f"{entry_id}_authentication_failed"
         rate_issue = f"{entry_id}_rate_limited"
+        season_issue = f"{entry_id}_season_stale"
         if self._auth_failed:
             ir.async_create_issue(
                 self.hass,
@@ -1206,6 +1324,18 @@ class SoccerLiveSensor(Entity):
             )
         else:
             ir.async_delete_issue(self.hass, DOMAIN, rate_issue)
+        if (self._attributes.get("season_transition") or {}).get("status") == "stale":
+            ir.async_create_issue(
+                self.hass,
+                DOMAIN,
+                season_issue,
+                is_fixable=False,
+                is_persistent=True,
+                severity=ir.IssueSeverity.WARNING,
+                translation_key="season_stale",
+            )
+        else:
+            ir.async_delete_issue(self.hass, DOMAIN, season_issue)
 
     def _fire_new_lineup_events(self, previous_attrs, current_attrs):
         from .club_changes import newly_available_lineups
@@ -1266,7 +1396,13 @@ class SoccerLiveSensor(Entity):
             .setdefault(self._config_entry_id, {})
             .setdefault("match_sources", {})
         )
-        store[self.unique_id] = matches
+        # Keep provenance with the shared rows. Provider-neutral sensor output
+        # does not need this repeated field, but unified enrichment does need to
+        # explain which secondary source supplied a field.
+        store[self.unique_id] = [
+            {**match, "provider": match.get("provider") or self._provider}
+            for match in matches
+        ]
         if self._coordinator:
             self._coordinator.capture_matches(matches)
 

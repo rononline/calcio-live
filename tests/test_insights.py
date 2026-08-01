@@ -140,6 +140,22 @@ def test_competition_race_exposes_gaps_and_maximum_points():
     assert feyenoord["gap_to_above"] == 2
     assert feyenoord["remaining"] == 0
     assert feyenoord["maximum_points"] == 10
+    assert feyenoord["title_possible"] is False
+    assert result["groups"][0]["rows"][0]["title_clinched"] is True
+
+
+def test_competition_race_exposes_europe_and_relegation_facts():
+    standings = {
+        "league_name": "League",
+        "standings_groups": [{"standings": [
+            {"rank": 1, "team_name": "A", "points": 40, "games_played": 20, "zone_label": "Champions League"},
+            {"rank": 2, "team_name": "B", "points": 20, "games_played": 20},
+            {"rank": 3, "team_name": "C", "points": 10, "games_played": 20, "zone_label": "Relegation"},
+        ]}],
+    }
+    rows = insights.competition_race(standings)["groups"][0]["rows"]
+    assert rows[0]["europe_secured"] is True
+    assert rows[0]["relegation_safe"] is True
 
 
 def test_competition_race_uses_actual_schedule_and_games_in_hand():

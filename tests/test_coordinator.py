@@ -39,8 +39,18 @@ def test_coordinator_registers_refreshes_and_unregisters_entities():
 
     assert asyncio.run(coordinator.async_refresh()) == 1
     assert entity.refreshes == 1
+    assert coordinator.entities == (entity,)
     remove()
     assert asyncio.run(coordinator.async_refresh()) == 0
+
+
+def test_archive_sync_rejects_non_http_urls_before_network_access():
+    import asyncio
+    import pytest
+
+    coordinator = coordinator_module.SoccerLiveEntryCoordinator(_Hass(), "entry")
+    with pytest.raises(ValueError, match="http or https"):
+        asyncio.run(coordinator.async_sync_archive_url("file:///tmp/archive.json"))
 
 
 def test_coordinator_claims_event_only_once():

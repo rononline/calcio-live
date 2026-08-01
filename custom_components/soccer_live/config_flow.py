@@ -642,6 +642,9 @@ class SoccerLiveOptionsFlow(config_entries.OptionsFlow):
         enable_summary_enrichment = self.config_entry.options.get("enable_summary_enrichment", True)
         enable_club_data = self.config_entry.options.get("enable_club_data", True)
         enable_live_odds = self.config_entry.options.get("enable_live_odds", False)
+        enable_unified_enrichment = self.config_entry.options.get("enable_unified_enrichment", False)
+        archive_sync_url = self.config_entry.options.get("archive_sync_url", "")
+        archive_sync_interval = self.config_entry.options.get("archive_sync_interval", 24)
         provider = _normalize_provider(self.config_entry.data.get(CONF_PROVIDER, PROVIDER_ESPN))
         supports_club = provider_supports(provider, "club")
         supports_live_odds = provider_supports(provider, "live_odds")
@@ -669,6 +672,9 @@ class SoccerLiveOptionsFlow(config_entries.OptionsFlow):
             vol.Optional("quiet_hours_end", default=quiet_hours_end): str,
             vol.Optional("player_watchlist", default=player_watchlist): str,
             vol.Optional("enable_summary_enrichment", default=enable_summary_enrichment): bool,
+            vol.Optional("enable_unified_enrichment", default=enable_unified_enrichment): bool,
+            vol.Optional("archive_sync_url", default=archive_sync_url): str,
+            vol.Optional("archive_sync_interval", default=archive_sync_interval): vol.In([1, 6, 12, 24, 48, 168]),
         }
         # Club enrichment (profile/coach/squad/transfers) is API-Football only.
         if supports_club:

@@ -120,6 +120,15 @@ async def async_get_config_entry_diagnostics(
             "standings_history_count": (
                 coordinator.standings_history_count if coordinator else 0
             ),
+            "archive_sync_status": (
+                coordinator.archive_sync_status if coordinator else "disabled"
+            ),
+            "archive_sync_last_update": (
+                coordinator.archive_sync_last_update if coordinator else None
+            ),
+            "archive_sync_last_error": (
+                coordinator.archive_sync_last_error if coordinator else None
+            ),
         },
         "api_football": api_football,
         "config_entry": {
@@ -132,6 +141,8 @@ async def async_get_config_entry_diagnostics(
             "scan_interval": entry.options.get("scan_interval", 3),
             "recent_match_hours": entry.options.get("recent_match_hours", 24),
             "notify_service": bool(entry.options.get("notify_service")),
+            "unified_enrichment": bool(entry.options.get("enable_unified_enrichment")),
+            "external_archive_sync": bool(entry.options.get("archive_sync_url")),
         },
         "sensors": sensors,
     }

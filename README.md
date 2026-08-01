@@ -83,6 +83,9 @@ Configure via **Settings → Devices & Services → Soccer Live → Configure**:
 | `scan_interval` | `3` minutes | Normal polling interval when no match is live. |
 | `live_scan_interval` | `60` seconds | Extra refresh interval while a match is live (`30` / `45` / `60` / `90` / `120` seconds). Use `30` seconds for faster goal/card updates when your API quota allows it. |
 | `enable_summary_enrichment` | `true` | Fetch extra match details. ESPN uses the summary endpoint; API-Football uses fixture events, statistics and lineups. Disable to reduce API calls. |
+| `enable_unified_enrichment` | `false` | Fill missing rich fields from matching fixtures in other Soccer Live entries while keeping this entry's schedule and scores authoritative. |
+| `archive_sync_url` | empty | Optional HTTP(S) JSON source using `soccer_live.archive.v1` or supported legacy Dutch fields. It is merged into the local archive. |
+| `archive_sync_interval` | `24` hours | Refresh interval for the optional external archive (`1`–`168` hours). |
 | `include_friendlies` | `true` | Include friendlies when using API-Football fixture data. |
 | `api_football_season` | `0` (auto) | API-Football season to query. For standings/top scorers, auto mode uses the previous season before August. |
 | `change_api_football_key` | — | *(API-Football only)* Paste a new key here to replace an expired/revoked one; leave blank to keep the current key. The value is validated on save. |
@@ -101,6 +104,9 @@ Configure via **Settings → Devices & Services → Soccer Live → Configure**:
 > sensor; API-Football entries add an **API requests remaining** sensor. These
 > compact entities are convenient automation triggers without templating large
 > match attributes or manually entering event-bus names.
+> Four binary sensors are also created: **Match live**, **Match today**,
+> **Lineup available** and **Data degraded**. They are derived locally from
+> published fixtures and make common automations template-free.
 
 > **Card contract.** Sensors publish `integration_version`, `data_schema_version` and `recommended_card_types` (the `card_type` slugs that suit the sensor), so the card editor can recommend the right card for a selected entity and warn when the integration is outdated.
 
@@ -117,6 +123,10 @@ Configure via **Settings → Devices & Services → Soccer Live → Configure**:
 > `standings_history`; `competition_race` contains points gaps, actual remaining
 > fixtures when available, games in hand, projections, result scenarios and
 > maximum attainable points. Both stay out of Recorder.
+> Schema v8 additionally publishes a reasoned `capability_matrix`,
+> `season_transition`, structured `match_summary`, optional
+> `unified_enrichment` provenance and mathematical title/Europe/relegation
+> milestones. A stale explicit season creates a Home Assistant Repair issue.
 
 ### Local archive and refresh services
 
@@ -129,6 +139,7 @@ The integration registers services under the `soccer_live` domain:
 | `soccer_live.clear_match_archive` | Permanently clear the selected local archive. |
 | `soccer_live.export_match_archive` | Return a versioned JSON-compatible archive backup as response data. |
 | `soccer_live.import_match_archive` | Replace an archive from a previous JSON export. |
+| `soccer_live.sync_match_archive` | Merge an external archive URL immediately; the URL may also be configured for scheduled synchronization. |
 | `soccer_live.play_match_replay` | Replay the recorded lifecycle as safe simulated events, with a deterministic demo fallback. |
 | `soccer_live.clear_match_replay` | Clear locally recorded replay snapshots. |
 | `soccer_live.export_match_replay` | Return recorded replay snapshots as response data. |
@@ -142,6 +153,9 @@ Assistant assigned the restored integration a different config-entry ID.
 The public [`soccer_live.archive.v1`](docs/archive-contract-v1.md) contract also
 accepts common Dutch `datum`/`thuis`/`uit`/`uitslag` fields from feyod or a
 personal MySQL sensor.
+Remote synchronization is optional and bounded to a 5 MB response. A failed
+archive server never interrupts normal fixture updates; its status and last
+error are exposed through the Setup status sensor.
 
 ### Replay lab and restart-safe events
 
