@@ -1076,6 +1076,7 @@ class SoccerLiveSensor(Entity):
 
     async def _apply_insights(self):
         """Attach provider-neutral quality, matchday, watchlist and archive data."""
+        from .derived import capability_matrix, match_summary, season_transition
         from .insights import (
             annotate_completeness,
             archive_summary,
@@ -1086,7 +1087,6 @@ class SoccerLiveSensor(Entity):
             player_watchlist,
             update_archive,
         )
-        from .derived import capability_matrix, match_summary, season_transition
 
         entry = self.hass.config_entries.async_get_entry(self._config_entry_id)
         options = entry.options if entry else {}

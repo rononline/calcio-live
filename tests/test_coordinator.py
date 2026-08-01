@@ -46,6 +46,7 @@ def test_coordinator_registers_refreshes_and_unregisters_entities():
 
 def test_archive_sync_rejects_non_http_urls_before_network_access():
     import asyncio
+
     import pytest
 
     coordinator = coordinator_module.SoccerLiveEntryCoordinator(_Hass(), "entry")

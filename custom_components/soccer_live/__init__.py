@@ -241,6 +241,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     archive_url = str(entry.options.get("archive_sync_url") or "").strip()
     if archive_url:
         from datetime import timedelta
+
         from homeassistant.helpers.event import async_track_time_interval
 
         interval = max(1, int(entry.options.get("archive_sync_interval", 24)))
