@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo
 
 import aiohttp
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -708,13 +708,18 @@ class SoccerLiveSensor(Entity):
         if self._is_live():
             self._live_unsub = async_call_later(
                 self.hass, self._live_scan_interval,
-                lambda _: self.async_schedule_update_ha_state(force_refresh=True),
+                self._handle_live_refresh,
             )
             _LOGGER.debug(
                 "Live match active for %s — refresh scheduled in %s s",
                 self._name,
                 self._live_scan_interval,
             )
+
+    @callback
+    def _handle_live_refresh(self, _now):
+        """Request the live refresh from Home Assistant's event-loop thread."""
+        self.async_schedule_update_ha_state(force_refresh=True)
 
     async def async_added_to_hass(self):
         """Load previously dispatched match_finished keys from disk so HA restarts
@@ -1338,7 +1343,7 @@ class SoccerLiveSensor(Entity):
             ir.async_delete_issue(self.hass, DOMAIN, season_issue)
 
     def _fire_new_lineup_events(self, previous_attrs, current_attrs):
-        from .club_changes import newly_available_lineups
+        from .club_changes import lineup_difference, newly_available_lineups
         from .insights import watched_player_names
 
         entry = self.hass.config_entries.async_get_entry(self._config_entry_id)
@@ -1358,6 +1363,15 @@ class SoccerLiveSensor(Entity):
             }
             if self._claim_bus_event("soccer_live_lineup_available", event_data):
                 self.hass.bus.async_fire("soccer_live_lineup_available", event_data)
+            difference = lineup_difference(match, self._team_id, self._team_name)
+            if difference:
+                difference_data = {**event_data, **difference}
+                if self._claim_bus_event(
+                    "soccer_live_lineup_difference", difference_data, ttl=7 * 86400
+                ):
+                    self.hass.bus.async_fire(
+                        "soccer_live_lineup_difference", difference_data
+                    )
             for side, players in (
                 ("home", match.get("lineup_home") or []),
                 ("away", match.get("lineup_away") or []),

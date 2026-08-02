@@ -13,6 +13,7 @@ EVENT_TYPES = {
     "second_half": ("soccer_live_second_half", "second_half"),
     "match_finished": ("soccer_live_match_finished", "finished"),
     "lineup_available": ("soccer_live_lineup_available", "scheduled"),
+    "lineup_difference": ("soccer_live_lineup_difference", "scheduled"),
     "watchlist": ("soccer_live_watchlist_event", None),
     "postponed": ("soccer_live_match_postponed", "postponed"),
     "cancelled": ("soccer_live_match_cancelled", "cancelled"),
@@ -40,7 +41,11 @@ def simulated_event(event_type, data, now=None):
     }
     if phase:
         payload["match_phase"] = phase
-    for key in ("player", "minute", "team", "home_players", "away_players"):
+    for key in (
+        "player", "minute", "team", "home_players", "away_players",
+        "expected_starters", "actual_starters", "unexpected_starters",
+        "missing_expected",
+    ):
         if data.get(key) is not None:
             payload[key] = data[key]
     return bus_event, payload

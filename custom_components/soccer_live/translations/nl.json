@@ -243,6 +243,7 @@
     "binary_sensor": {
       "match_live": { "name": "Wedstrijd live" },
       "match_today": { "name": "Wedstrijd vandaag" },
+      "match_tomorrow": { "name": "Wedstrijd morgen" },
       "lineup_available": { "name": "Opstelling beschikbaar" },
       "data_degraded": { "name": "Datakwaliteit verminderd" }
     },

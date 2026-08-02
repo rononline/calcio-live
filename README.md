@@ -81,7 +81,7 @@ Configure via **Settings → Devices & Services → Soccer Live → Configure**:
 | Option | Default | Description |
 |---|---|---|
 | `scan_interval` | `3` minutes | Normal polling interval when no match is live. |
-| `live_scan_interval` | `60` seconds | Extra refresh interval while a match is live (`30` / `45` / `60` / `90` / `120` seconds). Use `30` seconds for faster goal/card updates when your API quota allows it. |
+| `live_scan_interval` | `60` seconds | Extra refresh interval while a match is live (`15` / `30` / `45` / `60` / `90` / `120` seconds). Use `15` or `30` seconds for faster goal/card updates only when your provider quota allows it. |
 | `enable_summary_enrichment` | `true` | Fetch extra match details. ESPN uses the summary endpoint; API-Football uses fixture events, statistics and lineups. Disable to reduce API calls. |
 | `enable_unified_enrichment` | `false` | Fill missing rich fields from matching fixtures in other Soccer Live entries while keeping this entry's schedule and scores authoritative. |
 | `archive_sync_url` | empty | Optional HTTP(S) JSON source using `soccer_live.archive.v1` or supported legacy Dutch fields. It is merged into the local archive. |
@@ -104,8 +104,8 @@ Configure via **Settings → Devices & Services → Soccer Live → Configure**:
 > sensor; API-Football entries add an **API requests remaining** sensor. These
 > compact entities are convenient automation triggers without templating large
 > match attributes or manually entering event-bus names.
-> Four binary sensors are also created: **Match live**, **Match today**,
-> **Lineup available** and **Data degraded**. They are derived locally from
+> Five binary sensors are also created: **Match live**, **Match today**,
+> **Match tomorrow**, **Lineup available** and **Data degraded**. They are derived locally from
 > published fixtures and make common automations template-free.
 
 > **Card contract.** Sensors publish `integration_version`, `data_schema_version` and `recommended_card_types` (the `card_type` slugs that suit the sensor), so the card editor can recommend the right card for a selected entity and warn when the integration is outdated.
@@ -564,6 +564,7 @@ Each config entry also creates a **calendar entity** (`calendar.soccer_live_<tea
 | `soccer_live_substitution` | Substitution | `player`, `minute`, `team`, `home_team`, `away_team`, `league_name` |
 | `soccer_live_match_finished` | Full time | `home_score`, `away_score`, `goal_scorers`, `goal_scorers_str`, `league_name` |
 | `soccer_live_lineup_available` | A fixture publishes its lineup for the first time | `event_id`, `home_team`, `away_team`, `home_players`, `away_players` |
+| `soccer_live_lineup_difference` | The official XI differs from an available expected XI | `team`, `expected_starters`, `actual_starters`, `unexpected_starters`, `missing_expected` |
 | `soccer_live_watchlist_event` | A configured watched player appears in a match, lineup or club change | `player`, `activity`, `team`, `source_event` |
 | `soccer_live_club_change` | A daily club snapshot changes | `type`, `team_id`, `player`/`name`, optional `delta` |
 | `soccer_live_transfer_added` | A new transfer appears | `team_id`, `player`, `direction` |
@@ -573,6 +574,7 @@ Each config entry also creates a **calendar entity** (`calendar.soccer_live_<tea
 Example automation blueprints are available in [`blueprints/automation`](blueprints/automation):
 goal, yellow card, red card, substitution, match started, full time (final score)
 and a configurable kick-off reminder (choose how many minutes before kick-off).
+Additional blueprints cover persistent data degradation and recovery, matchday/live/full-time actions, and expected-versus-official lineup differences.
 The player-watchlist blueprint turns `soccer_live_watchlist_event` into grouped
 mobile notifications for goals, cards, lineup roles, injuries and transfers.
 The **Soccer Live – iOS Live Activity** blueprint starts and updates one

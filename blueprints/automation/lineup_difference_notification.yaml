@@ -1,0 +1,47 @@
+blueprint:
+  name: Soccer Live - Lineup difference notification
+  description: Notify when the official starting eleven differs from an available expected lineup.
+  domain: automation
+  input:
+    notify_service:
+      name: Notify service
+      description: "Example: notify.mobile_app_iphone"
+      selector:
+        text:
+    team_name:
+      name: Team filter
+      description: Optional team name; leave empty for every team.
+      default: ""
+      selector:
+        text:
+
+trigger:
+  - platform: event
+    event_type: soccer_live_lineup_difference
+
+variables:
+  wanted_team: !input team_name
+  event: "{{ trigger.event.data }}"
+
+condition:
+  - condition: template
+    value_template: >-
+      {% set wanted = wanted_team | lower | trim %}
+      {{ not wanted or wanted in (event.team | default('', true) | lower) }}
+
+action:
+  - service: !input notify_service
+    data:
+      title: "⚽ Opstelling wijkt af"
+      message: >-
+        {% set unexpected = event.unexpected_starters | default([], true) %}
+        {% set missing = event.missing_expected | default([], true) %}
+        {{ event.team | default('Team', true) }}:
+        {% if unexpected %} onverwacht basis: {{ unexpected | join(', ') }}.{% endif %}
+        {% if missing %} verwacht maar geen basis: {{ missing | join(', ') }}.{% endif %}
+      data:
+        tag: "soccer-live-lineup-{{ event.event_id | default('match', true) }}"
+        group: soccer-live
+
+mode: queued
+max: 10

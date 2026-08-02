@@ -61,6 +61,7 @@ def test_every_simulated_event_is_actually_emitted_by_the_integration():
         "soccer_live_goal_cancelled", "soccer_live_kickoff_changed",
         "soccer_live_venue_changed", "soccer_live_opponent_changed",
         "soccer_live_substitution", "soccer_live_lineup_available",
+        "soccer_live_lineup_difference",
             "soccer_live_watchlist_event",
             "soccer_live_race_milestone",
         }

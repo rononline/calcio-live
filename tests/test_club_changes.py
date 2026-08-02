@@ -8,6 +8,7 @@ SPEC.loader.exec_module(MODULE)
 club_snapshot = MODULE.club_snapshot
 diff_club = MODULE.diff_club
 newly_available_lineups = MODULE.newly_available_lineups
+lineup_difference = MODULE.lineup_difference
 
 
 def test_club_snapshot_and_diff_detect_meaningful_changes():
@@ -56,3 +57,18 @@ def test_finished_match_enrichment_never_fires_lineup_event():
         }]
     }
     assert newly_available_lineups(base, enriched) == []
+
+
+def test_lineup_difference_compares_expected_with_official_starters():
+    difference = lineup_difference({
+        "home_id": 209,
+        "home_team": "Feyenoord",
+        "expected_lineup_home": [{"name": "A"}, {"name": "B"}],
+        "lineup_home": [
+            {"name": "A", "starter": True},
+            {"name": "C", "starter": True},
+            {"name": "B", "starter": False},
+        ],
+    }, team_id=209)
+    assert difference["unexpected_starters"] == ["C"]
+    assert difference["missing_expected"] == ["B"]

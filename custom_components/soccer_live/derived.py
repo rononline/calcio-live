@@ -22,18 +22,30 @@ def _as_datetime(value):
 def entry_match_state(matches, now=None) -> dict:
     """Return automation-friendly flags for an entry's published fixtures."""
     now = now or datetime.now(timezone.utc)
-    local_day = now.astimezone().date()
+    local_day = now.date()
+    tomorrow_day = local_day.fromordinal(local_day.toordinal() + 1)
     items = [item for item in (matches or []) if isinstance(item, dict)]
     live = [item for item in items if item.get("state") in {"in", "live"}]
     today = []
+    tomorrow = []
     for item in items:
         kickoff = _as_datetime(item.get("date_iso") or item.get("date"))
-        if kickoff and kickoff.astimezone().date() == local_day:
-            today.append(item)
-    lineup = [
-        item for item in items
-        if item.get("lineup_home") or item.get("lineup_away")
-    ]
+        if kickoff:
+            kickoff_day = kickoff.astimezone(now.tzinfo).date()
+            if kickoff_day == local_day:
+                today.append(item)
+            elif kickoff_day == tomorrow_day:
+                tomorrow.append(item)
+    upcoming = sorted(
+        (
+            (kickoff, item)
+            for item in items
+            if item.get("state") == "pre"
+            if (kickoff := _as_datetime(item.get("date_iso") or item.get("date")))
+            and kickoff >= now
+        ),
+        key=lambda pair: pair[0],
+    )
     degraded = [
         item for item in (live or today)
         if (item.get("data_completeness") or {}).get("level") == "limited"
@@ -43,15 +55,26 @@ def entry_match_state(matches, now=None) -> dict:
             if isinstance(alert, dict)
         )
     ]
-    focus = live[0] if live else today[0] if today else None
+    focus = (
+        live[0] if live
+        else today[0] if today
+        else upcoming[0][1] if upcoming
+        else tomorrow[0] if tomorrow
+        else None
+    )
+    lineup_available = bool(
+        focus and (focus.get("lineup_home") or focus.get("lineup_away"))
+    )
     return {
         "match_live": bool(live),
         "match_today": bool(today),
-        "lineup_available": bool(lineup),
+        "match_tomorrow": bool(tomorrow),
+        "lineup_available": lineup_available,
         "data_degraded": bool(degraded),
         "focus_match": focus,
         "live_count": len(live),
         "today_count": len(today),
+        "tomorrow_count": len(tomorrow),
     }
 
 

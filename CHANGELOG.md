@@ -1,5 +1,14 @@
 # Changelog
 
+## v3.17.0 (2026-08-02)
+
+- thread safety: mark the delayed live-refresh callback as an event-loop callback so Home Assistant never executes entity scheduling in an executor thread
+- polling: allow a 15-second live refresh interval for users whose provider quota permits faster goal and card updates
+- native automations: add a Match tomorrow binary sensor alongside Match today and Match live
+- lineup intelligence: emit `soccer_live_lineup_difference` when an official XI can be compared with an available expected XI
+- blueprints: add data-quality recovery, matchday-mode and lineup-difference automations
+- docs/tests: document the new interval, status and event contract and cover tomorrow and lineup comparison behavior
+
 ## v3.16.0 (2026-08-01)
 
 - native automations: add Match live, Match today, Lineup available and Data degraded binary sensors per config entry

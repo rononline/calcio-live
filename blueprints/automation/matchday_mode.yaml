@@ -1,0 +1,56 @@
+blueprint:
+  name: Soccer Live - Matchday mode
+  description: Run configurable actions on matchday, at kick-off and after full time.
+  domain: automation
+  input:
+    match_today:
+      name: Match today binary sensor
+      selector:
+        entity:
+          domain: binary_sensor
+    match_live:
+      name: Match live binary sensor
+      selector:
+        entity:
+          domain: binary_sensor
+    preparation_actions:
+      name: Matchday actions
+      default: []
+      selector:
+        action:
+    live_actions:
+      name: Live match actions
+      default: []
+      selector:
+        action:
+    finished_actions:
+      name: Full-time actions
+      default: []
+      selector:
+        action:
+
+trigger:
+  - platform: state
+    entity_id: !input match_today
+    to: "on"
+    id: matchday
+  - platform: state
+    entity_id: !input match_live
+    to: "on"
+    id: live
+  - platform: state
+    entity_id: !input match_live
+    from: "on"
+    to: "off"
+    id: finished
+
+action:
+  - choose:
+      - conditions: "{{ trigger.id == 'matchday' }}"
+        sequence: !input preparation_actions
+      - conditions: "{{ trigger.id == 'live' }}"
+        sequence: !input live_actions
+      - conditions: "{{ trigger.id == 'finished' }}"
+        sequence: !input finished_actions
+
+mode: restart

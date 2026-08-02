@@ -50,7 +50,11 @@ def _load_sensor_module():
     _install_module("aiohttp", ClientTimeout=_ClientTimeout, ClientError=_ClientError, ClientResponseError=_ClientResponseError)
     _install_module("homeassistant")
     _install_module("homeassistant.config_entries", ConfigEntry=object)
-    _install_module("homeassistant.core", HomeAssistant=object)
+    def _callback(func):
+        func._hass_callback = True
+        return func
+
+    _install_module("homeassistant.core", HomeAssistant=object, callback=_callback)
     _install_module("homeassistant.helpers")
     _install_module("homeassistant.helpers.entity", Entity=_Entity)
     _install_module("homeassistant.helpers.storage", Store=_Store)
@@ -531,14 +535,15 @@ def test_live_refresh_uses_configured_interval(monkeypatch):
     calls = []
 
     def _fake_call_later(hass, delay, callback):
-        calls.append(delay)
+        calls.append((delay, callback))
         return lambda: None
 
     monkeypatch.setattr(_sensor_mod, "async_call_later", _fake_call_later)
 
     sensor._schedule_live_refresh()
 
-    assert calls == [30]
+    assert calls[0][0] == 30
+    assert getattr(calls[0][1], "_hass_callback", False) is True
 
 
 def test_live_main_cache_ttl_uses_configured_interval():

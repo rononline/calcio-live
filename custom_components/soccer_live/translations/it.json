@@ -243,6 +243,7 @@
     "binary_sensor": {
       "match_live": { "name": "Partita in diretta" },
       "match_today": { "name": "Partita oggi" },
+      "match_tomorrow": { "name": "Partita domani" },
       "lineup_available": { "name": "Formazione disponibile" },
       "data_degraded": { "name": "Qualità dati ridotta" }
     },

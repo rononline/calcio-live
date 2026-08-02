@@ -1,11 +1,18 @@
 """Native automation-friendly match-state binary sensors."""
 
 from homeassistant.components.binary_sensor import BinarySensorEntity
+from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
 from .derived import entry_match_state
 
-KINDS = ("match_live", "match_today", "lineup_available", "data_degraded")
+KINDS = (
+    "match_live",
+    "match_today",
+    "match_tomorrow",
+    "lineup_available",
+    "data_degraded",
+)
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
@@ -28,6 +35,7 @@ class SoccerLiveMatchBinarySensor(BinarySensorEntity):
         self._attr_icon = {
             "match_live": "mdi:soccer",
             "match_today": "mdi:calendar-today",
+            "match_tomorrow": "mdi:calendar-arrow-right",
             "lineup_available": "mdi:account-group",
             "data_degraded": "mdi:alert-circle-outline",
         }[kind]
@@ -62,7 +70,7 @@ class SoccerLiveMatchBinarySensor(BinarySensorEntity):
                 for item in (attrs.get("data_alerts") or [])
                 if isinstance(item, dict)
             )
-        state = entry_match_state(matches)
+        state = entry_match_state(matches, dt_util.now())
         state["data_degraded"] = state["data_degraded"] or degraded
         return state
 
@@ -81,4 +89,5 @@ class SoccerLiveMatchBinarySensor(BinarySensorEntity):
             "away_team": focus.get("away_team"),
             "live_count": state["live_count"],
             "today_count": state["today_count"],
+            "tomorrow_count": state["tomorrow_count"],
         }

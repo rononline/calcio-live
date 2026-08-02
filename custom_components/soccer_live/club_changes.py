@@ -75,3 +75,46 @@ def newly_available_lineups(previous_attrs, current_attrs):
         if has_lineup and not had_lineup:
             available.append(match)
     return available
+
+
+def lineup_difference(match, team_id=None, team_name=None):
+    """Compare an official lineup with an optional provider prediction."""
+    match = match or {}
+    followed_home = (
+        str(match.get("home_id") or "") == str(team_id or "")
+        if team_id not in (None, "")
+        else str(team_name or "").casefold() in str(match.get("home_team") or "").casefold()
+    )
+    side = "home" if followed_home else "away"
+    expected = match.get(f"expected_lineup_{side}") or []
+    official = match.get(f"lineup_{side}") or []
+
+    def names(items, official_only=False):
+        result = []
+        for item in items:
+            if not isinstance(item, dict):
+                item = {"name": item}
+            if official_only and (
+                item.get("starter") is False
+                or item.get("substitute")
+                or item.get("bench")
+            ):
+                continue
+            name = str(item.get("name") or item.get("player") or "").strip()
+            if name and name.casefold() not in {value.casefold() for value in result}:
+                result.append(name)
+        return result
+
+    predicted = names(expected)
+    actual = names(official, official_only=True)
+    if not predicted or not actual:
+        return None
+    predicted_keys = {name.casefold() for name in predicted}
+    actual_keys = {name.casefold() for name in actual}
+    return {
+        "team": match.get(f"{side}_team"),
+        "expected_starters": predicted,
+        "actual_starters": actual,
+        "unexpected_starters": [name for name in actual if name.casefold() not in predicted_keys],
+        "missing_expected": [name for name in predicted if name.casefold() not in actual_keys],
+    }

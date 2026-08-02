@@ -31,6 +31,35 @@ def test_entry_match_state_exposes_native_flags():
     assert state["lineup_available"] is True
 
 
+def test_entry_match_state_exposes_tomorrows_fixture_separately():
+    now = datetime(2026, 8, 2, 10, tzinfo=timezone.utc)
+    state = derived.entry_match_state([
+        _match(date_iso="2026-08-03T12:00:00+00:00", state="pre")
+    ], now)
+    assert state["match_today"] is False
+    assert state["match_tomorrow"] is True
+    assert state["tomorrow_count"] == 1
+
+
+def test_lineup_available_ignores_historical_lineups():
+    now = datetime(2026, 8, 2, 10, tzinfo=timezone.utc)
+    state = derived.entry_match_state([
+        _match(
+            event_id="old",
+            date_iso="2026-07-31T12:00:00+00:00",
+            state="post",
+            lineup_home=[{"name": "Old starter"}],
+        ),
+        _match(
+            event_id="next",
+            date_iso="2026-08-03T12:00:00+00:00",
+            state="pre",
+            lineup_home=[],
+        ),
+    ], now)
+    assert state["lineup_available"] is False
+
+
 def test_capability_matrix_explains_missing_data():
     matrix = derived.capability_matrix(
         [_match()], ["fixtures", "lineups"]

@@ -1,0 +1,48 @@
+blueprint:
+  name: Soccer Live - Data quality notification
+  description: Notify only when Soccer Live data stays degraded, and again when it recovers.
+  domain: automation
+  input:
+    data_degraded:
+      name: Data degraded binary sensor
+      selector:
+        entity:
+          domain: binary_sensor
+    notify_service:
+      name: Notify service
+      description: "Example: notify.mobile_app_iphone"
+      selector:
+        text:
+    degraded_for:
+      name: Minimum degraded duration
+      default: "00:10:00"
+      selector:
+        duration:
+
+trigger:
+  - platform: state
+    entity_id: !input data_degraded
+    to: "on"
+    for: !input degraded_for
+    id: degraded
+  - platform: state
+    entity_id: !input data_degraded
+    from: "on"
+    to: "off"
+    id: recovered
+
+action:
+  - service: !input notify_service
+    data:
+      title: >-
+        {{ '⚠️ Soccer Live vertraagd' if trigger.id == 'degraded'
+           else '✅ Soccer Live hersteld' }}
+      message: >-
+        {{ 'De provider levert al enige tijd onvolledige of vertraagde wedstrijddata.'
+           if trigger.id == 'degraded'
+           else 'De wedstrijddata wordt weer normaal bijgewerkt.' }}
+      data:
+        tag: soccer-live-data-quality
+        group: soccer-live
+
+mode: restart

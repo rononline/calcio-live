@@ -52,6 +52,7 @@ async def test_translations_load_from_strings(hass: HomeAssistant):
     assert nl[f"component.{DOMAIN}.entity.calendar.match_calendar.name"] == "Wedstrijdkalender"
     assert nl[f"component.{DOMAIN}.entity.event.match_event.name"] == "Wedstrijdgebeurtenis"
     assert nl[f"component.{DOMAIN}.entity.binary_sensor.match_live.name"] == "Wedstrijd live"
+    assert nl[f"component.{DOMAIN}.entity.binary_sensor.match_tomorrow.name"] == "Wedstrijd morgen"
 
 
 async def test_user_flow_espn_goes_to_follow_without_a_key(hass: HomeAssistant):
@@ -144,6 +145,7 @@ async def test_team_entry_wiring(hass: HomeAssistant):
     assert any(eid.endswith("_match_event") for eid in entity_ids), entity_ids
     assert any(eid.endswith("_match_live") for eid in entity_ids), entity_ids
     assert any(eid.endswith("_match_today") for eid in entity_ids), entity_ids
+    assert any(eid.endswith("_match_tomorrow") for eid in entity_ids), entity_ids
     assert any(eid.endswith("_lineup_available") for eid in entity_ids), entity_ids
     assert any(eid.endswith("_data_degraded") for eid in entity_ids), entity_ids
     assert any(eid.startswith("calendar.soccer_live_") for eid in entity_ids), entity_ids
