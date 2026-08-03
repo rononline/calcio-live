@@ -1,5 +1,15 @@
 # Changelog
 
+## v3.18.0 (2026-08-03)
+
+- event contract: add stable provider-neutral `event_uid`, source, detection time, score-at-event and correction metadata to match events
+- cross-provider reliability: deduplicate matching events across sensors, config entries and contract-aware providers in one Home Assistant runtime
+- delayed updates: reconstruct each historical goal and running score when a provider jumps across several goals in one refresh
+- VAR corrections: replay and live providers now publish explicit `soccer_live_goal_cancelled` events with previous and corrected scores
+- live diagnostics: expose provider health, clocks, scores, alerts and poll interval through `live_provider_monitor` on the Runtime status sensor
+- replay lab: cover score corrections and publish the same event contract for safe pre-match automation testing
+- docs/tests: document the common payload and add regressions for multi-goal catch-up, cross-entry deduplication and VAR replay
+
 ## v3.17.0 (2026-08-02)
 
 - thread safety: mark the delayed live-refresh callback as an event-loop callback so Home Assistant never executes entity scheduling in an executor thread

@@ -148,6 +148,36 @@ def test_score_correction_emits_cancelled_goal_and_allows_reaward():
     assert events[1][1]["home_score"] == 0
 
 
+def test_delayed_score_jump_emits_each_goal_with_its_historical_score():
+    sensor = _sensor("team_matches")
+    base = {
+        "event_id": "fixture-late",
+        "date_iso": "2026-08-02T13:00:00Z",
+        "state": "in",
+        "home_id": 1,
+        "away_id": 2,
+        "home_team": "Feyenoord",
+        "away_team": "Atalanta",
+        "home_score": 0,
+        "away_score": 0,
+        "match_details": [],
+        "key_events": [],
+    }
+    events = []
+    sensor._detect_and_dispatch_goals([base], events)
+    goals = [
+        {"type": "Goal", "scoring_play": True, "minute": 11, "player": "A", "team_id": 1, "team": "Feyenoord"},
+        {"type": "Goal", "scoring_play": True, "minute": 45, "player": "B", "team_id": 2, "team": "Atalanta"},
+        {"type": "Goal", "scoring_play": True, "minute": 81, "player": "C", "team_id": 1, "team": "Feyenoord"},
+    ]
+    sensor._detect_and_dispatch_goals(
+        [{**base, "home_score": 2, "away_score": 1, "key_events": goals}], events
+    )
+    assert [(item[1]["player"], item[1]["home_score"], item[1]["away_score"]) for item in events] == [
+        ("A", 1, 0), ("B", 1, 1), ("C", 2, 1)
+    ]
+
+
 def test_club_overrides_keep_provider_provenance_and_conflicts():
     sensor = _sensor("team_match", provider="api_football")
     entry = types.SimpleNamespace(options={
@@ -196,6 +226,21 @@ def test_bus_events_are_deduplicated_across_sensors_in_one_entry():
     assert second._claim_bus_event(
         "soccer_live_lineup_available",
         {"event_id": "fixture-2", "home_players": ["A", "B"]},
+    ) is False
+
+
+def test_event_uid_deduplicates_across_config_entries_in_one_ha_runtime():
+    SoccerLiveSensor._bus_event_fingerprints = {}
+    hass = types.SimpleNamespace(data={})
+    first = _sensor("team_matches")
+    second = _sensor("team_matches_mixed")
+    first.hass = second.hass = hass
+    first._config_entry_id = "entry-a"
+    second._config_entry_id = "entry-b"
+    event = {"event_uid": "sl-shared-goal", "event_id": "provider-a"}
+    assert first._claim_bus_event("soccer_live_goal", event) is True
+    assert second._claim_bus_event(
+        "soccer_live_goal", {**event, "event_id": "provider-b"}
     ) is False
 
 

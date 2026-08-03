@@ -239,7 +239,31 @@ def replay_events(previous: dict | None, current: dict) -> list[tuple[str, dict]
             event_type == "soccer_live_goal" for event_type, _ in events
         ):
             events.append(("soccer_live_goal", payload))
-    return events
+        if new_home < old_home or new_away < old_away:
+            side = "home" if new_home < old_home else "away"
+            events.append(("soccer_live_goal_cancelled", {
+                **payload,
+                "team": current.get(f"{side}_team"),
+                "previous_home_score": old_home,
+                "previous_away_score": old_away,
+                "goals_removed": (old_home - new_home) + (old_away - new_away),
+                "reason": "score_correction",
+            }))
+
+    from .event_contract import enrich_event
+    return [
+        (
+            event_type,
+            enrich_event(
+                event_type,
+                event_payload,
+                provider="replay",
+                source_entity_id="soccer_live.play_match_replay",
+                detected_at=current.get("captured_at"),
+            ),
+        )
+        for event_type, event_payload in events
+    ]
 
 
 def demo_replay(home_team="Feyenoord", away_team="Tegenstander") -> list[dict]:

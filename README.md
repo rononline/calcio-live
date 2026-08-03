@@ -163,13 +163,21 @@ Match sensors retain at most 180 compact, meaningful snapshots for the current
 fixture. The replay service emits the normal `soccer_live_*` lifecycle events
 with `simulated: true`, `replayed: true` and `provider: replay`, so automations
 and notifications can be tested before a real match. Replay never writes fake
-scores into the normal sensors.
+scores into the normal sensors. Replays include score corrections, allowing a
+VAR-disallowed goal flow to be tested without waiting for a live match.
 
 Real event fingerprints are kept in local storage for seven days. This prevents
 a Home Assistant restart or overlapping next/all/mixed sensors from announcing
 the same lineup, phase, goal or card again. Direct mobile-app notifications use
 a stable match tag and group, allowing later score updates to replace the
 existing notification instead of creating a stack.
+
+Every match event follows the provider-neutral event contract and includes
+`event_uid`, `event_contract_version`, `provider`, `source_entity_id`,
+`detected_at`, `score_at_event` and `is_correction`. The same real-world goal
+therefore receives the same `event_uid` when two providers use different
+fixture IDs or player-name abbreviations. Use `event_uid` as an automation or
+notification deduplication key.
 
 > **Shared coordinator and restart recovery.** Entities retain their
 > provider-specific polling intervals, while an entry-wide coordinator
@@ -543,6 +551,11 @@ mode: queued
 **Health/debug attributes**:
 `api_status`, `last_successful_update`, `last_error`, `request_count`, `last_request_time`, `sensor_type`, `start_date`, `end_date`, `provider`, `provider_capabilities`, `api_football_season`, `api_football_quota`
 
+The entry-level **Runtime status** sensor also exposes
+`live_provider_monitor`, containing `status` (`not_live`, `healthy` or
+`degraded`), live clocks/scores, active data alerts and the configured live
+poll interval.
+
 **Provider capabilities**: the `provider_capabilities` attribute lists what the selected provider can supply, so cards and automations can adapt. ESPN: `fixtures`, `scores`, `standings`, `top_scorers`, `news`, `brackets`, `lineups`, `statistics`, `head_to_head`. API-Football also adds derived `brackets`, `top_assists`, `predictions`, `odds`, `injuries` and `xg` (but not `news`).
 
 ---
@@ -559,6 +572,7 @@ Each config entry also creates a **calendar entity** (`calendar.soccer_live_<tea
 |---|---|---|
 | `soccer_live_match_started` | Kick-off (pre → in) | `home_team`, `away_team`, `venue`, `date`, `league_name`, `competition_code` |
 | `soccer_live_goal` | Goal scored | `team`, `player`, `minute`, `home_score`, `away_score`, `league_name`, `competition_code` |
+| `soccer_live_goal_cancelled` | A provider corrects the score, usually after VAR | `team`, `previous_home_score`, `previous_away_score`, `home_score`, `away_score`, `is_correction` |
 | `soccer_live_yellow_card` | Yellow card | `player`, `minute`, `team`, `home_team`, `away_team`, `league_name` |
 | `soccer_live_red_card` | Red card | `player`, `minute`, `team`, `home_team`, `away_team`, `league_name` |
 | `soccer_live_substitution` | Substitution | `player`, `minute`, `team`, `home_team`, `away_team`, `league_name` |
@@ -570,6 +584,10 @@ Each config entry also creates a **calendar entity** (`calendar.soccer_live_<tea
 | `soccer_live_transfer_added` | A new transfer appears | `team_id`, `player`, `direction` |
 | `soccer_live_injury_added` / `soccer_live_player_available` | A player becomes unavailable/available | `team_id`, `player` |
 | `soccer_live_coach_changed` | The published head coach changes | `team_id`, `name`, `previous` |
+
+All match-event rows above additionally carry the common event-contract fields
+`event_uid`, `provider`, `source_entity_id`, `detected_at`, `score_at_event` and
+`is_correction`.
 
 Example automation blueprints are available in [`blueprints/automation`](blueprints/automation):
 goal, yellow card, red card, substitution, match started, full time (final score)

@@ -1,4 +1,6 @@
 import importlib.util
+import sys
+import types
 from pathlib import Path
 
 MODULE_PATH = (
@@ -7,7 +9,13 @@ MODULE_PATH = (
     / "soccer_live"
     / "replay.py"
 )
-SPEC = importlib.util.spec_from_file_location("soccer_live_replay", MODULE_PATH)
+package = types.ModuleType("custom_components.soccer_live")
+package.__path__ = [str(MODULE_PATH.parent)]
+sys.modules.setdefault("custom_components", types.ModuleType("custom_components"))
+sys.modules["custom_components.soccer_live"] = package
+SPEC = importlib.util.spec_from_file_location(
+    "custom_components.soccer_live.replay", MODULE_PATH
+)
 replay = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(replay)
 
@@ -55,6 +63,8 @@ def test_replay_derives_lifecycle_and_goal_events():
     events = replay.replay_events(previous, current)
     assert [event_type for event_type, _ in events] == ["soccer_live_goal"]
     assert events[0][1]["simulated"] is True
+    assert events[0][1]["provider"] == "replay"
+    assert events[0][1]["event_uid"].startswith("sl-")
 
     finished = replay.replay_events(
         current,
@@ -79,3 +89,13 @@ def test_demo_replay_covers_a_complete_match():
     assert replay.replay_events(None, snapshots[0])[0][0] == (
         "soccer_live_lineup_available"
     )
+
+
+def test_replay_exercises_var_score_correction():
+    events = replay.replay_events(
+        _snapshot(home_score=1, clock="30"),
+        _snapshot(home_score=0, clock="32"),
+    )
+    assert events[0][0] == "soccer_live_goal_cancelled"
+    assert events[0][1]["is_correction"] is True
+    assert events[0][1]["previous_home_score"] == 1

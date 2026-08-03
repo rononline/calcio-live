@@ -513,10 +513,39 @@ class SoccerLiveRuntimeSensor(Entity):
                 "config_entry_id": self._entry.entry_id,
             }
         if self._kind != "api_quota_remaining":
-            return {
+            attrs = {
                 "provider": self._provider,
                 "config_entry_id": self._entry.entry_id,
             }
+            if self._kind == "runtime_status":
+                matches = [
+                    match
+                    for entity in self._source_entities()
+                    for match in ((getattr(entity, "_attributes", {}) or {}).get("matches") or [])
+                    if isinstance(match, dict)
+                ]
+                live = [match for match in matches if match.get("state") in {"in", "live"}]
+                alerts = [
+                    alert
+                    for entity in self._source_entities()
+                    for alert in ((getattr(entity, "_attributes", {}) or {}).get("data_alerts") or [])
+                    if isinstance(alert, dict)
+                ]
+                attrs["live_provider_monitor"] = {
+                    "status": (
+                        "not_live" if not live
+                        else "degraded" if any(alert.get("severity") in {"warning", "error"} for alert in alerts)
+                        else "healthy"
+                    ),
+                    "live_matches": len(live),
+                    "clocks": [match.get("clock") for match in live],
+                    "scores": [f"{match.get('home_score')}-{match.get('away_score')}" for match in live],
+                    "alerts": alerts,
+                    "poll_interval_seconds": min(
+                        [getattr(entity, "_live_scan_interval", 60) for entity in self._source_entities()] or [60]
+                    ),
+                }
+            return attrs
         quotas = [
             getattr(entity, "_api_football_quota", {})
             for entity in self._source_entities()
@@ -1344,6 +1373,7 @@ class SoccerLiveSensor(Entity):
 
     def _fire_new_lineup_events(self, previous_attrs, current_attrs):
         from .club_changes import lineup_difference, newly_available_lineups
+        from .event_contract import enrich_event
         from .insights import watched_player_names
 
         entry = self.hass.config_entries.async_get_entry(self._config_entry_id)
@@ -1351,7 +1381,7 @@ class SoccerLiveSensor(Entity):
             (entry.options if entry else {}).get("player_watchlist", "")
         )
         for match in newly_available_lineups(previous_attrs, current_attrs):
-            event_data = {
+            event_data = enrich_event("soccer_live_lineup_available", {
                 "entity_id": self.entity_id,
                 "config_entry_id": self._config_entry_id,
                 "team_id": self._team_id,
@@ -1360,7 +1390,9 @@ class SoccerLiveSensor(Entity):
                 "away_team": match.get("away_team"),
                 "home_players": [item.get("name") or item.get("player") for item in (match.get("lineup_home") or [])],
                 "away_players": [item.get("name") or item.get("player") for item in (match.get("lineup_away") or [])],
-            }
+                "date": match.get("date"),
+                "date_iso": match.get("date_iso"),
+            }, provider=self._provider, source_entity_id=self.entity_id)
             if self._claim_bus_event("soccer_live_lineup_available", event_data):
                 self.hass.bus.async_fire("soccer_live_lineup_available", event_data)
             difference = lineup_difference(match, self._team_id, self._team_name)
@@ -1438,7 +1470,15 @@ class SoccerLiveSensor(Entity):
         fire_bus = self._sensor_type != "team_match"
         now_iso = datetime.now().isoformat()
         for event_type, event_data in self._pending_events:
+            from .event_contract import enrich_event
+
             event_data.setdefault("config_entry_id", self._config_entry_id)
+            event_data = enrich_event(
+                event_type,
+                event_data,
+                provider=self._provider,
+                source_entity_id=self.entity_id,
+            )
             self._store_last_event_attributes(event_type, event_data, now_iso)
             if fire_bus and self._claim_bus_event(event_type, event_data):
                 self.hass.bus.fire(event_type, event_data)
@@ -1472,12 +1512,25 @@ class SoccerLiveSensor(Entity):
     def _claim_bus_event(self, event_type, event_data, ttl=300):
         """Claim an event fingerprint shared by all sensors in this HA process."""
         now = monotonic()
+        uid = (event_data or {}).get("event_uid")
+        global_cache = (
+            self.hass.data.setdefault("soccer_live_event_uids_v1", {})
+            if uid and self.hass is not None
+            else {}
+        )
+        if uid:
+            previous_uid = global_cache.get(uid)
+            if previous_uid is not None and now - previous_uid < max(ttl, 300):
+                return False
         cache = SoccerLiveSensor._bus_event_fingerprints
         expired = [key for key, timestamp in cache.items() if now - timestamp >= ttl]
         for key in expired:
             cache.pop(key, None)
 
         canonical = (
+            {"event_uid": (event_data or {}).get("event_uid")}
+            if (event_data or {}).get("event_uid")
+            else
             {"event_id": (event_data or {}).get("event_id")}
             if event_type in _SINGLE_FIXTURE_EVENT_TYPES
             else {
@@ -1487,9 +1540,7 @@ class SoccerLiveSensor(Entity):
             }
         )
         fingerprint = (
-            self._config_entry_id,
             event_type,
-            str((event_data or {}).get("event_id") or ""),
             json.dumps(canonical, sort_keys=True, default=str, separators=(",", ":")),
         )
         coordinator = getattr(self, "_coordinator", None)
@@ -1502,6 +1553,14 @@ class SoccerLiveSensor(Entity):
         if previous is not None and now - previous < ttl:
             return False
         cache[fingerprint] = now
+        if uid:
+            global_cache[uid] = now
+            for old_uid, timestamp in list(global_cache.items()):
+                if now - timestamp >= 7 * 86400:
+                    global_cache.pop(old_uid, None)
+            if len(global_cache) > 1000:
+                oldest = min(global_cache, key=global_cache.get)
+                global_cache.pop(oldest, None)
         if len(cache) > 500:
             cache.pop(min(cache, key=cache.get), None)
         return True
@@ -2846,6 +2905,34 @@ class SoccerLiveSensor(Entity):
             home_abbrev = match.get("home_abbrev", "")
             away_abbrev = match.get("away_abbrev", "")
 
+            # Rich providers may return several historical goal incidents in the
+            # first live response after a delayed refresh. Reconstruct each
+            # score-at-event so notifications never label every scorer with the
+            # latest aggregate score (for example two different 2-1 alerts).
+            key_goals = self._new_key_goal_events(
+                match, dispatched, prev_home, prev_away, home_score, away_score
+            )
+            if key_goals:
+                for goal in key_goals:
+                    side = goal["side"]
+                    scoring_team = match.get(f"{side}_team", "N/A")
+                    opponent_side = "away" if side == "home" else "home"
+                    self._dispatch_goal_event(
+                        scoring_team,
+                        match.get(f"{opponent_side}_team", "N/A"),
+                        1,
+                        goal["home_score"],
+                        goal["away_score"],
+                        match,
+                        [{"player": goal["player"], "minute": goal["minute"]}],
+                        events,
+                    )
+                    dispatched.add(goal["key"])
+                # The score increases have been emitted incident-by-incident;
+                # keep the existing branches only for corrections/fallbacks.
+                prev_home = home_score
+                prev_away = away_score
+
             if home_score > prev_home:
                 goals_scored = home_score - prev_home
                 home_strings = self._pick_goal_strings(curr_details, dispatched, home_abbrev, goals_scored)
@@ -2886,6 +2973,77 @@ class SoccerLiveSensor(Entity):
             self._previous_scores[match_id]["away"] = away_score
             self._previous_scores[match_id]["match_details"] = curr_details.copy()
 
+    @staticmethod
+    def _new_key_goal_events(
+        match, dispatched, previous_home, previous_away, current_home, current_away
+    ):
+        """Return undispatched goal incidents with reconstructed running scores."""
+        if current_home <= previous_home and current_away <= previous_away:
+            return []
+        home_name = str(match.get("home_team") or "").casefold()
+        away_name = str(match.get("away_team") or "").casefold()
+        home_id = str(match.get("home_id") or "")
+        away_id = str(match.get("away_id") or "")
+
+        def minute_number(item):
+            raw = str(item.get("minute") or item.get("clock") or "0")
+            try:
+                return sum(int(part) for part in raw.replace("'", "").split("+"))
+            except ValueError:
+                return 0
+
+        goals = []
+        for index, item in enumerate(match.get("key_events") or []):
+            if not isinstance(item, dict):
+                continue
+            kind = str(item.get("type") or item.get("type_text") or "").casefold()
+            if not (item.get("scoring_play") or "goal" in kind):
+                continue
+            goals.append((minute_number(item), index, item))
+        goals.sort(key=lambda value: (value[0], value[1]))
+        if not goals:
+            return []
+
+        running_home = running_away = 0
+        result = []
+        for _, index, item in goals:
+            team_name = str(item.get("team") or "").casefold()
+            team_id = str(item.get("team_id") or "")
+            side = (
+                "home" if (team_id and team_id == home_id) or team_name == home_name
+                else "away" if (team_id and team_id == away_id) or team_name == away_name
+                else None
+            )
+            if side is None:
+                return []
+            if side == "home":
+                running_home += 1
+            else:
+                running_away += 1
+            key = "ke:{}:{}:{}:{}".format(
+                item.get("id") or item.get("event_id") or index,
+                item.get("minute") or item.get("clock") or "",
+                item.get("player") or "",
+                side,
+            )
+            if key in dispatched:
+                continue
+            changed_after_previous = (
+                side == "home" and running_home > previous_home
+                or side == "away" and running_away > previous_away
+            )
+            within_current = running_home <= current_home and running_away <= current_away
+            if changed_after_previous and within_current:
+                result.append({
+                    "key": key,
+                    "side": side,
+                    "player": item.get("player") or "N/A",
+                    "minute": item.get("minute") or item.get("clock") or "N/A",
+                    "home_score": running_home,
+                    "away_score": running_away,
+                })
+        return result
+
     def _dispatch_goal_cancelled_event(
         self, match, side, removed, previous_home, previous_away, events
     ):
@@ -2904,6 +3062,8 @@ class SoccerLiveSensor(Entity):
             "away_score": match.get("away_score", 0),
             "clock": match.get("clock", "N/A"),
             "league_name": match.get("league_name", "N/A"),
+            "date": match.get("date"),
+            "date_iso": match.get("date_iso"),
             "competition_code": self._code,
             "sensor_name": self._name,
         }))
@@ -2982,6 +3142,8 @@ class SoccerLiveSensor(Entity):
                 "match_status": match.get("status", "N/A"),
                 "season_info": match.get("season_info", "N/A"),
                 "league_name": match.get("league_name", "N/A"),
+                "date": match.get("date"),
+                "date_iso": match.get("date_iso"),
                 "competition_code": self._code,
                 "sensor_name": self._name,
             }
@@ -3035,6 +3197,8 @@ class SoccerLiveSensor(Entity):
                 "match_status": match.get("status", "N/A"),
                 "season_info": match.get("season_info", "N/A"),
                 "league_name": match.get("league_name", "N/A"),
+                "date": match.get("date"),
+                "date_iso": match.get("date_iso"),
                 "competition_code": self._code,
                 "sensor_name": self._name,
             }
