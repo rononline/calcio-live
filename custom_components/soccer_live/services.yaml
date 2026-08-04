@@ -182,3 +182,20 @@ export_match_replay:
       selector:
         config_entry:
           integration: soccer_live
+
+get_match_details:
+  name: Get match details
+  description: Returns rich details for one fixture and fetches them on demand when the provider supports it.
+  fields:
+    config_entry_id:
+      name: Config entry ID
+      description: Optional Soccer Live config entry. Leave empty to search all entries.
+      selector:
+        config_entry:
+          integration: soccer_live
+    match_id:
+      name: Match ID
+      description: Provider fixture or event ID published by a Soccer Live match sensor.
+      required: true
+      selector:
+        text:

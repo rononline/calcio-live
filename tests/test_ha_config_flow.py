@@ -33,6 +33,7 @@ from custom_components.soccer_live.const import (
     PROVIDER_API_FOOTBALL,
     PROVIDER_ESPN,
 )
+from custom_components.soccer_live.device_trigger import async_get_triggers
 
 
 @pytest.fixture(autouse=True)
@@ -160,6 +161,13 @@ async def test_team_entry_wiring(hass: HomeAssistant):
     devices = dr.async_entries_for_config_entry(dev_reg, entry.entry_id)
     assert len(devices) == 1
     assert all(e.device_id == devices[0].id for e in entities)
+    triggers = await async_get_triggers(hass, devices[0].id)
+    assert {trigger["type"] for trigger in triggers} >= {
+        "goal",
+        "lineup_available",
+        "match_started",
+        "match_finished",
+    }
 
 
 async def test_archive_services_round_trip_in_real_home_assistant(hass: HomeAssistant):
@@ -267,3 +275,19 @@ async def test_archive_services_round_trip_in_real_home_assistant(hass: HomeAssi
         return_response=True,
     )
     assert replay_export["replays"][entry.entry_id]["version"] == 1
+
+    details = await hass.services.async_call(
+        DOMAIN,
+        "get_match_details",
+        {
+            "config_entry_id": entry.entry_id,
+            "match_id": "missing-fixture",
+        },
+        blocking=True,
+        return_response=True,
+    )
+    assert details == {
+        "match": None,
+        "match_id": "missing-fixture",
+        "available": False,
+    }

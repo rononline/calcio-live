@@ -384,7 +384,10 @@ class SoccerLiveEntryCoordinator:
         delay = max(0.05, min(5.0, 1.0 / max(0.2, float(speed))))
         for index, snapshot in enumerate(snapshots):
             for event_type, payload in replay_events(previous, snapshot):
-                self.hass.bus.async_fire(event_type, payload)
+                self.hass.bus.async_fire(
+                    event_type,
+                    {**payload, "config_entry_id": self.entry_id},
+                )
                 fired += 1
             previous = snapshot
             if index < len(snapshots) - 1:
@@ -409,6 +412,28 @@ class SoccerLiveEntryCoordinator:
         for entity in tuple(self._entities):
             entity.async_schedule_update_ha_state(force_refresh=True)
         return len(self._entities)
+
+    async def async_get_match_details(self, match_id: str) -> dict | None:
+        """Load one fixture on demand without duplicating provider requests."""
+        from .details import find_match, has_match_details, public_match_details
+
+        candidates = []
+        for entity in tuple(self._entities):
+            match = find_match(getattr(entity, "_attributes", {}), match_id)
+            if match is None:
+                continue
+            if has_match_details(match):
+                return public_match_details(match)
+            candidates.append(entity)
+        if not candidates:
+            return None
+        # The focused next-match entity is cheapest and most likely to have the
+        # right competition code for an ESPN summary endpoint.
+        candidates.sort(
+            key=lambda entity: getattr(entity, "_sensor_type", "") != "team_match"
+        )
+        loader = getattr(candidates[0], "async_get_match_details", None)
+        return await loader(str(match_id)) if loader else None
 
     async def async_replace_archive(self, matches):
         """Replace the shared archive and publish it on every entry sensor."""

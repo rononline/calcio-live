@@ -195,6 +195,15 @@
       "invalid_api_key": "Ungültiger API-Football-Schlüssel. Bitte überprüfe deinen Schlüssel und versuche es erneut."
     }
   },
+  "device_automation": {
+    "trigger_type": {
+      "goal": "Tor", "goal_cancelled": "Tor aberkannt",
+      "lineup_available": "Aufstellung verfügbar", "match_started": "Spiel begonnen",
+      "halftime": "Halbzeit", "second_half": "Zweite Halbzeit begonnen",
+      "red_card": "Rote Karte", "match_finished": "Spiel beendet",
+      "match_postponed": "Spiel verschoben", "match_cancelled": "Spiel abgesagt"
+    }
+  },
   "entity": {
     "sensor": {
       "team_match": {

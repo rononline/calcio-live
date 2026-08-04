@@ -35,6 +35,7 @@ from .const import (
     compute_sync_status,
     recommended_card_types,
 )
+from .polling import adaptive_poll_interval
 
 _LIVE_POLL_TYPES = {"team_match", "team_matches", "team_matches_mixed", "match_day", "all_matches_today"}
 _LEGACY_SELECTIONS = {
@@ -542,8 +543,20 @@ class SoccerLiveRuntimeSensor(Entity):
                     "scores": [f"{match.get('home_score')}-{match.get('away_score')}" for match in live],
                     "alerts": alerts,
                     "poll_interval_seconds": min(
-                        [getattr(entity, "_live_scan_interval", 60) for entity in self._source_entities()] or [60]
+                        [
+                            getattr(
+                                entity,
+                                "_adaptive_poll_interval",
+                                getattr(entity, "_live_scan_interval", 60),
+                            )
+                            for entity in self._source_entities()
+                        ]
+                        or [60]
                     ),
+                    "polling_reasons": sorted({
+                        getattr(entity, "_adaptive_poll_reason", "normal")
+                        for entity in self._source_entities()
+                    }),
                 }
             return attrs
         quotas = [
@@ -690,6 +703,8 @@ class SoccerLiveSensor(Entity):
 
         # Handle for the extra live-mode refresh timer (cancelled on removal)
         self._live_unsub = None
+        self._adaptive_poll_interval = int(self._scan_interval.total_seconds())
+        self._adaptive_poll_reason = "normal"
 
         self.base_url = "https://site.web.api.espn.com/apis/v2/sports/soccer"
         self.base_url_2 = "https://site.api.espn.com/apis/site/v2/sports/soccer"
@@ -725,24 +740,50 @@ class SoccerLiveSensor(Entity):
 
     def _main_cache_ttl(self):
         """Return cache TTL for the main provider request."""
+        adaptive_interval, reason = self._next_adaptive_poll()
+        if reason.startswith("quota_"):
+            # HA's base polling timer cannot be lengthened per cycle. Keeping
+            # the last successful response valid enforces the quota floor
+            # without making the entity unavailable or changing manual setup.
+            return adaptive_interval
         if self._is_live():
             return min(60, self._live_scan_interval)
         return 60
 
+    def _next_adaptive_poll(self):
+        """Return the next phase- and quota-aware refresh interval."""
+        scan_interval = getattr(self, "_scan_interval", timedelta(minutes=5))
+        return adaptive_poll_interval(
+            self._attributes.get("matches") or [],
+            base_seconds=int(scan_interval.total_seconds()),
+            live_seconds=self._live_scan_interval,
+            quota=getattr(self, "_api_football_quota", {}),
+        )
+
     def _schedule_live_refresh(self):
-        """Schedule an extra refresh while a match is live, replacing any pending timer."""
+        """Schedule an adaptive matchday refresh, replacing any pending timer.
+
+        The historical method name is retained for focused tests and external
+        monkeypatches, but it now covers pre-match, half-time and post-match
+        correction windows as well as live play.
+        """
         if self._live_unsub:
             self._live_unsub()
             self._live_unsub = None
-        if self._is_live():
+        interval, reason = self._next_adaptive_poll()
+        self._adaptive_poll_interval = interval
+        self._adaptive_poll_reason = reason
+        base = int(getattr(self, "_scan_interval", timedelta(minutes=5)).total_seconds())
+        if reason != "normal" or interval < base:
             self._live_unsub = async_call_later(
-                self.hass, self._live_scan_interval,
+                self.hass, interval,
                 self._handle_live_refresh,
             )
             _LOGGER.debug(
-                "Live match active for %s — refresh scheduled in %s s",
+                "Adaptive polling for %s: %s — refresh scheduled in %s s",
                 self._name,
-                self._live_scan_interval,
+                reason,
+                interval,
             )
 
     @callback
@@ -824,8 +865,22 @@ class SoccerLiveSensor(Entity):
     def extra_state_attributes(self):
         card_defaults = self._card_defaults()
         coordinator = self._coordinator
+        detail_contract = (
+            {
+                "detail_service": f"{DOMAIN}.get_match_details",
+                "detail_service_data": {
+                    "config_entry_id": self._config_entry_id
+                },
+            }
+            if self._sensor_type in {
+                "team_match", "team_matches", "team_matches_mixed",
+                "match_day", "all_matches_today",
+            }
+            else {}
+        )
         return {
             **self._attributes,
+            **detail_contract,
             **({"card_defaults": card_defaults} if card_defaults else {}),
             "request_count": self._request_count,
             "last_request_time": self._last_request_time,
@@ -842,6 +897,8 @@ class SoccerLiveSensor(Entity):
             "api_football_season": self._api_football_season,
             "api_football_quota": self._api_football_quota,
             "live_scan_interval": self._live_scan_interval,
+            "effective_poll_interval": self._adaptive_poll_interval,
+            "polling_reason": self._adaptive_poll_reason,
             "start_date": self._filter_start_str(),
             "end_date": self._filter_end_str(),
             "sensor_type": self._sensor_type,
@@ -897,14 +954,84 @@ class SoccerLiveSensor(Entity):
             if coordinator:
                 coordinator.end_fetch()
 
+    async def async_get_match_details(self, match_id: str) -> dict | None:
+        """Fetch one fixture's heavy sections without rebuilding its schedule."""
+        from .details import find_match, has_match_details, public_match_details
+
+        match = find_match(self._attributes, match_id)
+        if match is None:
+            return None
+        if not has_match_details(match):
+            enrichment = {}
+            if self._provider == PROVIDER_ESPN:
+                summary = await self._fetch_match_summary(match_id)
+                if summary:
+                    from .parsers.scoreboard import process_summary_data
+
+                    enrichment = await self.hass.async_add_executor_job(
+                        process_summary_data, summary
+                    )
+            elif self._provider == PROVIDER_API_FOOTBALL:
+                from .parsers.api_football import process_fixture_enrichment
+
+                events_data, statistics_data, lineups_data = await asyncio.gather(
+                    self._fetch_api_football_json(
+                        "fixtures/events", {"fixture": match_id}
+                    ),
+                    self._fetch_api_football_json(
+                        "fixtures/statistics", {"fixture": match_id}
+                    ),
+                    self._fetch_api_football_json(
+                        "fixtures/lineups", {"fixture": match_id}
+                    ),
+                )
+                if any(
+                    self._api_football_response_has_items(data)
+                    for data in (events_data, statistics_data, lineups_data)
+                ):
+                    enrichment = await self.hass.async_add_executor_job(
+                        process_fixture_enrichment,
+                        events_data,
+                        statistics_data,
+                        lineups_data,
+                        match.get("home_id"),
+                        match.get("away_id"),
+                    )
+            if enrichment:
+                match.update(enrichment)
+                match["detail_loaded"] = True
+                # next_match/current_match may be detached copies of this row.
+                for key in ("next_match", "current_match"):
+                    target = self._attributes.get(key)
+                    if (
+                        isinstance(target, dict)
+                        and str(target.get("event_id")) == str(match_id)
+                    ):
+                        target.update(enrichment)
+                        target["detail_loaded"] = True
+                for key in ("matches", "previous_matches", "upcoming_matches"):
+                    for target in self._attributes.get(key) or []:
+                        if (
+                            isinstance(target, dict)
+                            and str(target.get("event_id")) == str(match_id)
+                        ):
+                            target.update(enrichment)
+                            target["detail_loaded"] = True
+                self._publish_matches(self._attributes.get("matches") or [])
+                self.async_write_ha_state()
+        return public_match_details(match)
+
     async def _async_update_impl(self):
         _LOGGER.debug("Starting update for %s", self._name)
 
         self._pending_events = []
         self._save_store_needed = False
 
-        # Prune cache entries older than 5 minutes to prevent unbounded growth
+        # Prune cache entries once they can no longer be reused. Under quota
+        # pressure one stale-but-valid response may intentionally live longer
+        # than five minutes so ordinary HA polling does not spend more quota.
         _now = monotonic()
+        main_cache_ttl = self._main_cache_ttl()
         main_cache = self._runtime_dict("main_cache", SoccerLiveSensor._cache)
         calendar_cache = self._runtime_dict(
             "calendar_cache", SoccerLiveSensor._calendar_cache
@@ -917,7 +1044,7 @@ class SoccerLiveSensor(Entity):
         )
         fresh_main = {
             k: v for k, v in main_cache.items()
-            if _now - v["time"] < 300
+            if _now - v["time"] < max(300, main_cache_ttl)
         }
         main_cache.clear()
         main_cache.update(fresh_main)
@@ -941,7 +1068,6 @@ class SoccerLiveSensor(Entity):
         if url is None:
             return
         cache_key = url
-        main_cache_ttl = self._main_cache_ttl()
         if cache_key in main_cache and monotonic() - main_cache[cache_key]["time"] < main_cache_ttl:
             try:
                 await self._process_and_apply(main_cache[cache_key]["data"])
@@ -2705,29 +2831,32 @@ class SoccerLiveSensor(Entity):
         return path, tuple(sorted((params or {}).items()))
 
     def _api_football_cache_ttl(self, path):
+        adaptive_interval, reason = self._next_adaptive_poll()
+        quota_floor = adaptive_interval if reason.startswith("quota_") else 0
+        ttl = 300
         if path == "status":
-            return 1800
-        if path == "fixtures/events":
-            return 30
-        if path in {"fixtures/statistics", "fixtures/lineups"}:
-            return 300
-        if path == "predictions":
-            return 21600  # predictions change rarely; cache for 6 hours
-        if path == "injuries":
-            return 10800  # team news updates occasionally; cache for 3 hours
-        if path == "odds":
-            return 3600  # bookmaker odds update a few times a day; cache 1 hour
-        if path == "odds/live":
-            return 45  # in-play odds move fast; short cache dedups sensors on the same fixture
-        if path == "standings":
-            return 21600  # league table changes at most daily; cache for 6 hours
-        if path == "fixtures/headtohead":
-            return 86400  # historical meetings are immutable; one call per matchup/day
-        if path in {"teams", "coachs", "players/squads", "transfers"}:
-            return 86400  # club profile / squad / transfers change rarely; cache 24h
-        if path == "players/topassists":
-            return 21600  # top assists change at most daily; cache 6h
-        return 300
+            ttl = 1800
+        elif path == "fixtures/events":
+            ttl = 30
+        elif path in {"fixtures/statistics", "fixtures/lineups"}:
+            ttl = 300
+        elif path == "predictions":
+            ttl = 21600  # predictions change rarely; cache for 6 hours
+        elif path == "injuries":
+            ttl = 10800  # team news updates occasionally; cache for 3 hours
+        elif path == "odds":
+            ttl = 3600  # bookmaker odds update a few times a day; cache 1 hour
+        elif path == "odds/live":
+            ttl = 45  # in-play odds move fast; normally dedup for one live cycle
+        elif path == "standings":
+            ttl = 21600  # league table changes at most daily; cache for 6 hours
+        elif path == "fixtures/headtohead":
+            ttl = 86400  # historical meetings are immutable
+        elif path in {"teams", "coachs", "players/squads", "transfers"}:
+            ttl = 86400  # club profile / squad / transfers change rarely
+        elif path == "players/topassists":
+            ttl = 21600  # top assists change at most daily
+        return max(ttl, quota_floor)
 
     def _prune_api_football_endpoint_cache(self, now):
         endpoint_cache = self._runtime_dict(

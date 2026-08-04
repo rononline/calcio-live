@@ -1,9 +1,18 @@
 import importlib.util
+import sys
 from pathlib import Path
+from types import ModuleType
 
 MODULE_PATH = Path(__file__).parents[1] / "custom_components" / "soccer_live" / "coordinator.py"
-SPEC = importlib.util.spec_from_file_location("soccer_live_coordinator", MODULE_PATH)
+PACKAGE_NAME = "soccer_live_coordinator_test_package"
+PACKAGE = ModuleType(PACKAGE_NAME)
+PACKAGE.__path__ = [str(MODULE_PATH.parent)]
+sys.modules[PACKAGE_NAME] = PACKAGE
+SPEC = importlib.util.spec_from_file_location(
+    f"{PACKAGE_NAME}.coordinator", MODULE_PATH
+)
 coordinator_module = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = coordinator_module
 SPEC.loader.exec_module(coordinator_module)
 
 
@@ -99,3 +108,27 @@ def test_coordinator_keeps_bounded_changed_standings_history():
     assert len(coordinator.update_standings("league-a", attrs)) == 2
     assert len(coordinator._standings_histories) == 2
     assert coordinator.standings_history_count == 3
+
+
+def test_on_demand_details_use_one_focused_entity():
+    class DetailEntity:
+        def __init__(self, sensor_type):
+            self._sensor_type = sensor_type
+            self._attributes = {"matches": [{"event_id": "fixture-1"}]}
+            self.calls = 0
+
+        async def async_get_match_details(self, match_id):
+            self.calls += 1
+            return {"event_id": match_id, "detail_loaded": True}
+
+    coordinator = coordinator_module.SoccerLiveEntryCoordinator(_Hass(), "entry")
+    schedule = DetailEntity("team_matches_mixed")
+    focused = DetailEntity("team_match")
+    coordinator.register_entity(schedule)
+    coordinator.register_entity(focused)
+    import asyncio
+
+    result = asyncio.run(coordinator.async_get_match_details("fixture-1"))
+    assert result["detail_loaded"] is True
+    assert focused.calls == 1
+    assert schedule.calls == 0

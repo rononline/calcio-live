@@ -1,5 +1,15 @@
 # Changelog
 
+## v3.19.0 (2026-08-04)
+
+- adaptive polling: refresh more often around kick-off, live play and post-match corrections while relaxing at half-time and protecting low API-Football quota
+- diagnostics: publish the effective poll interval and the reason selected by the polling policy
+- native automations: expose goal, lineup and match-lifecycle events as translated Home Assistant device triggers
+- on-demand details: add the response-enabled `soccer_live.get_match_details` service so cards can load one fixture's timeline, statistics and lineups only when opened
+- architecture: extract provider-neutral polling and detail helpers from the sensor module
+- provider contracts: add sanitized ESPN/API-Football fixture regressions for the public match schema
+- data contract: bump the published schema to version 9 for adaptive polling and detail-service discovery
+
 ## v3.18.0 (2026-08-03)
 
 - event contract: add stable provider-neutral `event_uid`, source, detection time, score-at-event and correction metadata to match events

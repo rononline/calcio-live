@@ -195,6 +195,20 @@
       "invalid_api_key": "Invalid API-Football key. Please check your key and try again."
     }
   },
+  "device_automation": {
+    "trigger_type": {
+      "goal": "Goal scored",
+      "goal_cancelled": "Goal cancelled",
+      "lineup_available": "Lineup available",
+      "match_started": "Match started",
+      "halftime": "Half-time",
+      "second_half": "Second half started",
+      "red_card": "Red card",
+      "match_finished": "Match finished",
+      "match_postponed": "Match postponed",
+      "match_cancelled": "Match cancelled"
+    }
+  },
   "entity": {
     "sensor": {
       "team_match": {

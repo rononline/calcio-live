@@ -107,6 +107,10 @@ Configure via **Settings → Devices & Services → Soccer Live → Configure**:
 > Five binary sensors are also created: **Match live**, **Match today**,
 > **Match tomorrow**, **Lineup available** and **Data degraded**. They are derived locally from
 > published fixtures and make common automations template-free.
+> The entry's device also offers translated native triggers for goals, cancelled
+> goals, lineups, kick-off, half-time, the second half, red cards, full-time,
+> postponements and cancellations. Existing event-bus automations continue to
+> work unchanged.
 
 > **Card contract.** Sensors publish `integration_version`, `data_schema_version` and `recommended_card_types` (the `card_type` slugs that suit the sensor), so the card editor can recommend the right card for a selected entity and warn when the integration is outdated.
 
@@ -127,6 +131,10 @@ Configure via **Settings → Devices & Services → Soccer Live → Configure**:
 > `season_transition`, structured `match_summary`, optional
 > `unified_enrichment` provenance and mathematical title/Europe/relegation
 > milestones. A stale explicit season creates a Home Assistant Repair issue.
+> Schema v9 adds `effective_poll_interval`, `polling_reason` and an optional
+> `detail_service` contract. Polling accelerates near and during a match, checks
+> briefly for post-match corrections, relaxes at half-time and applies a
+> conservative floor when the API-Football daily quota is nearly exhausted.
 
 ### Local archive and refresh services
 
@@ -143,10 +151,14 @@ The integration registers services under the `soccer_live` domain:
 | `soccer_live.play_match_replay` | Replay the recorded lifecycle as safe simulated events, with a deterministic demo fallback. |
 | `soccer_live.clear_match_replay` | Clear locally recorded replay snapshots. |
 | `soccer_live.export_match_replay` | Return recorded replay snapshots as response data. |
+| `soccer_live.get_match_details` | Return/fetch rich details for one published match ID without refreshing the complete schedule. |
 
 Every service accepts an optional `config_entry_id`; without one it applies to
 all Soccer Live entries. The Archive card supplies the correct ID
 automatically for its rebuild and clear buttons.
+Cards discover `get_match_details` through sensor attributes and call it only
+when a user opens a fixture whose heavy timeline/statistics/lineup sections are
+not already present.
 The complete response from `export_match_archive` can be pasted into
 `import_match_archive`; a one-entry backup also remains portable when Home
 Assistant assigned the restored integration a different config-entry ID.

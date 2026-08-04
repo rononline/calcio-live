@@ -195,6 +195,15 @@
       "invalid_api_key": "Clave de API-Football no válida. Comprueba tu clave e inténtalo de nuevo."
     }
   },
+  "device_automation": {
+    "trigger_type": {
+      "goal": "Gol", "goal_cancelled": "Gol anulado",
+      "lineup_available": "Alineación disponible", "match_started": "Partido iniciado",
+      "halftime": "Descanso", "second_half": "Segunda parte iniciada",
+      "red_card": "Tarjeta roja", "match_finished": "Partido finalizado",
+      "match_postponed": "Partido aplazado", "match_cancelled": "Partido cancelado"
+    }
+  },
   "entity": {
     "sensor": {
       "team_match": {

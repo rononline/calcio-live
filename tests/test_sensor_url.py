@@ -607,6 +607,21 @@ def test_non_live_main_cache_ttl_stays_default():
     assert sensor._main_cache_ttl() == 60
 
 
+def test_api_quota_pressure_extends_main_and_detail_cache_ttls():
+    sensor = object.__new__(SoccerLiveSensor)
+    sensor._sensor_type = "team_matches"
+    sensor._attributes = {"matches": [{"state": "in"}]}
+    sensor._scan_interval = timedelta(minutes=5)
+    sensor._live_scan_interval = 15
+    sensor._api_football_quota = {
+        "requests_current": 96,
+        "requests_limit_day": 100,
+    }
+
+    assert sensor._main_cache_ttl() == 300
+    assert sensor._api_football_cache_ttl("fixtures/events") == 300
+
+
 def test_standings_url_does_not_fetch_calendar():
     sensor = _sensor("standings", code="ned.1")
 

@@ -136,6 +136,24 @@ def _register_services(hass: HomeAssistant) -> None:
             }
         }
 
+    async def async_get_match_details(call):
+        match_id = str(call.data["match_id"])
+        selected = _coordinators(hass, call.data.get("config_entry_id"))
+        best = None
+        best_score = -1
+        for coordinator in selected:
+            match = await coordinator.async_get_match_details(match_id)
+            if not isinstance(match, dict):
+                continue
+            score = sum(bool(value) for value in match.values())
+            if score > best_score:
+                best, best_score = match, score
+        return {
+            "match": best,
+            "match_id": match_id,
+            "available": best is not None,
+        }
+
     entry_schema = {vol.Optional("config_entry_id"): str}
     hass.services.async_register(
         DOMAIN,
@@ -227,6 +245,16 @@ def _register_services(hass: HomeAssistant) -> None:
         schema=vol.Schema(entry_schema),
         supports_response=SupportsResponse.ONLY,
     )
+    hass.services.async_register(
+        DOMAIN,
+        "get_match_details",
+        async_get_match_details,
+        schema=vol.Schema({
+            **entry_schema,
+            vol.Required("match_id"): str,
+        }),
+        supports_response=SupportsResponse.ONLY,
+    )
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -289,6 +317,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 "play_match_replay",
                 "clear_match_replay",
                 "export_match_replay",
+                "get_match_details",
             ):
                 hass.services.async_remove(DOMAIN, service)
             hass.data.pop(DOMAIN, None)
