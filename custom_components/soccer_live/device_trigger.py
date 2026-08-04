@@ -5,8 +5,8 @@ from __future__ import annotations
 from collections.abc import Callable
 
 import voluptuous as vol
-from homeassistant.components.automation.trigger import event as event_trigger
-from homeassistant.components.device_automation import TRIGGER_BASE_SCHEMA
+from homeassistant.components.device_automation import DEVICE_TRIGGER_BASE_SCHEMA
+from homeassistant.components.homeassistant.triggers import event as event_trigger
 from homeassistant.const import CONF_DEVICE_ID, CONF_DOMAIN, CONF_PLATFORM, CONF_TYPE
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
@@ -27,7 +27,7 @@ TRIGGER_EVENTS = {
     "match_cancelled": "soccer_live_match_cancelled",
 }
 
-TRIGGER_SCHEMA = TRIGGER_BASE_SCHEMA.extend(
+TRIGGER_SCHEMA = DEVICE_TRIGGER_BASE_SCHEMA.extend(
     {vol.Required(CONF_TYPE): vol.In(TRIGGER_EVENTS)}
 )
 
