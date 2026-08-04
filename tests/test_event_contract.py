@@ -24,8 +24,8 @@ def test_goal_uid_is_provider_neutral_and_uses_score_transition():
         "away_score": 1,
     }
     api = {**common, "event_id": "154", "player": "S. van Persie", "minute": "81"}
-    fotmob = {**common, "event_id": "999", "player": "Shaqueel van Persie", "minute": 81}
-    assert event_uid("soccer_live_goal", api) == event_uid("soccer_live_goal", fotmob)
+    alternate = {**common, "event_id": "999", "player": "Shaqueel van Persie", "minute": 81}
+    assert event_uid("soccer_live_goal", api) == event_uid("soccer_live_goal", alternate)
 
 
 def test_enrich_event_adds_contract_metadata_and_correction_flag():
