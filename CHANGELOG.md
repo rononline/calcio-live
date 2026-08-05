@@ -1,5 +1,10 @@
 # Changelog
 
+## v3.20.3 (2026-08-05)
+
+- release hygiene: fix the remaining ruff import-order issue in the ESPN header patch so CI can pass again
+- tests: keep the shared ESPN header helper covered after the request-shape change
+
 ## v3.20.2 (2026-08-05)
 
 - release hygiene: keep the ESPN user-agent workaround but fix import ordering so the CI release job passes again

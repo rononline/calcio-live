@@ -32,8 +32,8 @@ from .const import (
     PROVIDER_API_FOOTBALL,
     PROVIDER_CAPABILITIES,
     PROVIDER_ESPN,
-    espn_request_headers,
     compute_sync_status,
+    espn_request_headers,
     recommended_card_types,
 )
 from .polling import adaptive_poll_interval, request_priority_plan
