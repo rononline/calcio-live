@@ -11,10 +11,12 @@ import json
 from custom_components.soccer_live.const import (
     DATA_SCHEMA_VERSION,
     INTEGRATION_VERSION,
+    ESPN_USER_AGENT,
     PROVIDER_API_FOOTBALL,
     PROVIDER_CAPABILITIES,
     PROVIDER_ESPN,
     compute_sync_status,
+    espn_request_headers,
     provider_supports,
     recommended_card_types,
 )
@@ -83,6 +85,14 @@ def test_both_providers_share_the_core_capabilities():
 
 def test_unknown_provider_supports_nothing():
     assert provider_supports("nope", "fixtures") is False
+
+
+def test_espn_request_headers_include_user_agent():
+    headers = espn_request_headers()
+    assert headers["Accept-Language"] == "en"
+    assert headers["User-Agent"] == ESPN_USER_AGENT
+    headers["User-Agent"] = "mutated"
+    assert espn_request_headers()["User-Agent"] == ESPN_USER_AGENT
 
 
 def test_compute_sync_status_first_load():

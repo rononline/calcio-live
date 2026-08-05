@@ -26,6 +26,7 @@ from .const import (
     CONF_INCLUDE_FRIENDLIES,
     CONF_LIVE_SCAN_INTERVAL,
     CONF_PROVIDER,
+    espn_request_headers,
     DOMAIN,
     PROVIDER_API_FOOTBALL,
     PROVIDER_ESPN,
@@ -446,7 +447,11 @@ class SoccerLiveConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         url = "https://site.api.espn.com/apis/site/v2/leagues/dropdown?lang=en&region=us&calendartype=whitelist&limit=200&sport=soccer"
         try:
             session = async_get_clientsession(self.hass)
-            async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
+            async with session.get(
+                url,
+                headers=espn_request_headers(),
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as response:
                 response.raise_for_status()
                 competitions_data = await response.json()
                 return parse_competitions(competitions_data)
@@ -467,7 +472,11 @@ class SoccerLiveConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         url = f"https://site.api.espn.com/apis/site/v2/sports/soccer/{competition_code}/teams"
         try:
             session = async_get_clientsession(self.hass)
-            async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
+            async with session.get(
+                url,
+                headers=espn_request_headers(),
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as response:
                 response.raise_for_status()
                 teams_data = await response.json()
                 self._teams = parse_teams(teams_data)

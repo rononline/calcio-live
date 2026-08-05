@@ -5,6 +5,20 @@ import os
 _LOGGER = logging.getLogger(__name__)
 
 DOMAIN = "soccer_live"
+ESPN_USER_AGENT = "curl/8.20.0"
+
+
+def espn_request_headers():
+    """Headers used for ESPN requests.
+
+    ESPN has a habit of changing how it treats generic clients. A fixed user
+    agent keeps the integration consistent across setup, data fetches and
+    supportable regressions.
+    """
+    return {
+        "Accept-Language": "en",
+        "User-Agent": ESPN_USER_AGENT,
+    }
 
 
 def _read_manifest_version():

@@ -26,6 +26,7 @@ from .const import (
     CONF_INCLUDE_FRIENDLIES,
     CONF_LIVE_SCAN_INTERVAL,
     CONF_PROVIDER,
+    espn_request_headers,
     DATA_SCHEMA_VERSION,
     DOMAIN,
     INTEGRATION_VERSION,
@@ -958,7 +959,7 @@ class SoccerLiveSensor(Entity):
     def _request_headers(self):
         if self._provider == PROVIDER_API_FOOTBALL:
             return {"x-apisports-key": self._api_football_key}
-        return {"Accept-Language": "en"}
+        return espn_request_headers()
 
     @property
     def unique_id(self):
@@ -2064,7 +2065,7 @@ class SoccerLiveSensor(Entity):
         url = f"{self.base_url_2}/{self._code}/summary?event={event_id}"
         try:
             session = async_get_clientsession(self.hass)
-            async with session.get(url, headers={"Accept-Language": "en"}, timeout=aiohttp.ClientTimeout(total=10)) as response:
+            async with session.get(url, headers=espn_request_headers(), timeout=aiohttp.ClientTimeout(total=10)) as response:
                 if response.status == 200:
                     raw = await response.read()
                     return await self.hass.async_add_executor_job(json.loads, raw)
@@ -2995,7 +2996,7 @@ class SoccerLiveSensor(Entity):
         """Fetch calendar data from ESPN. Caller handles per-code caching."""
         try:
             session = async_get_clientsession(self.hass)
-            async with session.get(calendar_url, headers={"Accept-Language": "en"}, timeout=aiohttp.ClientTimeout(total=10)) as response:
+            async with session.get(calendar_url, headers=espn_request_headers(), timeout=aiohttp.ClientTimeout(total=10)) as response:
                 response.raise_for_status()
                 raw = await response.read()
                 data = await self.hass.async_add_executor_job(json.loads, raw)

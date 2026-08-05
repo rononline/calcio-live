@@ -1,5 +1,10 @@
 # Changelog
 
+## v3.20.1 (2026-08-05)
+
+- ESPN requests: send a fixed user-agent alongside the existing English locale header so setup and fetches stay resilient if ESPN tightens client handling again
+- tests: cover the shared ESPN header helper so the integration keeps using the same request shape across ESPN call sites
+
 ## v3.20.0 (2026-08-04)
 
 - coordinator: coalesce adaptive matchday refreshes into one config-entry cycle and fan the result out to registered entities, while retaining normal Home Assistant polling as a fallback
