@@ -65,6 +65,14 @@ class SoccerLiveEntryCoordinator:
         self.archive_sync_status = "disabled"
         self.archive_sync_last_update = None
         self.archive_sync_last_error = None
+        # One adaptive timer per config entry. Entities still retain Home
+        # Assistant's ordinary polling as a safety net, while matchday bursts
+        # are coalesced here so equal endpoints are refreshed in one cycle.
+        self._refresh_requests: dict[object, dict] = {}
+        self._refresh_handle = None
+        self.refresh_cycle_count = 0
+        self.last_refresh_cycle = None
+        self.last_refresh_reasons: list[str] = []
 
     async def async_initialize(self):
         """Load persistent event claims and recorded replay snapshots."""
@@ -185,6 +193,9 @@ class SoccerLiveEntryCoordinator:
 
     async def async_shutdown(self):
         """Flush coalesced storage tasks before an entry unload."""
+        if self._refresh_handle:
+            self._refresh_handle()
+            self._refresh_handle = None
         for task in (
             self._save_ledger_task,
             self._save_replay_task,
@@ -245,6 +256,7 @@ class SoccerLiveEntryCoordinator:
 
         def remove():
             self._entities.discard(entity)
+            self.cancel_entity_refresh(entity)
 
         return remove
 
@@ -264,6 +276,60 @@ class SoccerLiveEntryCoordinator:
     def _notify(self):
         for listener in tuple(self._listeners):
             listener()
+
+    def schedule_entity_refresh(self, entity, interval: int, reason: str) -> None:
+        """Schedule one entity in the entry-wide adaptive refresh cycle."""
+        delay = max(15, int(interval or 60))
+        self._refresh_requests[entity] = {
+            "deadline": time.monotonic() + delay,
+            "interval": delay,
+            "reason": str(reason or "normal"),
+        }
+        self._schedule_next_refresh_cycle()
+
+    def cancel_entity_refresh(self, entity) -> None:
+        self._refresh_requests.pop(entity, None)
+        self._schedule_next_refresh_cycle()
+
+    def _schedule_next_refresh_cycle(self) -> None:
+        if self._refresh_handle:
+            self._refresh_handle()
+            self._refresh_handle = None
+        if not self._refresh_requests:
+            return
+        from homeassistant.helpers.event import async_call_later
+
+        deadline = min(item["deadline"] for item in self._refresh_requests.values())
+        delay = max(0.05, deadline - time.monotonic())
+        self._refresh_handle = async_call_later(
+            self.hass, delay, self._handle_refresh_cycle
+        )
+
+    def _handle_refresh_cycle(self, _now) -> None:
+        """Fan out one due adaptive cycle from Home Assistant's event loop."""
+        self._refresh_handle = None
+        now = time.monotonic()
+        due = [
+            (entity, request)
+            for entity, request in tuple(self._refresh_requests.items())
+            if request["deadline"] <= now + 0.5
+        ]
+        reasons = set()
+        for entity, request in due:
+            self._refresh_requests.pop(entity, None)
+            reasons.add(request["reason"])
+            if entity in self._entities and getattr(entity, "hass", None):
+                entity.async_schedule_update_ha_state(force_refresh=True)
+        if due:
+            self.refresh_cycle_count += 1
+            self.last_refresh_cycle = datetime.now(timezone.utc).isoformat()
+            self.last_refresh_reasons = sorted(reasons)
+            self._notify()
+        self._schedule_next_refresh_cycle()
+
+    @property
+    def scheduled_refresh_count(self) -> int:
+        return len(self._refresh_requests)
 
     @staticmethod
     def _ledger_key(fingerprint) -> str:
@@ -409,8 +475,16 @@ class SoccerLiveEntryCoordinator:
 
     async def async_refresh(self):
         """Request an immediate refresh from all entities in this entry."""
+        if self._refresh_handle:
+            self._refresh_handle()
+            self._refresh_handle = None
+        self._refresh_requests.clear()
+        self.refresh_cycle_count += 1
+        self.last_refresh_cycle = datetime.now(timezone.utc).isoformat()
+        self.last_refresh_reasons = ["manual"]
         for entity in tuple(self._entities):
             entity.async_schedule_update_ha_state(force_refresh=True)
+        self._notify()
         return len(self._entities)
 
     async def async_get_match_details(self, match_id: str) -> dict | None:

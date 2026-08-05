@@ -91,6 +91,7 @@ _CAPABILITY_FIELDS = {
     "weather": ("weather", "temperature", "venue_lat"),
     "broadcasts": ("broadcasts",),
     "review": ("review", "player_of_the_match", "match_story", "match_summary"),
+    "analysis": ("momentum_analysis", "preview_analysis", "post_match_analysis"),
 }
 
 
@@ -201,6 +202,7 @@ _RICH_FIELDS = (
     "formation_home", "formation_away", "key_events", "match_details",
     "home_statistics", "away_statistics", "momentum", "shotmap",
     "player_of_the_match", "review", "match_story", "match_summary",
+    "momentum_analysis", "preview_analysis", "post_match_analysis",
 )
 
 

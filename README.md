@@ -135,6 +135,11 @@ Configure via **Settings → Devices & Services → Soccer Live → Configure**:
 > `detail_service` contract. Polling accelerates near and during a match, checks
 > briefly for post-match corrections, relaxes at half-time and applies a
 > conservative floor when the API-Football daily quota is nearly exhausted.
+> Schema v10 adds a phase-aware `request_priority_plan`, provider-neutral
+> `preview_analysis`, `momentum_analysis` and `post_match_analysis`, plus a
+> structured `installation_check` on the Setup status sensor. The main fixture
+> and score request is never deferred; only optional enrichment is reduced when
+> quota is constrained.
 
 ### Local archive and refresh services
 
@@ -192,9 +197,10 @@ fixture IDs or player-name abbreviations. Use `event_uid` as an automation or
 notification deduplication key.
 
 > **Shared coordinator and restart recovery.** Entities retain their
-> provider-specific polling intervals, while an entry-wide coordinator
+> provider-specific polling intervals as a fallback, while an entry-wide coordinator
 > publishes a real `fetching` transition, tracks the entry's entities, owns
-> entry-scoped request deduplication and handles manual refreshes. It stores a
+> entry-scoped request deduplication, coalesces adaptive matchday refreshes into
+> one cycle and fans the result out to registered entities. It stores a
 > bounded last-known snapshot for up to seven days, so cards and calendars can
 > recover immediately after a restart while the first provider request runs.
 > Existing entity IDs and event semantics are unchanged.
@@ -652,11 +658,19 @@ These attributes are guaranteed to be present when available. Card developers ca
 | `canonical_id` | string | Stable provider-neutral identity for this fixture and UTC match day |
 | `canonical_pair_id` | string | Stable provider-neutral team/competition/season pairing, also across a reschedule |
 | `provider_event_id` | string\|null | Original provider fixture ID retained for detail requests |
+| `preview_analysis` | dict | Observed pre-match form, ranking, H2H, absence, prediction and featured-player factors; absent when no useful facts exist |
+| `momentum_analysis` | dict | Five-minute attacking-event pressure buckets derived from supplied match events; absent with insufficient observations |
+| `post_match_analysis` | dict | Chronological factual milestones, equalizer/decisive lead, player of the match and xG when supplied |
 
 At sensor level, `data_alerts` contains only observable issues, such as a
 provider error, conflicting sources, stale live data, an absent live
 lineup/timeline or a postponed/rescheduled fixture. Optional data that a
 provider does not support is deliberately not reported as an error.
+The sensor-level `request_priority_plan` records the current quota level and
+which optional sections are allowed or deferred. The Setup status sensor adds
+`installation_check`, a structured checklist for configuration, authentication,
+fixture availability, season selection and quota health. Both attributes are
+excluded from Recorder history where appropriate.
 
 #### API-Football pre-match enrichment (next upcoming match only)
 

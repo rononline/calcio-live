@@ -1,5 +1,15 @@
 # Changelog
 
+## v3.20.0 (2026-08-04)
+
+- coordinator: coalesce adaptive matchday refreshes into one config-entry cycle and fan the result out to registered entities, while retaining normal Home Assistant polling as a fallback
+- quota planner: keep schedule and score requests authoritative and defer optional lineup, statistics, timeline, preview, H2H and club calls in a phase-aware order when quota is constrained
+- match intelligence: publish strictly observed provider-neutral preview factors, five-minute momentum buckets and factual post-match milestones without inventing unavailable data
+- first-install check: add a structured configuration, authentication, fixture, season and quota checklist to the Setup status sensor
+- diagnostics: expose coordinator cycles, scheduled refreshes and the active request plan for cards and support reports
+- data contract: bump the published schema to version 10 for analysis, installation-check and request-priority attributes
+- tests/docs: cover coordinator fan-out, request planning, analysis derivation and setup diagnostics
+
 ## v3.19.0 (2026-08-04)
 
 - adaptive polling: refresh more often around kick-off, live play and post-match corrections while relaxing at half-time and protecting low API-Football quota

@@ -35,7 +35,7 @@ from .const import (
     compute_sync_status,
     recommended_card_types,
 )
-from .polling import adaptive_poll_interval
+from .polling import adaptive_poll_interval, request_priority_plan
 
 _LIVE_POLL_TYPES = {"team_match", "team_matches", "team_matches_mixed", "match_day", "all_matches_today"}
 _LEGACY_SELECTIONS = {
@@ -425,16 +425,7 @@ class SoccerLiveRuntimeSensor(Entity):
     @property
     def state(self):
         if self._kind == "setup_status":
-            if not self._source_entities():
-                return "initializing"
-            if any(getattr(entity, "_auth_failed", False) for entity in self._source_entities()):
-                return "action_required"
-            if not any((getattr(entity, "_attributes", {}) or {}).get("matches")
-                       or (getattr(entity, "_attributes", {}) or {}).get("standings")
-                       or (getattr(entity, "_attributes", {}) or {}).get("club")
-                       for entity in self._source_entities()):
-                return "waiting_for_data"
-            return "ready"
+            return self._setup_report()["status"]
         if self._kind == "runtime_status":
             if self._coordinator.is_fetching:
                 return "fetching"
@@ -487,6 +478,35 @@ class SoccerLiveRuntimeSensor(Entity):
             remaining.append(max(0, limit - current))
         return min(remaining) if remaining else None
 
+    def _setup_report(self):
+        from .analysis import installation_check
+
+        entities = self._source_entities()
+        attributes = [getattr(entity, "_attributes", {}) or {} for entity in entities]
+        capabilities = {}
+        for attrs in attributes:
+            for key, value in (attrs.get("capability_matrix") or {}).items():
+                if key not in capabilities or value.get("available"):
+                    capabilities[key] = value
+        season = next(
+            (attrs.get("season_transition") for attrs in attributes if attrs.get("season_transition")),
+            None,
+        )
+        plans = [attrs.get("request_priority_plan") for attrs in attributes if attrs.get("request_priority_plan")]
+        quota_plan = next(
+            (plan for level in ("exhausted", "critical", "constrained") for plan in plans if plan.get("quota_level") == level),
+            plans[0] if plans else None,
+        )
+        return installation_check(
+            configured_entities=len(entities),
+            entities_with_data=sum(bool(attrs.get("matches") or attrs.get("standings") or attrs.get("club")) for attrs in attributes),
+            auth_failed=any(getattr(entity, "_auth_failed", False) for entity in entities),
+            last_error=any(bool(getattr(entity, "_last_error", None)) for entity in entities),
+            capabilities=capabilities,
+            season_transition=season,
+            quota_plan=quota_plan,
+        )
+
     @property
     def extra_state_attributes(self):
         if self._kind == "setup_status":
@@ -512,6 +532,10 @@ class SoccerLiveRuntimeSensor(Entity):
                 "archive_sync_last_update": self._coordinator.archive_sync_last_update,
                 "archive_sync_last_error": self._coordinator.archive_sync_last_error,
                 "config_entry_id": self._entry.entry_id,
+                "installation_check": self._setup_report(),
+                "coordinator_cycle_count": self._coordinator.refresh_cycle_count,
+                "scheduled_refreshes": self._coordinator.scheduled_refresh_count,
+                "last_coordinator_cycle": self._coordinator.last_refresh_cycle,
             }
         if self._kind != "api_quota_remaining":
             attrs = {
@@ -557,6 +581,10 @@ class SoccerLiveRuntimeSensor(Entity):
                         getattr(entity, "_adaptive_poll_reason", "normal")
                         for entity in self._source_entities()
                     }),
+                    "coordinator_cycle_count": self._coordinator.refresh_cycle_count,
+                    "scheduled_refreshes": self._coordinator.scheduled_refresh_count,
+                    "last_coordinator_cycle": self._coordinator.last_refresh_cycle,
+                    "coordinator_reasons": self._coordinator.last_refresh_reasons,
                 }
             return attrs
         quotas = [
@@ -583,7 +611,8 @@ class SoccerLiveSensor(Entity):
         "data_quality", "data_alerts", "matchday", "match_readiness", "match_archive",
         "match_archive_summary", "player_watchlist", "standings_history",
         "competition_race", "capability_matrix", "season_transition",
-        "unified_enrichment", "match_summary",
+        "unified_enrichment", "match_summary", "request_priority_plan",
+        "momentum_analysis", "preview_analysis", "post_match_analysis",
         "last_event", "last_goal_event", "last_card_event",
         "last_match_started_event", "last_match_finished_event",
     })
@@ -774,7 +803,15 @@ class SoccerLiveSensor(Entity):
         self._adaptive_poll_interval = interval
         self._adaptive_poll_reason = reason
         base = int(getattr(self, "_scan_interval", timedelta(minutes=5)).total_seconds())
+        coordinator = getattr(self, "_coordinator", None)
+        if coordinator and reason == "normal" and interval >= base:
+            coordinator.cancel_entity_refresh(self)
         if reason != "normal" or interval < base:
+            if coordinator:
+                coordinator.schedule_entity_refresh(
+                    self, interval, reason
+                )
+                return
             self._live_unsub = async_call_later(
                 self.hass, interval,
                 self._handle_live_refresh,
@@ -974,16 +1011,21 @@ class SoccerLiveSensor(Entity):
             elif self._provider == PROVIDER_API_FOOTBALL:
                 from .parsers.api_football import process_fixture_enrichment
 
+                plan = request_priority_plan(
+                    [match], quota=getattr(self, "_api_football_quota", {})
+                )
+                allowed = set(plan["allowed"])
+
                 events_data, statistics_data, lineups_data = await asyncio.gather(
                     self._fetch_api_football_json(
                         "fixtures/events", {"fixture": match_id}
-                    ),
+                    ) if "timeline" in allowed else asyncio.sleep(0, result=None),
                     self._fetch_api_football_json(
                         "fixtures/statistics", {"fixture": match_id}
-                    ),
+                    ) if "statistics" in allowed else asyncio.sleep(0, result=None),
                     self._fetch_api_football_json(
                         "fixtures/lineups", {"fixture": match_id}
-                    ),
+                    ) if "lineup" in allowed else asyncio.sleep(0, result=None),
                 )
                 if any(
                     self._api_football_response_has_items(data)
@@ -1017,6 +1059,11 @@ class SoccerLiveSensor(Entity):
                         ):
                             target.update(enrichment)
                             target["detail_loaded"] = True
+                            from .analysis import annotate_match_analysis
+
+                            analysed = annotate_match_analysis([target])
+                            if analysed:
+                                target.update(analysed[0])
                 self._publish_matches(self._attributes.get("matches") or [])
                 self.async_write_ha_state()
         return public_match_details(match)
@@ -1200,6 +1247,10 @@ class SoccerLiveSensor(Entity):
             if _k in self._attributes and _k not in attrs:
                 attrs[_k] = self._attributes[_k]
         self._attributes = attrs
+        self._attributes["request_priority_plan"] = request_priority_plan(
+            attrs.get("matches") or [],
+            quota=getattr(self, "_api_football_quota", {}),
+        )
         self._pending_events = result.get("events", [])
         self._detect_and_dispatch_phase_events(attrs.get("matches") or [], self._pending_events)
         self._save_store_needed = any(e[0] == "soccer_live_match_finished" for e in self._pending_events)
@@ -1236,6 +1287,7 @@ class SoccerLiveSensor(Entity):
 
     async def _apply_insights(self):
         """Attach provider-neutral quality, matchday, watchlist and archive data."""
+        from .analysis import annotate_match_analysis
         from .derived import capability_matrix, match_summary, season_transition
         from .insights import (
             annotate_completeness,
@@ -1245,6 +1297,7 @@ class SoccerLiveSensor(Entity):
             data_quality,
             matchday_summary,
             player_watchlist,
+            source_sections,
             update_archive,
         )
 
@@ -1296,19 +1349,32 @@ class SoccerLiveSensor(Entity):
             self._provider,
             insight_updated_at,
         )
+        matches = annotate_match_analysis(matches)
+        matches = [
+            {
+                **match,
+                "source_sections": source_sections(
+                    match, self._provider, insight_updated_at
+                ),
+            }
+            for match in matches
+        ]
         self._attributes["matches"] = matches
+        if "request_priority_plan" not in self._attributes:
+            self._attributes["request_priority_plan"] = request_priority_plan(
+                matches, quota=getattr(self, "_api_football_quota", {})
+            )
         if self._attributes.get("next_match"):
             annotated_next = annotate_completeness(
                 [self._attributes["next_match"]],
                 self._provider,
                 insight_updated_at,
             )[0]
-            self._attributes["next_match"] = {
-                **self._attributes["next_match"],
-                "data_completeness": annotated_next["data_completeness"],
-                "match_readiness": annotated_next["match_readiness"],
-                "source_sections": annotated_next["source_sections"],
-            }
+            analysed_next = annotate_match_analysis([annotated_next])[0]
+            analysed_next["source_sections"] = source_sections(
+                analysed_next, self._provider, insight_updated_at
+            )
+            self._attributes["next_match"] = analysed_next
             self._attributes["match_readiness"] = self._attributes["next_match"][
                 "match_readiness"
             ]
@@ -2011,11 +2077,18 @@ class SoccerLiveSensor(Entity):
         if not matches:
             return
 
+        plan = request_priority_plan(
+            matches, quota=getattr(self, "_api_football_quota", {})
+        )
+        self._attributes["request_priority_plan"] = plan
+        allowed = set(plan["allowed"])
+
         # H2H is the most useful enrichment for an upcoming fixture and costs a
         # single, 24-hour cached request. Fetch it before enriching historical
         # fixtures: a list sensor can otherwise spend up to fifteen requests on
         # events/statistics/lineups and enter provider backoff before H2H runs.
-        await self._enrich_api_football_head_to_head(matches)
+        if "head_to_head" in allowed:
+            await self._enrich_api_football_head_to_head(matches)
 
         if self._sensor_type in {"team_matches", "team_matches_mixed"}:
             targets = self._api_football_team_list_enrichment_targets(matches)
@@ -2036,9 +2109,12 @@ class SoccerLiveSensor(Entity):
                 continue
 
             events_data, statistics_data, lineups_data = await asyncio.gather(
-                self._fetch_api_football_json("fixtures/events", {"fixture": event_id}),
-                self._fetch_api_football_json("fixtures/statistics", {"fixture": event_id}),
-                self._fetch_api_football_json("fixtures/lineups", {"fixture": event_id}),
+                self._fetch_api_football_json("fixtures/events", {"fixture": event_id})
+                if "timeline" in allowed else asyncio.sleep(0, result=None),
+                self._fetch_api_football_json("fixtures/statistics", {"fixture": event_id})
+                if "statistics" in allowed else asyncio.sleep(0, result=None),
+                self._fetch_api_football_json("fixtures/lineups", {"fixture": event_id})
+                if "lineup" in allowed else asyncio.sleep(0, result=None),
             )
             if not any(self._api_football_response_has_items(d) for d in (events_data, statistics_data, lineups_data)):
                 continue
@@ -2057,7 +2133,8 @@ class SoccerLiveSensor(Entity):
                     self._summary_cache.pop(next(iter(self._summary_cache)))
                 self._summary_cache[event_id] = enrichment
 
-        await self._enrich_api_football_prematch(matches)
+        if "prematch" in allowed:
+            await self._enrich_api_football_prematch(matches)
 
         self._detect_and_dispatch_goals(matches, self._pending_events)
         self._detect_and_dispatch_cards(matches, self._pending_events)
@@ -2155,6 +2232,9 @@ class SoccerLiveSensor(Entity):
         24h and persisted to disk, so an HA restart re-uses it instead of
         spending four requests per team sensor on every startup."""
         if self._provider != PROVIDER_API_FOOTBALL or not self._enable_club_data:
+            return
+        plan = self._attributes.get("request_priority_plan") or {}
+        if plan and "club" not in set(plan.get("allowed") or []):
             return
         if self._sensor_type not in {"team_match", "team_matches", "team_matches_mixed"}:
             return

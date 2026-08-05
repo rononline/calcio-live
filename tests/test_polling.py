@@ -7,6 +7,7 @@ SPEC = importlib.util.spec_from_file_location("soccer_live_polling", MODULE_PATH
 polling = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(polling)
 adaptive_poll_interval = polling.adaptive_poll_interval
+request_priority_plan = polling.request_priority_plan
 
 
 NOW = datetime(2026, 8, 4, 18, 0, tzinfo=timezone.utc)
@@ -39,3 +40,21 @@ def test_quota_pressure_overrides_aggressive_live_polling():
 def test_bad_dates_and_unknown_quota_are_safe():
     rows = [{"state": "pre", "date_iso": "not-a-date"}]
     assert adaptive_poll_interval(rows, base_seconds=300, live_seconds=60, quota={"requests_current": "?"}, now=NOW) == (300, "normal")
+
+
+def test_request_plan_prioritizes_live_data_and_defers_optional_calls():
+    normal = request_priority_plan([match("in")])
+    assert normal["phase"] == "live"
+    assert normal["allowed"][:3] == ["timeline", "lineup", "statistics"]
+    constrained = request_priority_plan(
+        [match("in")],
+        quota={"requests_limit_day": 100, "requests_current": 90},
+    )
+    assert constrained["quota_level"] == "constrained"
+    assert constrained["allowed"] == ["timeline", "lineup", "statistics"]
+    exhausted = request_priority_plan(
+        [match("pre")],
+        quota={"requests_limit_day": 100, "requests_current": 100},
+    )
+    assert exhausted["allowed"] == []
+    assert "prematch" in exhausted["deferred"]

@@ -51,6 +51,17 @@ def test_match_readiness_ignores_provider_placeholders():
     assert result["level"] == "early"
 
 
+def test_source_sections_recognise_schema_v10_analysis():
+    sections = insights.source_sections(_match(
+        preview_analysis={"factors": [{"code": "form"}]},
+        momentum_analysis={"points": [{"minute": 10, "net": 2}]},
+        post_match_analysis={"score": "2-1"},
+    ))
+    assert sections["preview"]["available"] is True
+    assert sections["statistics"]["available"] is True
+    assert sections["review"]["available"] is True
+
+
 def test_matchday_prefers_live_and_limits_matches_to_same_day():
     live = _match(event_id="live", state="in")
     other = _match(event_id="tomorrow", date_iso="2026-08-10T12:15:00+00:00")

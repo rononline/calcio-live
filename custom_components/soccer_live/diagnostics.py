@@ -129,6 +129,18 @@ async def async_get_config_entry_diagnostics(
             "archive_sync_last_error": (
                 coordinator.archive_sync_last_error if coordinator else None
             ),
+            "refresh_cycle_count": (
+                coordinator.refresh_cycle_count if coordinator else 0
+            ),
+            "scheduled_refreshes": (
+                coordinator.scheduled_refresh_count if coordinator else 0
+            ),
+            "last_refresh_cycle": (
+                coordinator.last_refresh_cycle if coordinator else None
+            ),
+            "last_refresh_reasons": (
+                coordinator.last_refresh_reasons if coordinator else []
+            ),
         },
         "api_football": api_football,
         "config_entry": {

@@ -43,6 +43,53 @@ def _quota_floor(quota: dict | None) -> tuple[int, str] | None:
     return None
 
 
+def request_priority_plan(
+    matches: list[dict] | None,
+    *,
+    quota: dict | None = None,
+) -> dict:
+    """Plan optional requests by match phase and remaining daily quota.
+
+    The main fixture/score request is never disabled. Optional sections are
+    ordered by usefulness and progressively deferred under quota pressure.
+    """
+    rows = [item for item in (matches or []) if isinstance(item, dict)]
+    live = any(item.get("state") in {"in", "live"} for item in rows)
+    upcoming = any(item.get("state") in {"pre", "scheduled"} for item in rows)
+    finished = any(item.get("state") in {"post", "finished"} for item in rows)
+    phase = "live" if live else "prematch" if upcoming else "postmatch" if finished else "idle"
+    order = {
+        "live": ["timeline", "lineup", "statistics", "prematch", "head_to_head", "club"],
+        "prematch": ["lineup", "prematch", "head_to_head", "club", "timeline", "statistics"],
+        "postmatch": ["timeline", "statistics", "lineup", "head_to_head", "club", "prematch"],
+        "idle": ["club", "head_to_head", "prematch", "lineup", "timeline", "statistics"],
+    }[phase]
+    try:
+        limit = int((quota or {}).get("requests_limit_day"))
+        current = int((quota or {}).get("requests_current"))
+    except (TypeError, ValueError):
+        limit = current = 0
+    remaining = max(0, limit - current) if limit > 0 else None
+    ratio = (remaining / limit) if limit > 0 else None
+    if remaining == 0 and limit > 0:
+        level, allowance = "exhausted", 0
+    elif ratio is not None and ratio <= 0.05:
+        level, allowance = "critical", 1
+    elif ratio is not None and ratio <= 0.15:
+        level, allowance = "constrained", 3
+    else:
+        level, allowance = "normal", len(order)
+    allowed = order[:allowance]
+    return {
+        "phase": phase,
+        "quota_level": level,
+        "remaining": remaining,
+        "priority": order,
+        "allowed": allowed,
+        "deferred": [item for item in order if item not in allowed],
+    }
+
+
 def adaptive_poll_interval(
     matches: list[dict] | None,
     *,

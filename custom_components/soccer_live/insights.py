@@ -128,11 +128,11 @@ def source_sections(match: dict, provider=None, updated_at=None) -> dict:
     """Describe availability, provider and freshness per visible card block."""
     fields = {
         "schedule": ("date", "date_iso", "venue", "competition_name", "league_name", "broadcasts"),
-        "preview": ("head_to_head", "prediction", "odds", "injuries_home", "injuries_away", "weather"),
+        "preview": ("head_to_head", "prediction", "odds", "injuries_home", "injuries_away", "weather", "preview_analysis"),
         "lineup": ("lineup_home", "lineup_away", "formation_home", "formation_away"),
         "timeline": ("key_events", "match_details"),
-        "statistics": ("home_statistics", "away_statistics", "momentum", "shotmap"),
-        "review": ("review", "player_of_the_match", "team_of_the_match", "match_story", "match_summary"),
+        "statistics": ("home_statistics", "away_statistics", "momentum", "momentum_analysis", "shotmap"),
+        "review": ("review", "player_of_the_match", "team_of_the_match", "match_story", "match_summary", "post_match_analysis"),
     }
     return {
         section: {

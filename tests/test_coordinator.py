@@ -19,6 +19,7 @@ SPEC.loader.exec_module(coordinator_module)
 class _Entity:
     def __init__(self):
         self.refreshes = 0
+        self.hass = True
 
     def async_schedule_update_ha_state(self, force_refresh=False):
         self.refreshes += int(force_refresh)
@@ -51,6 +52,22 @@ def test_coordinator_registers_refreshes_and_unregisters_entities():
     assert coordinator.entities == (entity,)
     remove()
     assert asyncio.run(coordinator.async_refresh()) == 0
+
+
+def test_coordinator_fans_out_due_adaptive_refreshes_as_one_cycle():
+    coordinator = coordinator_module.SoccerLiveEntryCoordinator(_Hass(), "entry")
+    first, second = _Entity(), _Entity()
+    coordinator.register_entity(first)
+    coordinator.register_entity(second)
+    coordinator._refresh_requests = {
+        first: {"deadline": 0, "interval": 30, "reason": "live"},
+        second: {"deadline": 0, "interval": 60, "reason": "kickoff_soon"},
+    }
+    coordinator._handle_refresh_cycle(None)
+    assert first.refreshes == second.refreshes == 1
+    assert coordinator.refresh_cycle_count == 1
+    assert coordinator.last_refresh_reasons == ["kickoff_soon", "live"]
+    assert coordinator.scheduled_refresh_count == 0
 
 
 def test_archive_sync_rejects_non_http_urls_before_network_access():
