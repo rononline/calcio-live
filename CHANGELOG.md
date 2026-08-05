@@ -1,5 +1,10 @@
 # Changelog
 
+## v3.20.2 (2026-08-05)
+
+- release hygiene: keep the ESPN user-agent workaround but fix import ordering so the CI release job passes again
+- tests: keep the shared ESPN header helper covered after the request-shape change
+
 ## v3.20.1 (2026-08-05)
 
 - ESPN requests: send a fixed user-agent alongside the existing English locale header so setup and fetches stay resilient if ESPN tightens client handling again

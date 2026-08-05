@@ -26,10 +26,10 @@ from .const import (
     CONF_INCLUDE_FRIENDLIES,
     CONF_LIVE_SCAN_INTERVAL,
     CONF_PROVIDER,
-    espn_request_headers,
     DOMAIN,
     PROVIDER_API_FOOTBALL,
     PROVIDER_ESPN,
+    espn_request_headers,
     provider_supports,
 )
 from .data import parse_competitions, parse_teams

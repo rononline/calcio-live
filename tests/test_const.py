@@ -10,8 +10,8 @@ import json
 
 from custom_components.soccer_live.const import (
     DATA_SCHEMA_VERSION,
-    INTEGRATION_VERSION,
     ESPN_USER_AGENT,
+    INTEGRATION_VERSION,
     PROVIDER_API_FOOTBALL,
     PROVIDER_CAPABILITIES,
     PROVIDER_ESPN,
