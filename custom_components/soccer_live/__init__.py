@@ -31,6 +31,16 @@ def _coordinators(hass, requested=None):
     ]
 
 
+async def _register_intents(hass: HomeAssistant) -> None:
+    """Register the Assist conversation intents once per HA instance."""
+    if hass.data.get(DOMAIN, {}).get("_intents_registered"):
+        return
+    from .intents import async_setup_intents
+
+    await async_setup_intents(hass)
+    hass.data.setdefault(DOMAIN, {})["_intents_registered"] = True
+
+
 def _register_services(hass: HomeAssistant) -> None:
     """Register entry-wide utility services once."""
     if hass.services.has_service(DOMAIN, "simulate_match_event"):
@@ -264,6 +274,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await coordinator.async_initialize()
     hass.data[DOMAIN].setdefault(entry.entry_id, {})["coordinator"] = coordinator
     _register_services(hass)
+    await _register_intents(hass)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     archive_url = str(entry.options.get("archive_sync_url") or "").strip()

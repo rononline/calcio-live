@@ -291,3 +291,35 @@ async def test_archive_services_round_trip_in_real_home_assistant(hass: HomeAssi
         "match_id": "missing-fixture",
         "available": False,
     }
+
+
+async def test_conversation_intents_answer_from_sensor_state(hass: HomeAssistant):
+    """The Assist intents register and answer from live sensor attributes."""
+    from homeassistant.helpers import intent
+
+    from custom_components.soccer_live.intents import async_setup_intents
+
+    await async_setup_intents(hass)
+    hass.states.async_set(
+        "sensor.soccerlive_next_ned_1_feyenoord",
+        "Feyenoord - Ajax",
+        {
+            "sensor_type": "team_match",
+            "team_name": "Feyenoord",
+            "next_match": {
+                "state": "pre", "home_team": "Feyenoord", "away_team": "Ajax",
+                "date": "08-08-2026 20:00",
+            },
+            "home_standing_summary": {"rank": 2, "points": 7},
+        },
+    )
+
+    response = await intent.async_handle(
+        hass, DOMAIN, "SoccerLiveNextMatch", {"team": {"value": "Feyenoord"}}
+    )
+    assert "Ajax" in response.speech["plain"]["speech"]
+
+    standing = await intent.async_handle(
+        hass, DOMAIN, "SoccerLiveStanding", {"team": {"value": "Feyenoord"}}
+    )
+    assert "2nd" in standing.speech["plain"]["speech"]

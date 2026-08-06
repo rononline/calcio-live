@@ -544,6 +544,23 @@ mode: queued
 
 ---
 
+## 🗣️ Voice assistant (Assist)
+
+The integration registers three conversation intents that answer from your sensors:
+
+| Intent | Example | Answer |
+|---|---|---|
+| `SoccerLiveNextMatch` | "When do Feyenoord play?" | "Feyenoord play Ajax at home, Saturday 20:00." |
+| `SoccerLiveScore` | "What's the score for Feyenoord?" | "Feyenoord are playing Ajax: 2–1, 67'." |
+| `SoccerLiveStanding` | "Where are Feyenoord in the league?" | "Feyenoord are 2nd with 7 points." |
+
+- **LLM-based Assist** (e.g. an OpenAI/Ollama conversation agent): nothing to set up — the intents are exposed as tools automatically.
+- **Default (sentence-matching) Assist**: copy the example sentences from [`custom_sentences/`](custom_sentences/) to `<config>/custom_sentences/<lang>/` and restart. English and Dutch are provided; add your own phrasings in the same format.
+
+Responses are localised (English/Dutch, English fallback).
+
+---
+
 ## 📊 Available sensor attributes
 
 **Next match** (`next_match_*`):

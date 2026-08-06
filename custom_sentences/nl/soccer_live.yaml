@@ -1,0 +1,30 @@
+# Soccer Live — voorbeeld Assist-zinnen (Nederlands).
+# Kopieer dit bestand naar  <config>/custom_sentences/nl/soccer_live.yaml  en
+# herstart Home Assistant. De integratie registreert de bijbehorende intents.
+# (Niet nodig bij een LLM-gebaseerde Assist-agent — die roept de intents direct
+# als tools aan.)
+language: "nl"
+lists:
+  team:
+    wildcard: true
+intents:
+  SoccerLiveNextMatch:
+    data:
+      - sentences:
+          - "wanneer speelt {team} [weer]"
+          - "wanneer is de volgende wedstrijd van {team}"
+          - "volgende wedstrijd van {team}"
+          - "wanneer speelt {team} de volgende keer"
+  SoccerLiveScore:
+    data:
+      - sentences:
+          - "wat is de stand van {team}"
+          - "wat staat het bij {team}"
+          - "hoe staat {team} ervoor"
+          - "heeft {team} gewonnen"
+  SoccerLiveStanding:
+    data:
+      - sentences:
+          - "de hoeveelste staat {team}"
+          - "wat is de positie van {team}"
+          - "hoe staat {team} in de competitie"

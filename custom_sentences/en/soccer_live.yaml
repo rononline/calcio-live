@@ -1,0 +1,30 @@
+# Soccer Live — example Assist sentences (English).
+# Copy this file to  <config>/custom_sentences/en/soccer_live.yaml  and restart
+# Home Assistant. The integration registers the matching intent handlers.
+# (Not needed when you use an LLM-based Assist agent — it calls the intents
+# directly as tools.)
+language: "en"
+lists:
+  team:
+    wildcard: true
+intents:
+  SoccerLiveNextMatch:
+    data:
+      - sentences:
+          - "when do {team} play [next]"
+          - "when is {team} playing [next]"
+          - "when is the next {team} match"
+          - "next match for {team}"
+  SoccerLiveScore:
+    data:
+      - sentences:
+          - "what is the {team} score"
+          - "what's the score for {team}"
+          - "how are {team} doing"
+          - "did {team} win"
+  SoccerLiveStanding:
+    data:
+      - sentences:
+          - "where are {team} in the league"
+          - "what is {team} position"
+          - "how are {team} doing in the league"
