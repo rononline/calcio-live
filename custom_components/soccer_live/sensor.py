@@ -1673,14 +1673,49 @@ class SoccerLiveSensor(Entity):
                 source_entity_id=self.entity_id,
             )
             self._store_last_event_attributes(event_type, event_data, now_iso)
-            if fire_bus and self._claim_bus_event(event_type, event_data):
-                self.hass.bus.fire(event_type, event_data)
-                await self._send_notification(event_type, event_data)
-                await self._fire_watchlist_event(event_type, event_data)
+            if not (fire_bus and self._claim_bus_event(event_type, event_data)):
+                continue
+            # Cross-provider reconciliation: when a second provider (another entry
+            # for the same team) already reported this event, suppress the
+            # duplicate and emit a corroboration signal instead.
+            decision = self._reconcile_cross_provider(event_type, event_data)
+            if decision is not None and not decision.fire:
+                if decision.corroborated:
+                    self.hass.bus.async_fire("soccer_live_event_corroborated", {
+                        "event_uid": event_data.get("event_uid"),
+                        "event_type": event_type,
+                        "sources": decision.sources,
+                        "config_entry_id": self._config_entry_id,
+                        "home_team": event_data.get("home_team"),
+                        "away_team": event_data.get("away_team"),
+                        "provider": self._provider,
+                    })
+                continue
+            if decision is not None:
+                event_data["confidence"] = decision.confidence
+                event_data["sources"] = decision.sources
+            self.hass.bus.fire(event_type, event_data)
+            await self._send_notification(event_type, event_data)
+            await self._fire_watchlist_event(event_type, event_data)
         self._pending_events = []
         if self._save_store_needed:
             self._save_store_needed = False
             await self._save_match_finished_store()
+
+    def _reconcile_cross_provider(self, event_type, event_data):
+        """Decide fire/suppress for one event across providers, or None on any
+        error so reconciliation can never block the core event pipeline."""
+        try:
+            from .event_contract import _text
+            from .reconcile import get_reconciler
+
+            team_key = (_text(self._team_name) if self._team_name else "") or f"entry:{self._config_entry_id}"
+            return get_reconciler(self.hass, team_key).observe(
+                event_data.get("event_uid"), event_type, self._provider, monotonic(),
+            )
+        except Exception as err:  # pragma: no cover - defensive, always fire
+            _LOGGER.debug("Cross-provider reconcile skipped: %s", err)
+            return None
 
     async def _fire_watchlist_event(self, event_type, event_data):
         """Emit one normalized event for match actions by watched players."""

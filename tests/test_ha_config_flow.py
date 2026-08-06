@@ -323,3 +323,25 @@ async def test_conversation_intents_answer_from_sensor_state(hass: HomeAssistant
         hass, DOMAIN, "SoccerLiveStanding", {"team": {"value": "Feyenoord"}}
     )
     assert "2nd" in standing.speech["plain"]["speech"]
+
+
+async def test_cross_provider_reconciler_shares_state_in_real_home_assistant(
+    hass: HomeAssistant,
+):
+    """The reconciler registry imports under the real package and shares state
+    per team across (config-entry) callers, corroborating a second provider."""
+    from custom_components.soccer_live.reconcile import get_reconciler
+
+    espn = get_reconciler(hass, "feyenoord")
+    api = get_reconciler(hass, "feyenoord")
+    assert espn is api  # shared per team, regardless of caller
+
+    first = espn.observe("sl-goal-1", "soccer_live_goal", "espn", now=100.0)
+    assert first.fire is True and first.confidence == "single_source"
+
+    second = api.observe("sl-goal-1", "soccer_live_goal", "api_football", now=110.0)
+    assert second.fire is False and second.corroborated is True
+    assert second.sources == ["api_football", "espn"]
+
+    # A different team gets its own reconciler.
+    assert get_reconciler(hass, "ajax") is not espn

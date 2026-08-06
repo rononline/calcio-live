@@ -1,5 +1,9 @@
 # Changelog
 
+## v3.22.0 (2026-08-06)
+- events: cross-provider reconciliation — when two entries track the same team through different providers (e.g. ESPN and API-Football), the same real-world event is no longer fired twice. The first provider fires the event tagged `confidence: single_source`; a second provider confirming the same event within a short window is suppressed and instead emits a `soccer_live_event_corroborated` signal (with the contributing `sources`), so automations can react to high-confidence events without duplicates. Reconciliation is fully defensive — any error falls back to firing the event, so it can never block the pipeline
+- tests: pure `TeamReconciler` unit coverage plus a real-Home-Assistant test that the shared per-team registry corroborates a second provider
+
 ## v3.21.0 (2026-08-06)
 - voice: added Assist / conversation intents — `SoccerLiveNextMatch`, `SoccerLiveScore` and `SoccerLiveStanding` — that answer from your sensors ("When do Feyenoord play?", "What's the score?", "Where are they in the league?"). Works out of the box with an LLM-based Assist agent; example English/Dutch sentences for the default agent ship under `custom_sentences/`. Responses are localised (EN/NL, English fallback)
 - tests: pure response-builder coverage plus a real-Home-Assistant test that registers the intents and answers from live sensor state
