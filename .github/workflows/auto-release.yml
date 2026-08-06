@@ -72,8 +72,7 @@ jobs:
         run: |
           zip -r "$GITHUB_WORKSPACE/soccer_live.zip" soccer_live/ \
             --exclude "soccer_live/__pycache__/*" \
-            --exclude "soccer_live/*.pyc" \
-            --exclude "soccer_live/.claude/*"
+            --exclude "soccer_live/*.pyc"
           test -s "$GITHUB_WORKSPACE/soccer_live.zip"
 
       - name: Create tag and release
