@@ -15,6 +15,12 @@ import time
 from collections.abc import Callable
 from datetime import datetime, timezone
 
+try:  # Home Assistant marks loop-safe callbacks; pure unit tests load this
+    from homeassistant.core import callback  # module without Home Assistant.
+except ImportError:  # pragma: no cover - standalone import path
+    def callback(func):  # type: ignore[misc]
+        return func
+
 _SNAPSHOT_MAX_AGE = 7 * 86400
 _SNAPSHOT_EXCLUDED = {
     "club_changes",
@@ -305,8 +311,15 @@ class SoccerLiveEntryCoordinator:
             self.hass, delay, self._handle_refresh_cycle
         )
 
+    @callback
     def _handle_refresh_cycle(self, _now) -> None:
-        """Fan out one due adaptive cycle from Home Assistant's event loop."""
+        """Fan out one due adaptive cycle from Home Assistant's event loop.
+
+        Decorated with ``@callback`` so Home Assistant runs it on the event
+        loop; without it a plain sync ``async_call_later`` target is dispatched
+        to an executor thread, and the ``async_schedule_update_ha_state`` call
+        below then hits ``async_create_task`` off-loop (thread-safety warning).
+        """
         self._refresh_handle = None
         now = time.monotonic()
         due = [

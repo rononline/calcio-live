@@ -325,6 +325,17 @@ async def test_conversation_intents_answer_from_sensor_state(hass: HomeAssistant
     assert "2nd" in standing.speech["plain"]["speech"]
 
 
+async def test_refresh_cycle_is_a_loop_callback(hass: HomeAssistant):
+    """The adaptive-refresh async_call_later target must be a @callback, or HA
+    dispatches it to an executor thread and async_schedule_update_ha_state then
+    calls async_create_task off-loop (thread-safety warning)."""
+    from homeassistant.core import is_callback
+
+    from custom_components.soccer_live.coordinator import SoccerLiveEntryCoordinator
+
+    assert is_callback(SoccerLiveEntryCoordinator._handle_refresh_cycle)
+
+
 async def test_cross_provider_reconciler_shares_state_in_real_home_assistant(
     hass: HomeAssistant,
 ):

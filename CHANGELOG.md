@@ -1,5 +1,9 @@
 # Changelog
 
+## v3.22.1 (2026-08-08)
+- fix: the adaptive entry-wide refresh cycle is now marked as a loop `@callback`. Without it, Home Assistant dispatched the `async_call_later` target to an executor thread, so `async_schedule_update_ha_state` reached `async_create_task` off the event loop — producing the "calls hass.async_create_task from a thread other than the event loop" warning. The refresh now runs on the event loop as intended
+- tests: real-Home-Assistant assertion that the refresh target is a `@callback`
+
 ## v3.22.0 (2026-08-06)
 - events: cross-provider reconciliation — when two entries track the same team through different providers (e.g. ESPN and API-Football), the same real-world event is no longer fired twice. The first provider fires the event tagged `confidence: single_source`; a second provider confirming the same event within a short window is suppressed and instead emits a `soccer_live_event_corroborated` signal (with the contributing `sources`), so automations can react to high-confidence events without duplicates. Reconciliation is fully defensive — any error falls back to firing the event, so it can never block the pipeline
 - tests: pure `TeamReconciler` unit coverage plus a real-Home-Assistant test that the shared per-team registry corroborates a second provider
