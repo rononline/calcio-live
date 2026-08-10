@@ -7,5 +7,5 @@
 #   pytest tests/test_ha_config_flow.py
 #
 # Pin the plugin version to one matching the Home Assistant version you target.
-# Last release that supports the Python 3.13 runtime used by this CI job.
-pytest-homeassistant-custom-component==0.13.316
+# Requires the Python 3.14 runtime used by this CI job (see tests.yaml ha-tests).
+pytest-homeassistant-custom-component==0.13.349
