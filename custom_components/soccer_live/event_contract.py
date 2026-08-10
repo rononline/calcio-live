@@ -10,12 +10,22 @@ from datetime import datetime, timezone
 
 EVENT_CONTRACT_VERSION = 1
 
+# Some providers spell the same club differently — e.g. ESPN "Feyenoord
+# Rotterdam" vs API-Football "Feyenoord" — which would break cross-provider
+# event identity. Map the normalized slug of each known variant to a canonical
+# slug. Extend this as needed; deliberately avoid heuristics such as stripping a
+# trailing city, which would wrongly merge distinct clubs (e.g. "Sparta
+# Rotterdam" → "Sparta").
+_TEAM_NAME_ALIASES = {
+    "feyenoord-rotterdam": "feyenoord",
+}
+
 
 def _text(value) -> str:
     value = unicodedata.normalize("NFKD", str(value or ""))
     value = "".join(char for char in value if not unicodedata.combining(char))
     value = re.sub(r"[^a-z0-9]+", "-", value.casefold()).strip("-")
-    return {"feyenoord-rotterdam": "feyenoord"}.get(value, value)
+    return _TEAM_NAME_ALIASES.get(value, value)
 
 
 def _score(value):
