@@ -8,4 +8,4 @@
 #
 # Pin the plugin version to one matching the Home Assistant version you target.
 # Last release that supports the Python 3.13 runtime used by this CI job.
-pytest-homeassistant-custom-component==0.13.316
+pytest-homeassistant-custom-component==0.13.354

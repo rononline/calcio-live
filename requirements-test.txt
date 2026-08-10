@@ -5,8 +5,8 @@
 # Assistant stubs (no real HA needed), so they stay fast. The optional real
 # Home Assistant integration test has its own heavier file:
 #   pip install -r requirements-ha-test.txt
-pytest==9.0.0
-pytest-asyncio==1.3.0           # for the pytest.ini asyncio_mode=auto config
+pytest==9.1.1
+pytest-asyncio==1.4.0           # for the pytest.ini asyncio_mode=auto config
 python-dateutil==2.9.0.post0    # runtime dependency, also imported directly by tests
 PyYAML==6.0.3                   # scripts/validate_blueprints.py
-ruff==0.16.0                    # critical static checks (undefined names/import errors)
+ruff==0.16.1                    # critical static checks (undefined names/import errors)
