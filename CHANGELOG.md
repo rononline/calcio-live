@@ -1,5 +1,8 @@
 # Changelog
 
+## v3.22.2 (2026-08-10)
+- fix: API-Football prediction comparison metrics (form/attack/defense) that come back as an empty 0/0 pair are now dropped instead of surfacing as blank "0% / 0%" bars. A real comparison sums to ~100, so a 0/0 pair just means the provider had no data for it
+
 ## v3.22.1 (2026-08-08)
 - fix: the adaptive entry-wide refresh cycle is now marked as a loop `@callback`. Without it, Home Assistant dispatched the `async_call_later` target to an executor thread, so `async_schedule_update_ha_state` reached `async_create_task` off the event loop — producing the "calls hass.async_create_task from a thread other than the event loop" warning. The refresh now runs on the event loop as intended
 - tests: real-Home-Assistant assertion that the refresh target is a `@callback`

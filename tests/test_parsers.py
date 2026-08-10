@@ -515,6 +515,25 @@ class TestApiFootballParser:
         assert pred["goals_away"] == "-2.5"
         assert pred["under_over"] == "-3.5"
 
+    def test_prediction_drops_empty_zero_comparison_metrics(self):
+        # API-Football returns 0/0 pairs (no "%") for comparison metrics it can't
+        # compute — these must not surface as empty "0% / 0%" bars.
+        data = {"response": [{
+            "predictions": {
+                "winner": {"name": "Away FC"},
+                "advice": "Double chance",
+                "percent": {"home": "0%", "draw": "50%", "away": "50%"},
+            },
+            "comparison": {
+                "form": {"home": "0%", "away": "0%"},
+                "att": {"home": "60%", "away": "40%"},
+                "def": {"home": "0%", "away": "0%"},
+            },
+        }]}
+        pred = process_api_football_prediction(data)
+        # Only the metric with real data survives; the 0/0 pairs are dropped.
+        assert pred["comparison"] == {"att": {"home": 60, "away": 40}}
+
     def test_injuries_split_by_team_with_suspension_flag(self):
         data = {"response": [
             {"player": {"name": "G. Trauner", "type": "Missing Fixture", "reason": "Achilles tendon problems"},

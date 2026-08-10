@@ -484,7 +484,10 @@ def process_prediction_data(data):
         pair = _as_dict(comparison.get(key))
         h = _percent_int(pair.get("home"))
         a = _percent_int(pair.get("away"))
-        if h is not None or a is not None:
+        # A real comparison pair sums to ~100; a 0/0 (or empty) pair means
+        # API-Football returned no data for it, so skip it instead of showing
+        # an empty bar. `h or a` is falsy exactly when both are 0 or None.
+        if h or a:
             metrics[key] = {"home": h, "away": a}
     if metrics:
         result["comparison"] = metrics
