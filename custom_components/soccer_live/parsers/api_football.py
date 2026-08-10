@@ -513,6 +513,10 @@ def process_injuries_data(data, home_team_id=None, away_team_id=None):
     listed absentee, so callers attach it only when data exists."""
     response = data.get("response", []) if isinstance(data, dict) else []
     home, away = [], []
+    # API-Football's /injuries response repeats each absentee (once per fixture
+    # in the round), so de-duplicate by player + reason + team to avoid listing
+    # the same player twice.
+    seen = set()
     for item in response or []:
         item = _as_dict(item)
         player = _as_dict(item.get("player"))
@@ -520,13 +524,17 @@ def process_injuries_data(data, home_team_id=None, away_team_id=None):
         if not name:
             continue
         reason = player.get("reason") or ""
+        team_id = _as_dict(item.get("team")).get("id")
+        dedup_key = (name, reason, player.get("type") or "", str(team_id))
+        if dedup_key in seen:
+            continue
+        seen.add(dedup_key)
         entry = {
             "player": name,
             "reason": reason,
             "type": player.get("type") or "",
             "suspended": "suspend" in reason.lower(),
         }
-        team_id = _as_dict(item.get("team")).get("id")
         if home_team_id is not None and str(team_id) == str(home_team_id):
             home.append(entry)
         elif away_team_id is not None and str(team_id) == str(away_team_id):

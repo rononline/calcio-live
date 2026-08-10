@@ -1,5 +1,8 @@
 # Changelog
 
+## v3.22.3 (2026-08-10)
+- fix: de-duplicate API-Football injuries/absentees. The provider repeats each absentee (once per fixture in the round), which listed every injured/suspended player twice; entries are now unique per player, reason and team
+
 ## v3.22.2 (2026-08-10)
 - fix: API-Football prediction comparison metrics (form/attack/defense) that come back as an empty 0/0 pair are now dropped instead of surfacing as blank "0% / 0%" bars. A real comparison sums to ~100, so a 0/0 pair just means the provider had no data for it
 

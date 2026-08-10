@@ -554,6 +554,16 @@ class TestApiFootballParser:
         assert out["injuries_home"][1]["suspended"] is True  # "Suspended"
         assert out["injuries_away"][0]["player"] == "H. Vanaken"
 
+    def test_injuries_deduplicate_repeated_rows(self):
+        # API-Football repeats each absentee (once per fixture in the round);
+        # the same player must not be listed twice.
+        row = {"player": {"name": "T. Beelen", "type": "Missing Fixture", "reason": "Broken Leg"},
+               "team": {"id": 209, "name": "Feyenoord"}}
+        data = {"response": [row, dict(row), row]}  # same entry three times
+        out = process_api_football_injuries(data, home_team_id=209, away_team_id=569)
+        assert len(out["injuries_home"]) == 1
+        assert out["injuries_home"][0]["player"] == "T. Beelen"
+
     def test_odds_average_match_winner_across_bookmakers(self):
         data = {"response": [{
             "bookmakers": [
