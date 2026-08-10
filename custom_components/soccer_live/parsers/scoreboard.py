@@ -525,15 +525,26 @@ def process_summary_data(data):
                 if not isinstance(p, dict):
                     continue
                 athletes.append(_as_dict(p.get("athlete")).get("displayName", ""))
-            out["key_events"].append({
-                "type": t.get("type", ""),
+            event_type = t.get("type", "")
+            entry = {
+                "type": event_type,
                 "type_text": t.get("text", ""),
                 "short_text": ev.get("shortText", ""),
                 "clock": clock,
                 "team": team,
                 "athletes": athletes,
                 "scoring_play": ev.get("scoringPlay", False),
-            })
+            }
+            if event_type == "substitution" and len(athletes) >= 2:
+                # ESPN lists substitution participants as [in, out]; normalise to
+                # the provider-neutral shape used by the other providers
+                # (player=out, assist=in, athletes=[out, in]) so cards render the
+                # in/out direction correctly.
+                player_in, player_out = athletes[0], athletes[1]
+                entry["player"] = player_out
+                entry["assist"] = player_in
+                entry["athletes"] = [player_out, player_in]
+            out["key_events"].append(entry)
     except Exception as e:
         _LOGGER.warning(f"Error processing summary key events: {e}")
 

@@ -1,5 +1,8 @@
 # Changelog
 
+## v3.22.4 (2026-08-10)
+- fix: normalise ESPN substitution events to the provider-neutral direction. ESPN lists the participants as [in, out] without explicit fields, so cards showed the substitution direction reversed; events now carry `player` (out), `assist` (in) and `athletes` in `[out, in]` order, matching the other providers
+
 ## v3.22.3 (2026-08-10)
 - fix: de-duplicate API-Football injuries/absentees. The provider repeats each absentee (once per fixture in the round), which listed every injured/suspended player twice; entries are now unique per player, reason and team
 

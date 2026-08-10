@@ -1095,6 +1095,23 @@ class TestSummaryParser:
         assert len(out["key_events"]) == 1
         assert out["key_events"][0]["type"] == "Goal"
 
+    def test_substitution_normalized_to_out_in_direction(self):
+        # ESPN lists substitution participants as [in, out]; normalise to the
+        # provider-neutral shape (player=out, assist=in, athletes=[out, in]).
+        data = {"keyEvents": [{
+            "type": {"type": "substitution", "text": "Substitution"},
+            "shortText": "Robin Van Cruijsen Substitution",
+            "team": {"displayName": "Sparta Rotterdam"},
+            "participants": [
+                {"athlete": {"displayName": "Robin Van Cruijsen"}},  # in
+                {"athlete": {"displayName": "Casper Terho"}},        # out
+            ],
+        }]}
+        sub = self.process_summary_data(data)["key_events"][0]
+        assert sub["player"] == "Casper Terho"          # out
+        assert sub["assist"] == "Robin Van Cruijsen"    # in
+        assert sub["athletes"] == ["Casper Terho", "Robin Van Cruijsen"]
+
     def test_malformed_h2h_does_not_wipe_lineups(self):
         data = {
             "rosters": [{"homeAway": "home", "formation": "4-3-3", "roster": [
