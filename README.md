@@ -619,10 +619,19 @@ Each config entry also creates a **calendar entity** (`calendar.soccer_live_<tea
 | `soccer_live_transfer_added` | A new transfer appears | `team_id`, `player`, `direction` |
 | `soccer_live_injury_added` / `soccer_live_player_available` | A player becomes unavailable/available | `team_id`, `player` |
 | `soccer_live_coach_changed` | The published head coach changes | `team_id`, `name`, `previous` |
+| `soccer_live_halftime` / `soccer_live_second_half` | The match transitions into half-time / the second half | `event_id`, `match_phase`, `home_team`, `away_team`, `home_score`, `away_score`, `league_name` |
+| `soccer_live_match_postponed` / `soccer_live_match_cancelled` | The match is postponed / cancelled | `event_id`, `match_phase`, `home_team`, `away_team`, `league_name` |
+| `soccer_live_kickoff_changed` | A fixture's kick-off time changes | `event_id`, `home_team`, `away_team`, `previous_date`, `date`, `change_type` |
+| `soccer_live_venue_changed` | A fixture's venue changes | `event_id`, `home_team`, `away_team`, `previous_venue`, `venue`, `change_type` |
+| `soccer_live_opponent_changed` | A fixture's teams change | `event_id`, `previous_home_team`, `previous_away_team`, `home_team`, `away_team`, `change_type` |
+| `soccer_live_race_milestone` | A title / European / relegation race fact becomes mathematically certain | `team`, `milestone`, `rank`, `points`, `league_name` |
+| `soccer_live_event_corroborated` | A second provider confirms an already-fired event, when two entries track the same team via different providers | `event_uid`, `event_type`, `sources`, `home_team`, `away_team`, `provider` |
 
 All match-event rows above additionally carry the common event-contract fields
 `event_uid`, `provider`, `source_entity_id`, `detected_at`, `score_at_event` and
-`is_correction`.
+`is_correction`. When two entries track the same team through different providers,
+fired match events also carry `confidence` (`single_source` / `corroborated`) and
+`sources` (the providers that reported the event).
 
 Example automation blueprints are available in [`blueprints/automation`](blueprints/automation):
 goal, yellow card, red card, substitution, match started, full time (final score)
