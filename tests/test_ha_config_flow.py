@@ -356,3 +356,96 @@ async def test_cross_provider_reconciler_shares_state_in_real_home_assistant(
 
     # A different team gets its own reconciler.
     assert get_reconciler(hass, "ajax") is not espn
+
+
+# ── First-install acceptance tests (config-flow onboarding, roadmap item 7) ──
+
+def _follow_options(result):
+    """The SelectSelector option values shown on the follow step."""
+    for key, selector in result["data_schema"].schema.items():
+        if str(key) == "selection":
+            return list(selector.config["options"])
+    return []
+
+
+async def test_api_football_flow_asks_for_credentials_first(hass: HomeAssistant):
+    """Choosing API-Football routes to the credentials step before any selection,
+    since searching teams/competitions needs the key."""
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_PROVIDER: PROVIDER_API_FOOTBALL}
+    )
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "api_football_credentials"
+
+
+async def test_api_football_credentials_reject_empty_and_invalid_key(hass: HomeAssistant):
+    """Empty and provider-rejected keys keep the user on the credentials form with
+    a specific error instead of proceeding into a broken entry."""
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_PROVIDER: PROVIDER_API_FOOTBALL}
+    )
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_API_FOOTBALL_KEY: "   "}
+    )
+    assert result["step_id"] == "api_football_credentials"
+    assert result["errors"] == {CONF_API_FOOTBALL_KEY: "api_key_required"}
+
+    with patch(
+        "custom_components.soccer_live.config_flow.async_validate_api_football_key",
+        return_value=False,
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {CONF_API_FOOTBALL_KEY: "bad-key"}
+        )
+    assert result["step_id"] == "api_football_credentials"
+    assert result["errors"] == {CONF_API_FOOTBALL_KEY: "invalid_api_key"}
+
+
+async def test_api_football_valid_key_advances_and_hides_news(hass: HomeAssistant):
+    """A valid key advances to the follow step, and News is not offered there for
+    API-Football (it's ESPN-only) — filtered up front, not rejected after submit."""
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_PROVIDER: PROVIDER_API_FOOTBALL}
+    )
+    with patch(
+        "custom_components.soccer_live.config_flow.async_validate_api_football_key",
+        return_value=True,
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {CONF_API_FOOTBALL_KEY: "good-key"}
+        )
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "follow"
+    assert "news" not in _follow_options(result)
+
+
+async def test_espn_follow_offers_news(hass: HomeAssistant):
+    """News IS offered on the follow step for ESPN, which supplies it."""
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_PROVIDER: PROVIDER_ESPN}
+    )
+    assert result["step_id"] == "follow"
+    assert "news" in _follow_options(result)
+
+
+async def test_espn_team_flow_aborts_cleanly_when_no_competitions(hass: HomeAssistant):
+    """A first install where the provider returns no competitions aborts with a
+    clear reason instead of showing an empty dropdown or erroring."""
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_PROVIDER: PROVIDER_ESPN}
+    )
+    with patch(
+        "custom_components.soccer_live.config_flow.SoccerLiveConfigFlow._get_competitions",
+        return_value={},
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"selection": "team"}
+        )
+    assert result["type"] == FlowResultType.ABORT
+    assert result["reason"] == "no_competitions"
