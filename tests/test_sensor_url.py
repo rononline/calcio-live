@@ -108,6 +108,7 @@ def _sensor(sensor_type, code="ned.1", team_name=None, team_id="1234", provider=
     sensor._previous_match_details = {}
     sensor._previous_match_states = {}
     sensor._dispatched_goal_details = {}
+    sensor._pending_goal_scores = {}
     sensor._match_finished_dispatched = set()
     sensor._match_finished_list = []
     sensor._pending_events = []
@@ -131,13 +132,21 @@ def test_score_correction_emits_cancelled_goal_and_allows_reaward():
         "home_abbrev": "FEY",
         "away_abbrev": "SPA",
         "away_score": 0,
-        "match_details": [],
     }
     events = []
-    sensor._detect_and_dispatch_goals([{**base, "home_score": 0}], events)
-    sensor._detect_and_dispatch_goals([{**base, "home_score": 1}], events)
-    sensor._detect_and_dispatch_goals([{**base, "home_score": 0}], events)
-    sensor._detect_and_dispatch_goals([{**base, "home_score": 1}], events)
+    sensor._detect_and_dispatch_goals([{**base, "home_score": 0, "match_details": []}], events)
+    # Goal with a known scorer fires immediately.
+    sensor._detect_and_dispatch_goals(
+        [{**base, "home_score": 1, "match_details": ["Goal - 10': Igor"]}], events
+    )
+    # VAR reverts the score -> cancellation.
+    sensor._detect_and_dispatch_goals(
+        [{**base, "home_score": 0, "match_details": ["Goal - 10': Igor"]}], events
+    )
+    # Re-awarded with a fresh scorer string -> fires again.
+    sensor._detect_and_dispatch_goals(
+        [{**base, "home_score": 1, "match_details": ["Goal - 10': Igor", "Goal - 12': Igor"]}], events
+    )
 
     assert [event[0] for event in events] == [
         "soccer_live_goal",
@@ -146,6 +155,43 @@ def test_score_correction_emits_cancelled_goal_and_allows_reaward():
     ]
     assert events[1][1]["previous_home_score"] == 1
     assert events[1][1]["home_score"] == 0
+
+
+def test_goal_without_scorer_is_deferred_then_fires_with_name():
+    sensor = _sensor("team_match")
+    base = {
+        "event_id": "fixture-scorer", "state": "in",
+        "home_team": "Feyenoord", "away_team": "Go Ahead Eagles",
+        "home_abbrev": "FEY", "away_abbrev": "GAE", "away_score": 0,
+    }
+    events = []
+    sensor._detect_and_dispatch_goals([{**base, "home_score": 0, "match_details": []}], events)
+    # Score ticks up before the scorer string arrives: held, nothing fired.
+    sensor._detect_and_dispatch_goals([{**base, "home_score": 1, "match_details": []}], events)
+    assert events == []
+    # The scorer arrives next poll: the goal fires with the name (not "unknown").
+    sensor._detect_and_dispatch_goals(
+        [{**base, "home_score": 1, "match_details": ["Goal - 22': Ueda"]}], events
+    )
+    assert [(item[0], item[1]["player"]) for item in events] == [("soccer_live_goal", "Ueda")]
+
+
+def test_goal_without_scorer_fires_after_grace():
+    sensor = _sensor("team_match")
+    base = {
+        "event_id": "fixture-grace", "state": "in",
+        "home_team": "Feyenoord", "away_team": "Sparta",
+        "home_abbrev": "FEY", "away_abbrev": "SPA", "away_score": 0,
+    }
+    events = []
+    sensor._detect_and_dispatch_goals([{**base, "home_score": 0, "match_details": []}], events)
+    # Scorer never arrives: held for the grace window, then fired as unknown.
+    for _ in range(sensor._MAX_GOAL_DEFER):
+        sensor._detect_and_dispatch_goals([{**base, "home_score": 1, "match_details": []}], events)
+    assert events == []
+    sensor._detect_and_dispatch_goals([{**base, "home_score": 1, "match_details": []}], events)
+    assert [item[0] for item in events] == ["soccer_live_goal"]
+    assert events[0][1]["player"] == "N/A"
 
 
 def test_delayed_score_jump_emits_each_goal_with_its_historical_score():

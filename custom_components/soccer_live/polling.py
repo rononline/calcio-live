@@ -125,23 +125,34 @@ def adaptive_poll_interval(
         interval, reason = (max(60, live), "halftime") if halftime else (live, "live")
     else:
         upcoming = []
+        around_kickoff = False
         recent_finished = False
         for match in rows:
             kickoff = _as_utc(match.get("date_iso"))
             if kickoff is None:
                 continue
             state = match.get("state")
-            if state in {"pre", "scheduled"} and kickoff >= current:
-                upcoming.append(kickoff)
+            if state in {"pre", "scheduled"}:
+                until = kickoff - current
+                if timedelta(minutes=-45) <= until <= timedelta(0):
+                    # The scheduled kick-off has arrived but the provider hasn't
+                    # flipped the fixture to live yet. Poll at the live rate so
+                    # the match-started event and first scores aren't minutes
+                    # late (the provider can lag the actual kick-off).
+                    around_kickoff = True
+                elif until > timedelta(0):
+                    upcoming.append(kickoff)
             elif state in {"post", "finished"}:
                 # Kick-off + three hours safely covers ordinary and extra-time
                 # matches while keeping post-match correction polling bounded.
                 recent_finished |= current <= kickoff + timedelta(hours=3)
-        if upcoming:
+        if around_kickoff:
+            interval, reason = live, "kickoff_soon"
+        elif upcoming:
             until = min(upcoming) - current
-            if timedelta(0) <= until <= timedelta(minutes=30):
+            if until <= timedelta(minutes=30):
                 interval, reason = min(base, 60), "kickoff_soon"
-            elif timedelta(0) <= until <= timedelta(hours=3):
+            elif until <= timedelta(hours=3):
                 interval, reason = min(base, 120), "matchday"
         elif recent_finished:
             interval, reason = min(base, 60), "post_match"

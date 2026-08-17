@@ -1,5 +1,10 @@
 # Changelog
 
+## v3.23.0 (2026-08-16)
+- fix: goals no longer notify with an unknown scorer when the score ticks up a poll or two before the provider attaches the scorer name. Such a goal is now held briefly (a few polls) so it fires with the scorer; if the name never arrives it still fires after a short grace window
+- fix: poll at the live rate around kick-off. A fixture whose scheduled kick-off has arrived but that the provider still reports as "pre" is now polled fast (previously polling dropped back to the normal interval right at kick-off, so match-started and the first live scores could be minutes late)
+- tests: cover the scorer-defer (deferred-then-named, and grace fallback) and the around-kick-off polling window
+
 ## v3.22.4 (2026-08-10)
 - fix: normalise ESPN substitution events to the provider-neutral direction. ESPN lists the participants as [in, out] without explicit fields, so cards showed the substitution direction reversed; events now carry `player` (out), `assist` (in) and `athletes` in `[out, in]` order, matching the other providers
 

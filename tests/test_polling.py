@@ -28,6 +28,11 @@ def test_adaptive_polling_follows_match_phase():
     assert adaptive_poll_interval([match("in", -60)], base_seconds=180, live_seconds=30, now=NOW) == (30, "live")
     assert adaptive_poll_interval([match("in", -60, period="HT")], base_seconds=180, live_seconds=30, now=NOW) == (60, "halftime")
     assert adaptive_poll_interval([match("post", -120)], base_seconds=180, live_seconds=30, now=NOW) == (60, "post_match")
+    # Scheduled kick-off has passed but the fixture is still "pre" (provider lag):
+    # poll at the live rate so the match-started flip isn't minutes late.
+    assert adaptive_poll_interval([match("pre", -8)], base_seconds=180, live_seconds=30, now=NOW) == (30, "kickoff_soon")
+    # Long past its scheduled time and still "pre" (e.g. postponed): back to normal.
+    assert adaptive_poll_interval([match("pre", -90)], base_seconds=180, live_seconds=30, now=NOW) == (180, "normal")
 
 
 def test_quota_pressure_overrides_aggressive_live_polling():

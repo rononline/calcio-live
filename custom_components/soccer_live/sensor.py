@@ -601,6 +601,10 @@ class SoccerLiveRuntimeSensor(Entity):
 
 
 class SoccerLiveSensor(Entity):
+    # How many polls a scored-but-scorer-unknown goal is held before firing it
+    # anyway (with "unknown"), so a slightly-late scorer name can still attach.
+    _MAX_GOAL_DEFER = 3
+
     # Keep large / high-churn attributes out of the recorder history so the HA
     # database doesn't balloon. The state itself (the score summary) and the
     # small scalar attributes are still recorded.
@@ -717,6 +721,10 @@ class SoccerLiveSensor(Entity):
         self._previous_match_states = {}
         self._previous_match_phases = {}
         self._dispatched_goal_details = {}
+        # A live score can tick up a poll or two before the provider attaches the
+        # scorer. Hold such a goal briefly so it fires with the name instead of
+        # "unknown". match_id -> {"home"|"away": deferred-poll count}.
+        self._pending_goal_scores = {}
         self._match_finished_dispatched = set()
         self._match_finished_list = []
         self._store = None
@@ -3178,15 +3186,26 @@ class SoccerLiveSensor(Entity):
                 prev_home = home_score
                 prev_away = away_score
 
+            pending = self._pending_goal_scores.setdefault(match_id, {})
+            defer_home = defer_away = False
             if home_score > prev_home:
                 goals_scored = home_score - prev_home
                 home_strings = self._pick_goal_strings(curr_details, dispatched, home_abbrev, goals_scored)
                 goal_scorers = self._extract_goal_scorers_from_details(home_strings, goals_scored)
-                synthetic_key = f"h_{home_score}"
-                if home_strings or synthetic_key not in dispatched:
-                    self._dispatch_goal_event(match.get("home_team", "N/A"), match.get("away_team", "N/A"), goals_scored, home_score, away_score, match, goal_scorers, events)
-                    dispatched.update(home_strings)
-                    dispatched.add(synthetic_key)
+                have_scorer = any(str((g or {}).get("player") or "").strip() for g in goal_scorers)
+                if not have_scorer and pending.get("home", 0) < self._MAX_GOAL_DEFER:
+                    # Scorer not known yet — hold this goal so it can arrive.
+                    pending["home"] = pending.get("home", 0) + 1
+                    defer_home = True
+                else:
+                    pending.pop("home", None)
+                    synthetic_key = f"h_{home_score}"
+                    if home_strings or synthetic_key not in dispatched:
+                        self._dispatch_goal_event(match.get("home_team", "N/A"), match.get("away_team", "N/A"), goals_scored, home_score, away_score, match, goal_scorers, events)
+                        dispatched.update(home_strings)
+                        dispatched.add(synthetic_key)
+            else:
+                pending.pop("home", None)  # score reverted/unchanged — drop any hold
             if home_score < prev_home:
                 self._dispatch_goal_cancelled_event(
                     match, "home", prev_home - home_score, prev_home, prev_away, events
@@ -3200,11 +3219,19 @@ class SoccerLiveSensor(Entity):
                 goals_scored = away_score - prev_away
                 away_strings = self._pick_goal_strings(curr_details, dispatched, away_abbrev, goals_scored)
                 goal_scorers = self._extract_goal_scorers_from_details(away_strings, goals_scored)
-                synthetic_key = f"a_{away_score}"
-                if away_strings or synthetic_key not in dispatched:
-                    self._dispatch_goal_event(match.get("away_team", "N/A"), match.get("home_team", "N/A"), goals_scored, home_score, away_score, match, goal_scorers, events)
-                    dispatched.update(away_strings)
-                    dispatched.add(synthetic_key)
+                have_scorer = any(str((g or {}).get("player") or "").strip() for g in goal_scorers)
+                if not have_scorer and pending.get("away", 0) < self._MAX_GOAL_DEFER:
+                    pending["away"] = pending.get("away", 0) + 1
+                    defer_away = True
+                else:
+                    pending.pop("away", None)
+                    synthetic_key = f"a_{away_score}"
+                    if away_strings or synthetic_key not in dispatched:
+                        self._dispatch_goal_event(match.get("away_team", "N/A"), match.get("home_team", "N/A"), goals_scored, home_score, away_score, match, goal_scorers, events)
+                        dispatched.update(away_strings)
+                        dispatched.add(synthetic_key)
+            else:
+                pending.pop("away", None)
             if away_score < prev_away:
                 self._dispatch_goal_cancelled_event(
                     match, "away", prev_away - away_score, prev_home, prev_away, events
@@ -3214,8 +3241,13 @@ class SoccerLiveSensor(Entity):
                     if str(key).startswith("a_") and str(key)[2:].isdigit()
                     and int(str(key)[2:]) > away_score
                 })
-            self._previous_scores[match_id]["home"] = home_score
-            self._previous_scores[match_id]["away"] = away_score
+            # Keep the previous score for a deferred side so the goal is
+            # re-detected next poll (once the scorer arrives); always refresh
+            # match_details so the scorer string can be picked up then.
+            if not defer_home:
+                self._previous_scores[match_id]["home"] = home_score
+            if not defer_away:
+                self._previous_scores[match_id]["away"] = away_score
             self._previous_scores[match_id]["match_details"] = curr_details.copy()
 
     @staticmethod
