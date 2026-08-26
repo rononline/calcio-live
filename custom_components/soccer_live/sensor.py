@@ -1597,7 +1597,7 @@ class SoccerLiveSensor(Entity):
             if self._claim_bus_event("soccer_live_lineup_available", event_data):
                 self.hass.bus.async_fire("soccer_live_lineup_available", event_data)
             difference = lineup_difference(match, self._team_id, self._team_name)
-            if difference:
+            if difference and (difference["unexpected_starters"] or difference["missing_expected"]):
                 difference_data = {**event_data, **difference}
                 if self._claim_bus_event(
                     "soccer_live_lineup_difference", difference_data, ttl=7 * 86400

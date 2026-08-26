@@ -40,10 +40,23 @@ def test_market_value_change_ignores_small_provider_fluctuations():
 
 def test_newly_available_lineups_only_fires_on_transition():
     base = {"matches": [{"event_id": "10", "state": "pre", "lineup_home": [], "lineup_away": []}]}
-    current = {"matches": [{"event_id": "10", "state": "pre", "lineup_home": [{"name": "A"}], "lineup_away": []}]}
+    current = {"matches": [{"event_id": "10", "state": "pre", "lineup_confirmed": True, "lineup_home": [{"name": "A"}], "lineup_away": []}]}
     assert [item["event_id"] for item in newly_available_lineups(base, current)] == ["10"]
     assert newly_available_lineups(current, current) == []
     assert newly_available_lineups({}, current) == []
+
+
+def test_newly_available_lineups_ignores_early_prediction_but_accepts_near_kickoff():
+    from datetime import datetime, timedelta, timezone
+
+    base = {"matches": [{"event_id": "10", "state": "pre", "lineup_home": [], "lineup_away": []}]}
+    # A probable XI days out, not confirmed and not near kick-off: no event.
+    prediction = {"matches": [{"event_id": "10", "state": "pre", "date_iso": "2099-01-01T12:00:00Z", "lineup_home": [{"name": "A"}], "lineup_away": []}]}
+    assert newly_available_lineups(base, prediction) == []
+    # The official sheet drops shortly before kick-off: event fires.
+    soon = (datetime.now(timezone.utc) + timedelta(minutes=45)).isoformat()
+    official = {"matches": [{"event_id": "10", "state": "pre", "date_iso": soon, "lineup_home": [{"name": "A"}], "lineup_away": []}]}
+    assert [item["event_id"] for item in newly_available_lineups(base, official)] == ["10"]
 
 
 def test_finished_match_enrichment_never_fires_lineup_event():

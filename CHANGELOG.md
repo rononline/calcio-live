@@ -1,5 +1,10 @@
 # Changelog
 
+## v3.23.1 (2026-08-26)
+- fix: only announce a lineup as available once it is the official team sheet, not a provider's early probable eleven. A predicted line-up filled in days before kick-off no longer fires `soccer_live_lineup_available` / `soccer_live_lineup_difference`; a line-up now counts only when the provider marks it confirmed, the match is live, or kick-off is imminent (within ~3 h)
+- fix: `soccer_live_lineup_difference` no longer fires when the official line-up matches the expected one — it is emitted only when there is an actual difference (an unexpected starter or a missing expected starter), so no more empty "line-up differs" notification
+- tests: cover the early-prediction rejection, the near-kick-off acceptance, and the confirmed-sheet transition
+
 ## v3.23.0 (2026-08-16)
 - fix: goals no longer notify with an unknown scorer when the score ticks up a poll or two before the provider attaches the scorer name. Such a goal is now held briefly (a few polls) so it fires with the scorer; if the name never arrives it still fires after a short grace window
 - fix: poll at the live rate around kick-off. A fixture whose scheduled kick-off has arrived but that the provider still reports as "pre" is now polled fast (previously polling dropped back to the normal interval right at kick-off, so match-started and the first live scores could be minutes late)

@@ -1,5 +1,31 @@
 """Provider-neutral club snapshot and change detection helpers."""
 
+from datetime import datetime, timedelta, timezone
+
+
+def _is_official_lineup(match, now=None):
+    """True only for a genuine team sheet, not an early probable XI.
+
+    Some providers expose a *predicted* eleven ahead of kick-off, which looks
+    identical to the confirmed sheet and would fire "lineup available" days too
+    early. Accept a lineup only when the provider marks it confirmed, the match
+    is already live, or kick-off is imminent (official sheets drop ~1 h before)
+    — so a prediction days out is ignored.
+    """
+    if match.get("lineup_confirmed"):
+        return True
+    if match.get("state") in ("in", "live"):
+        return True
+    raw = str(match.get("date_iso") or match.get("date") or "")
+    try:
+        kickoff = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return False
+    if kickoff.tzinfo is None:
+        kickoff = kickoff.replace(tzinfo=timezone.utc)
+    until = kickoff - (now or datetime.now(timezone.utc))
+    return timedelta(minutes=-30) <= until <= timedelta(hours=3)
+
 
 def _player_key(player):
     return str(player.get("id") or player.get("player_id") or player.get("name") or player.get("player") or "").strip()
@@ -72,7 +98,7 @@ def newly_available_lineups(previous_attrs, current_attrs):
         has_lineup = bool(match.get("lineup_home") or match.get("lineup_away") or match.get("formation_home") or match.get("formation_away"))
         old = previous.get(event_id) or {}
         had_lineup = bool(old.get("lineup_home") or old.get("lineup_away") or old.get("formation_home") or old.get("formation_away"))
-        if has_lineup and not had_lineup:
+        if has_lineup and not had_lineup and _is_official_lineup(match):
             available.append(match)
     return available
 
