@@ -638,6 +638,12 @@ class SoccerLiveSensor(Entity):
     # this monotonic deadline, doubling the wait on each consecutive 429.
     _af_enrich_pause_until: ClassVar[float | None] = None
     _af_backoff = 0
+    # Bound the fetch retry loop so a single update can't exceed the poll
+    # interval during a provider outage. Worst case per update is roughly
+    # _MAX_FETCH_ATTEMPTS × (10 s HTTP timeout + 2 s inter-attempt wait); at 2
+    # attempts that is ~22 s, safely under the 30 s live interval (previously 3
+    # attempts ≈ 36 s, which overran the interval and stacked updates).
+    _MAX_FETCH_ATTEMPTS = 2
     # Config entries for which an API-Football reauth flow has been started, so
     # a persistent bad key doesn't spawn a new flow on every poll.
     _af_reauth_entries: ClassVar[set] = set()
@@ -1157,7 +1163,7 @@ class SoccerLiveSensor(Entity):
             _timeout = aiohttp.ClientTimeout(total=10)
             session = async_get_clientsession(self.hass)
             retries = 0
-            while retries < 3:
+            while retries < self._MAX_FETCH_ATTEMPTS:
                 try:
                     async with session.get(url, headers=headers, timeout=_timeout) as response:
                         if response.status == 200:
@@ -1211,16 +1217,19 @@ class SoccerLiveSensor(Entity):
                             break
                         else:
                             # 5xx: temporary server error — wait briefly and retry
-                            await asyncio.sleep(2)
                             retries += 1
+                            if retries < self._MAX_FETCH_ATTEMPTS:
+                                await asyncio.sleep(2)
                 except aiohttp.ClientError as error:
                     self._last_error = str(error)
-                    await asyncio.sleep(2)
                     retries += 1
+                    if retries < self._MAX_FETCH_ATTEMPTS:
+                        await asyncio.sleep(2)
                 except asyncio.TimeoutError:
                     self._last_error = f"Timeout while fetching {self._provider_label} data"
-                    await asyncio.sleep(2)
                     retries += 1
+                    if retries < self._MAX_FETCH_ATTEMPTS:
+                        await asyncio.sleep(2)
             else:
                 self._last_error = f"All attempts failed; no data received from {self._provider_label}"
                 _LOGGER.warning(f"All attempts failed for {self._name} — no data received from {self._provider_label}")

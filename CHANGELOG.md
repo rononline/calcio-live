@@ -1,5 +1,8 @@
 # Changelog
 
+## v3.23.2 (2026-08-29)
+- fix: bound the fetch retry loop so a single update can't overrun the poll interval during a provider outage. On repeated 5xx/timeout/connection errors the fetch now makes at most 2 attempts (was 3) and skips the wait after the final failed attempt, capping a failing update at ~22 s instead of ~36 s. This stops the "Updating soccer_live sensor took longer than the scheduled update interval 0:00:30" warnings and the stacked updates they caused when API-Football has a server-side outage; last-known data is retained and normal polling resumes automatically once the provider recovers
+
 ## v3.23.1 (2026-08-26)
 - fix: only announce a lineup as available once it is the official team sheet, not a provider's early probable eleven. A predicted line-up filled in days before kick-off no longer fires `soccer_live_lineup_available` / `soccer_live_lineup_difference`; a line-up now counts only when the provider marks it confirmed, the match is live, or kick-off is imminent (within ~3 h)
 - fix: `soccer_live_lineup_difference` no longer fires when the official line-up matches the expected one — it is emitted only when there is an actual difference (an unexpected starter or a missing expected starter), so no more empty "line-up differs" notification
