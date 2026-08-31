@@ -605,6 +605,19 @@ class SoccerLiveSensor(Entity):
     # anyway (with "unknown"), so a slightly-late scorer name can still attach.
     _MAX_GOAL_DEFER = 3
 
+    # Providers sometimes emit a placeholder in place of an unresolved scorer
+    # (ESPN sends "<TBD>"). Treat these as "no scorer yet" so the goal is held
+    # for the real name, and never surface the placeholder in the event.
+    _PLACEHOLDER_SCORERS = frozenset({
+        "", "<tbd>", "tbd", "n/a", "na", "?", "-", "--", "unknown", "onbekend",
+    })
+
+    @classmethod
+    def _real_scorer_name(cls, value):
+        """Return the scorer name, or "" for an empty/placeholder value."""
+        name = str(value or "").strip()
+        return "" if name.casefold() in cls._PLACEHOLDER_SCORERS else name
+
     # Keep large / high-churn attributes out of the recorder history so the HA
     # database doesn't balloon. The state itself (the score summary) and the
     # small scalar attributes are still recorded.
@@ -3201,7 +3214,7 @@ class SoccerLiveSensor(Entity):
                 goals_scored = home_score - prev_home
                 home_strings = self._pick_goal_strings(curr_details, dispatched, home_abbrev, goals_scored)
                 goal_scorers = self._extract_goal_scorers_from_details(home_strings, goals_scored)
-                have_scorer = any(str((g or {}).get("player") or "").strip() for g in goal_scorers)
+                have_scorer = any(self._real_scorer_name((g or {}).get("player")) for g in goal_scorers)
                 if not have_scorer and pending.get("home", 0) < self._MAX_GOAL_DEFER:
                     # Scorer not known yet — hold this goal so it can arrive.
                     pending["home"] = pending.get("home", 0) + 1
@@ -3228,7 +3241,7 @@ class SoccerLiveSensor(Entity):
                 goals_scored = away_score - prev_away
                 away_strings = self._pick_goal_strings(curr_details, dispatched, away_abbrev, goals_scored)
                 goal_scorers = self._extract_goal_scorers_from_details(away_strings, goals_scored)
-                have_scorer = any(str((g or {}).get("player") or "").strip() for g in goal_scorers)
+                have_scorer = any(self._real_scorer_name((g or {}).get("player")) for g in goal_scorers)
                 if not have_scorer and pending.get("away", 0) < self._MAX_GOAL_DEFER:
                     pending["away"] = pending.get("away", 0) + 1
                     defer_away = True
@@ -3401,16 +3414,22 @@ class SoccerLiveSensor(Entity):
             # Also accepts plain strings for backwards compatibility.
             first = goal_scorers[0] if goal_scorers and len(goal_scorers) > 0 else None
             if isinstance(first, dict):
-                player_name = first.get("player", "N/A")
+                player_name = self._real_scorer_name(first.get("player"))
                 minute = first.get("minute", "N/A")
             elif isinstance(first, str):
-                player_name = first
+                player_name = self._real_scorer_name(first)
                 minute = "N/A"
             else:
-                player_name = "N/A"
+                player_name = ""
                 minute = "N/A"
 
-            players = [g.get("player") if isinstance(g, dict) else g for g in (goal_scorers or [])]
+            # Drop placeholder names ("<TBD>") so consumers see an empty scorer
+            # (and can show their own "unknown" label) rather than the raw token.
+            players = [
+                self._real_scorer_name(g.get("player") if isinstance(g, dict) else g)
+                for g in (goal_scorers or [])
+            ]
+            players = [name for name in players if name]
 
             event_data = {
                 "event_id": match.get("event_id"),

@@ -1,5 +1,8 @@
 # Changelog
 
+## v3.23.3 (2026-08-30)
+- fix: don't notify a goal with a placeholder scorer. When a provider reports a goal but fills the scorer with a placeholder (ESPN sends "<TBD>") the goal is now held for the real name just like a missing scorer, instead of firing immediately with the token — so a slower provider that has the name can win. If no real name ever arrives the scorer is emitted as an empty string (not "<TBD>"/"N/A") so consumers can show their own "unknown" label
+
 ## v3.23.2 (2026-08-29)
 - fix: bound the fetch retry loop so a single update can't overrun the poll interval during a provider outage. On repeated 5xx/timeout/connection errors the fetch now makes at most 2 attempts (was 3) and skips the wait after the final failed attempt, capping a failing update at ~22 s instead of ~36 s. This stops the "Updating soccer_live sensor took longer than the scheduled update interval 0:00:30" warnings and the stacked updates they caused when API-Football has a server-side outage; last-known data is retained and normal polling resumes automatically once the provider recovers
 

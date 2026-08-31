@@ -191,7 +191,32 @@ def test_goal_without_scorer_fires_after_grace():
     assert events == []
     sensor._detect_and_dispatch_goals([{**base, "home_score": 1, "match_details": []}], events)
     assert [item[0] for item in events] == ["soccer_live_goal"]
-    assert events[0][1]["player"] == "N/A"
+    # Unknown scorer is emitted as an empty string (not "N/A"/a placeholder) so
+    # consumers can render their own "unknown" label.
+    assert events[0][1]["player"] == ""
+
+
+def test_placeholder_scorer_is_deferred_then_fires_with_real_name():
+    sensor = _sensor("team_match")
+    base = {
+        "event_id": "fixture-tbd", "state": "in",
+        "home_team": "Feyenoord", "away_team": "ADO Den Haag",
+        "home_abbrev": "FEY", "away_abbrev": "ADO", "away_score": 0,
+    }
+    events = []
+    sensor._detect_and_dispatch_goals([{**base, "home_score": 0, "match_details": []}], events)
+    # A provider reports the goal but only a "<TBD>" placeholder scorer: hold it.
+    sensor._detect_and_dispatch_goals([
+        {**base, "home_score": 1, "match_details": ["Goal - 72': <TBD>"]}
+    ], events)
+    assert events == []
+    # Next poll the real name resolves: the goal fires with it, not "<TBD>".
+    sensor._detect_and_dispatch_goals([
+        {**base, "home_score": 1, "match_details": ["Goal - 72': Anis Hadj Moussa"]}
+    ], events)
+    assert [(item[0], item[1]["player"]) for item in events] == [
+        ("soccer_live_goal", "Anis Hadj Moussa")
+    ]
 
 
 def test_delayed_score_jump_emits_each_goal_with_its_historical_score():
