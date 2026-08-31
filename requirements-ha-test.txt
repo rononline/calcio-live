@@ -8,4 +8,4 @@
 #
 # Pin the plugin version to one matching the Home Assistant version you target.
 # Requires the Python 3.14 runtime used by this CI job (see tests.yaml ha-tests).
-pytest-homeassistant-custom-component==0.13.349
+pytest-homeassistant-custom-component==0.13.358
